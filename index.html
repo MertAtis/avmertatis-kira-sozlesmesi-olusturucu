@@ -634,11 +634,8 @@
 
     document.getElementById('kira-start-date').value = new Date().toISOString().slice(0, 10);
 
-    const inputs = document.querySelectorAll('input, textarea');
-    inputs.forEach(input => {
-        input.addEventListener('input', renderPreview);
-        input.addEventListener('change', renderPreview);
-    });
+    document.addEventListener('input', renderPreview);
+    document.addEventListener('change', renderPreview);
 
     function switchTab(tab) {
         currentTab = tab;
@@ -840,12 +837,6 @@
             const isMarried = document.getElementById('tahliye-is-married') ? document.getElementById('tahliye-is-married').checked : false;
             const spouseName = document.getElementById('tahliye-spouse-name') ? document.getElementById('tahliye-spouse-name').value.trim() || '...........................................................' : '';
             const spouseTc = document.getElementById('tahliye-spouse-tc') ? document.getElementById('tahliye-spouse-tc').value.trim() || '...........................................................' : '';
-
-            const formatDate = d => {
-                if (!d) return '......../............/..............';
-                const p = d.split('-');
-                return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
-            };
 
             let spouseHeaderHTML = '';
             if (isMarried) {

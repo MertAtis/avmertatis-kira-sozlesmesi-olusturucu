@@ -537,6 +537,16 @@
                     </div>
                 </div>
 
+                <!-- Özel Maddeler -->
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-list-check"></i> Özel Maddeler <span style="font-weight: 400; color: var(--muted-foreground); font-size: 0.8rem;">(İsteğe bağlı)</span></div>
+                    <div id="kira-custom-clauses-list" style="margin-bottom: 10px;"></div>
+                    <div style="display: flex; gap: 8px; align-items: flex-start;">
+                        <textarea id="kira-new-clause" rows="2" placeholder="Örn: Evde evcil hayvan beslenemez..." style="flex: 1;"></textarea>
+                        <button class="btn btn-shadcn-outline" type="button" onclick="addCustomClause()" style="white-space: nowrap;"><i class="fa-solid fa-plus"></i> Ekle</button>
+                    </div>
+                </div>
+
                 <div class="btn-bar">
                     <button class="btn btn-shadcn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
                     <button class="btn btn-shadcn-outline" onclick="resetKiraForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
@@ -756,6 +766,7 @@
                         ${hasGuarantor ? `
                         <li style="margin-bottom: 3px;">Sözleşmede kefilin kefaleti ve sorumluluğu yenilenen/uzayan kira dönemlerinde de devam edecektir. Kefil müteselsil kefildir.</li>
                         ` : ''}
+                        ${customClauses.map(c => `<li style="margin-bottom: 3px;">${esc(c)}</li>`).join('')}
                     </ol>
                 </div>
 
@@ -825,12 +836,45 @@
         }
     }
 
+    // Custom Clauses Management
+    let customClauses = [];
+
+    function addCustomClause() {
+        const input = document.getElementById('kira-new-clause');
+        const txt = input ? input.value.trim() : '';
+        if (!txt) return;
+        customClauses.push(txt);
+        input.value = '';
+        renderCustomClausesList();
+        renderPreview();
+    }
+
+    function deleteCustomClause(index) {
+        customClauses.splice(index, 1);
+        renderCustomClausesList();
+        renderPreview();
+    }
+
+    function renderCustomClausesList() {
+        const list = document.getElementById('kira-custom-clauses-list');
+        if (!list) return;
+        if (!customClauses.length) { list.innerHTML = ''; return; }
+        list.innerHTML = customClauses.map((c, i) => `
+            <div style="display:flex; align-items:flex-start; gap:8px; background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; margin-bottom:6px; font-size:0.85rem;">
+                <span style="flex:1; line-height:1.4;"><b>Özel Madde ${i + 1}:</b> ${esc(c)}</span>
+                <button onclick="deleteCustomClause(${i})" title="Sil" style="background:none; border:none; cursor:pointer; color:#ef4444; font-weight:bold; font-size:0.9rem; padding:0 4px;">✕</button>
+            </div>
+        `).join('');
+    }
+
     function resetKiraForm() {
         document.querySelectorAll('#kira-form-block input[type="text"]').forEach(i => i.value = '');
         document.getElementById('kira-has-deposit').checked = false;
         document.getElementById('kira-has-guarantor').checked = false;
         toggleDepositFields();
         toggleGuarantorFields();
+        customClauses = [];
+        renderCustomClausesList();
         renderPreview();
     }
 

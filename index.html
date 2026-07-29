@@ -601,7 +601,6 @@
     let currentTab = 'kira';
 
     document.getElementById('kira-start-date').value = new Date().toISOString().slice(0, 10);
-    document.getElementById('tahliye-issue-date').value = new Date().toISOString().slice(0, 10);
 
     const inputs = document.querySelectorAll('input, textarea');
     inputs.forEach(input => {
@@ -782,7 +781,7 @@
             const evictionDateRaw = document.getElementById('tahliye-eviction-date').value;
 
             const formatDate = d => {
-                if (!d) return '…… / …… / 20…';
+                if (!d) return '...................';
                 const p = d.split('-');
                 return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
             };

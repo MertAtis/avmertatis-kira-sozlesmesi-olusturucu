@@ -790,12 +790,12 @@
                 <div style="padding: 10px 5px; font-family: 'Times New Roman', Times, serif; font-size: 0.9rem; line-height: 1.5;">
                     <h2 style="text-align: center; font-size: 1.3rem; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">TAHLİYE TAAHHÜTNAMESİ</h2>
 
-                    <div style="margin-bottom: 16px; line-height: 1.7;">
-                        <p><strong>TAAHHÜT EDEN (KİRACI) :</strong> ${esc(tenantName)} (T.C. No: ${esc(tenantTc)})</p>
-                        <p><strong>MALİK / KİRAYA VEREN :</strong> ${esc(landlordName)}</p>
-                        <p><strong>TAHLİYE EDİLECEK ADRES :</strong> ${esc(address)}</p>
-                        <p><strong>TAAHHÜT DÜZENLEME TARİHİ :</strong> ${formatDate(issueDateRaw)}</p>
-                        <p><strong>TAHLİYE TARİHİ :</strong> ${formatDate(evictionDateRaw)}</p>
+                    <div style="margin-bottom: 16px; line-height: 1.7; word-break: break-word; overflow-wrap: anywhere;">
+                        <p style="margin-bottom: 6px;"><strong>TAAHHÜT EDEN (KİRACI) :</strong> ${esc(tenantName)} (T.C. No: ${esc(tenantTc)})</p>
+                        <p style="margin-bottom: 6px;"><strong>MALİK / KİRAYA VEREN :</strong> ${esc(landlordName)}</p>
+                        <p style="margin-bottom: 6px;"><strong>TAHLİYE EDİLECEK ADRES :</strong> ${esc(address)}</p>
+                        <p style="margin-bottom: 6px;"><strong>TAAHHÜT DÜZENLEME TARİHİ :</strong> ${formatDate(issueDateRaw)}</p>
+                        <p style="margin-bottom: 6px;"><strong>TAHLİYE TARİHİ :</strong> ${formatDate(evictionDateRaw)}</p>
                     </div>
 
                     <div style="margin-top: 18px; text-align: justify; line-height: 1.7;">

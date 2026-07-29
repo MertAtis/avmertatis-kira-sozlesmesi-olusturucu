@@ -433,8 +433,8 @@
                             <input type="text" id="kira-landlord-tc" maxlength="11" placeholder="Örn: 21312312312">
                         </div>
                         <div class="form-group full">
-                            <label>Kiraya Veren Vekili (Varsa)</label>
-                            <input type="text" id="kira-landlord-vekil" placeholder="Örn: Av. MERT ATIŞ">
+                            <label>Kiraya Veren Vekili (Varsa / Vekaleten T.C. Bilgileri)</label>
+                            <input type="text" id="kira-landlord-vekil" placeholder="Örn: AHMET YILMAZ adına vekaleten Av. MERT ATIŞ (TC: 10000000000)">
                         </div>
                         <div class="form-group">
                             <label>Kiracı Adı Soyadı</label>
@@ -667,8 +667,20 @@
             const startDurationFormatted = `${dateTxt} , #${duration}#`;
 
             let landlordTxt = '…………………………………………………………………………………………………………';
-            if (landlordVekil) landlordTxt = esc(landlordVekil);
-            else if (landlordName || landlordTc) landlordTxt = `${esc(landlordName)}${landlordTc ? ' – TC: ' + esc(landlordTc) : ''}`;
+            let sigLandlordName = '…………………………';
+
+            if (landlordVekil) {
+                if (landlordName && !landlordVekil.toLowerCase().includes('vekaleten')) {
+                    landlordTxt = `${esc(landlordName)}${landlordTc ? ' (TC: ' + esc(landlordTc) + ')' : ''} adına vekaleten ${esc(landlordVekil)}`;
+                    sigLandlordName = `${esc(landlordName)} V. ${esc(landlordVekil)}`;
+                } else {
+                    landlordTxt = esc(landlordVekil);
+                    sigLandlordName = esc(landlordVekil);
+                }
+            } else if (landlordName || landlordTc) {
+                landlordTxt = `${esc(landlordName)}${landlordTc ? ' – TC: ' + esc(landlordTc) : ''}`;
+                sigLandlordName = `${esc(landlordName)}${landlordTc ? ' - ' + esc(landlordTc) : ''}`;
+            }
 
             let tenantTxt = '…………………………………………………………………………………………………………';
             if (tenantName || tenantTc) tenantTxt = `${esc(tenantName)}${tenantTc ? ' – TC: ' + esc(tenantTc) : ''}`;
@@ -690,7 +702,6 @@
                 depositClauseText = `Kiracıdan herhangi bir depozito alınmamıştır.`;
             }
 
-            const sigLandlordName = (landlordName || (landlordVekil ? esc(landlordVekil) : '…………………………')) + (landlordTc ? ' - ' + esc(landlordTc) : '');
             const sigTenantName = (tenantName || '…………………………') + (tenantTc ? ' - ' + esc(tenantTc) : '');
 
             target.innerHTML = `

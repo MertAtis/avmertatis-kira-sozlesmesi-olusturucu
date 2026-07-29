@@ -3,46 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hukuki Kira Sözleşmesi & Tahliye Taahhüdü Oluşturucu (Açık Kaynak)</title>
+    <title>Hukuki Kira Sözleşmesi & Tahliye Taahhüdü Oluşturucu - Shadcn Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary: #1e293b;
-            --accent: #c5a059;
-            --accent-hover: #b38e46;
-            --bg: #f8fafc;
-            --card-bg: #ffffff;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
-            --border-color: #cbd5e1;
+            --background: #f8fafc;
+            --foreground: #0f172a;
+            --card: #ffffff;
+            --card-foreground: #0f172a;
+            --primary: #0f172a;
+            --primary-foreground: #ffffff;
+            --secondary: #f1f5f9;
+            --secondary-foreground: #0f172a;
+            --muted: #f1f5f9;
+            --muted-foreground: #64748b;
+            --accent: #f8fafc;
+            --accent-foreground: #0f172a;
+            --border: #e2e8f0;
+            --input: #cbd5e1;
+            --ring: #0f172a;
+            --radius: 0.5rem;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg);
-            color: var(--text-primary);
+            background-color: var(--background);
+            color: var(--foreground);
             line-height: 1.5;
-            padding: 20px;
+            padding: 24px 16px;
+            -webkit-font-smoothing: antialiased;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
+        /* Shadcn Header */
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding-bottom: 20px;
-            border-bottom: 2px solid var(--border-color);
+            border-bottom: 1px solid var(--border);
             margin-bottom: 24px;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 16px;
         }
 
         .brand {
@@ -52,257 +62,323 @@
         }
 
         .brand-icon {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             background: var(--primary);
-            color: var(--accent);
-            border-radius: 10px;
+            color: #ffffff;
+            border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.4rem;
+            font-size: 1.2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         .brand-title {
-            font-size: 1.25rem;
+            font-size: 1.15rem;
             font-weight: 700;
-            color: var(--primary);
+            letter-spacing: -0.02em;
+            color: var(--foreground);
         }
 
         .brand-sub {
             font-size: 0.8rem;
-            color: var(--text-secondary);
+            color: var(--muted-foreground);
         }
 
-        .badge-offline {
-            background: #dcfce7;
-            color: #166534;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+        .badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
         }
 
-        .badge-offline i { font-size: 0.65rem; }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
+        /* Shadcn Tabs */
+        .tab-container {
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: calc(var(--radius) + 2px);
+            display: inline-flex;
+            gap: 4px;
+            margin-bottom: 24px;
         }
 
         .tab-btn {
-            padding: 10px 18px;
-            border: 1px solid var(--border-color);
-            background: #fff;
-            border-radius: 8px;
+            padding: 8px 16px;
+            border-radius: var(--radius);
             font-weight: 600;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
+            font-size: 0.85rem;
+            color: var(--muted-foreground);
+            background: transparent;
+            border: none;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
             gap: 8px;
         }
 
         .tab-btn.active {
-            background: var(--primary);
-            color: #fff;
-            border-color: var(--primary);
+            background: var(--card);
+            color: var(--foreground);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
-        /* Layout Grid */
+        /* Main Split Grid */
         .app-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1.1fr 0.9fr;
             gap: 24px;
+            align-items: start;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1024px) {
             .app-grid { grid-template-columns: 1fr; }
         }
 
-        .form-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
+        /* Shadcn Card Panel */
+        .card-panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: calc(var(--radius) + 4px);
             padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
         }
 
-        .section-title {
-            font-size: 0.95rem;
+        .card-header-title {
+            font-size: 1.05rem;
             font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 14px;
+            color: var(--foreground);
+            margin-bottom: 16px;
             display: flex;
             align-items: center;
             gap: 8px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Form Visibility Enhancements */
+        .form-section {
+            background: #fafafa;
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius);
+            padding: 18px;
+            margin-bottom: 18px;
+        }
+
+        .form-section-head {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
         }
 
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 6px;
         }
 
-        .form-group.full-width {
-            grid-column: 1 / -1;
-        }
+        .form-group.full { grid-column: 1 / -1; }
 
         label {
-            font-size: 0.8rem;
+            font-size: 0.8125rem;
             font-weight: 600;
-            color: var(--text-secondary);
+            color: #334155;
         }
 
         input[type="text"], input[type="date"], textarea {
             width: 100%;
-            padding: 9px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+            padding: 10px 14px;
+            background: #ffffff;
+            border: 1.5px solid var(--input);
+            border-radius: var(--radius);
             font-family: inherit;
-            font-size: 0.9rem;
-            color: var(--text-primary);
-            transition: border-color 0.15s;
+            font-size: 0.9375rem;
+            color: var(--foreground);
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        input[type="text"]::placeholder, textarea::placeholder {
+            color: #94a3b8;
+            font-weight: 400;
         }
 
         input[type="text"]:focus, input[type="date"]:focus, textarea:focus {
             outline: none;
-            border-color: var(--primary);
+            border-color: var(--ring);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
         }
 
-        .checkbox-group {
+        /* Checkbox Box */
+        .checkbox-card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
-            font-weight: 600;
+            gap: 10px;
             cursor: pointer;
             user-select: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--foreground);
+            transition: border-color 0.15s;
         }
 
-        .checkbox-group input {
-            width: 16px;
-            height: 16px;
+        .checkbox-card:hover {
+            border-color: var(--ring);
+        }
+
+        .checkbox-card input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
             accent-color: var(--primary);
             cursor: pointer;
         }
 
-        .sub-group {
-            background: #f8fafc;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 14px;
-            margin-top: 8px;
+        .nested-group {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-top: 10px;
         }
 
-        .info-badge {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            background: #f0f7ff;
-            border-left: 3px solid #3b82f6;
-            padding: 6px 10px;
-            border-radius: 4px;
-            margin-top: 8px;
+        .info-pill {
+            font-size: 0.775rem;
+            color: #3b82f6;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            margin-top: 10px;
             line-height: 1.4;
         }
 
-        /* Buttons */
-        .btn-group {
+        /* Action Buttons */
+        .btn-bar {
             display: flex;
             gap: 10px;
-            margin-top: 20px;
+            margin-top: 24px;
             flex-wrap: wrap;
         }
 
         .btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
-            transition: all 0.2s;
+            padding: 10px 20px;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
         }
 
-        .btn-primary {
+        .btn-shadcn-primary {
             background: var(--primary);
-            color: #fff;
+            color: var(--primary-foreground);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
 
-        .btn-primary:hover {
-            background: #0f172a;
+        .btn-shadcn-primary:hover {
+            background: #1e293b;
         }
 
-        .btn-accent {
-            background: var(--accent);
-            color: #fff;
+        .btn-shadcn-outline {
+            background: var(--card);
+            border-color: var(--border);
+            color: var(--foreground);
         }
 
-        .btn-accent:hover {
-            background: var(--accent-hover);
+        .btn-shadcn-outline:hover {
+            background: var(--secondary);
         }
 
-        .btn-outline {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-        }
-
-        .btn-outline:hover {
-            background: #f1f5f9;
-        }
-
-        /* Paper Preview */
-        .preview-wrapper {
+        /* Minimalist A4 Live Preview Inspector */
+        .preview-inspector {
             position: sticky;
             top: 20px;
         }
 
-        .paper {
-            background: #fff;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-            padding: 12mm 14mm;
-            border-radius: 4px;
-            min-height: 297mm;
-            font-family: 'Times New Roman', Times, serif;
-            color: #000;
-            font-size: 0.84rem;
-            line-height: 1.3;
+        .inspector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
         }
 
-        /* PRINT STYLES */
+        .inspector-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted-foreground);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .paper-minimal {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 10mm 12mm;
+            font-family: 'Times New Roman', Times, serif;
+            color: #000;
+            font-size: 0.8rem;
+            line-height: 1.28;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        /* Custom Scrollbar for Minimal Inspector */
+        .paper-minimal::-webkit-scrollbar {
+            width: 6px;
+        }
+        .paper-minimal::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        /* PRINT MEDIA QUERIES */
         @media print {
-            body { background: #fff; padding: 0; }
+            body { background: #fff !important; padding: 0 !important; }
             .no-print { display: none !important; }
-            .app-grid { display: block; }
-            .preview-wrapper { position: static; }
-            .paper {
-                border: none;
-                box-shadow: none;
-                padding: 4mm 6mm 4mm !important;
-                margin: 0;
-                width: 100%;
-                min-height: auto;
+            .app-grid { display: block !important; }
+            .preview-inspector { position: static !important; }
+            .paper-minimal {
+                border: none !important;
+                box-shadow: none !important;
+                padding: 4mm 6mm !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-height: none !important;
+                overflow: visible !important;
+                font-size: 0.84rem !important;
+                line-height: 1.3 !important;
             }
         }
     </style>
@@ -310,195 +386,223 @@
 <body>
 
 <div class="container">
+    
+    <!-- HEADER -->
     <header class="no-print">
         <div class="brand">
             <div class="brand-icon"><i class="fa-solid fa-scale-balanced"></i></div>
             <div>
-                <div class="brand-title">Hukuki Kira Sözleşmesi & Tahliye Taahhüdü Oluşturucu</div>
-                <div class="brand-sub">Avukatlar ve Hukukçular İçin Çevrimdışı (Offline) Sözleşme Jeneratörü</div>
+                <div class="brand-title">Kira Sözleşmesi & Tahliye Taahhüdü Jeneratörü</div>
+                <div class="brand-sub">Shadcn UI Edition • Çevrimdışı Hukukçu Araç Kiti</div>
             </div>
         </div>
-        <div class="badge-offline">
-            <i class="fa-solid fa-shield-halved"></i> %100 Çevrimdışı & Güvenli (KVKK Uyumlu)
+        <div class="badge">
+            <i class="fa-solid fa-circle-check"></i> %100 Çevrimdışı (KVKK & Meslek Sırrı Uyumlu)
         </div>
     </header>
 
-    <div class="tabs no-print">
-        <button class="tab-btn active" id="tab-kira-btn" onclick="switchTab('kira')"><i class="fa-solid fa-file-contract"></i> Kira Sözleşmesi</button>
-        <button class="tab-btn" id="tab-tahliye-btn" onclick="switchTab('tahliye')"><i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü</button>
+    <!-- TABS -->
+    <div class="tab-container no-print">
+        <button class="tab-btn active" id="tab-kira" onclick="switchTab('kira')">
+            <i class="fa-solid fa-file-contract"></i> Kira Sözleşmesi Formu
+        </button>
+        <button class="tab-btn" id="tab-tahliye" onclick="switchTab('tahliye')">
+            <i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü Formu
+        </button>
     </div>
 
+    <!-- MAIN GRID -->
     <div class="app-grid">
-        <!-- FORM PANEL -->
-        <div class="form-card no-print">
+
+        <!-- FORM INPUT PANEL (HIGH VISIBILITY) -->
+        <div class="card-panel no-print">
             
-            <!-- KİRA SÖZLEŞMESİ FORMU -->
-            <div id="form-kira-section">
-                <div class="section-title"><i class="fa-solid fa-user-tie"></i> Kiraya Veren & Kiracı</div>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Kiraya Veren Adı Soyadı</label>
-                        <input type="text" id="kira-landlord-name" placeholder="Örn: RAMAZAN AKAY">
-                    </div>
-                    <div class="form-group">
-                        <label>Kiraya Veren T.C. Kimlik No</label>
-                        <input type="text" id="kira-landlord-tc" maxlength="11" placeholder="Örn: 21312312312">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Kiraya Veren Vekili (Varsa)</label>
-                        <input type="text" id="kira-landlord-vekil" placeholder="Örn: Av. Mert ATIŞ">
-                    </div>
-                    <div class="form-group">
-                        <label>Kiracı Adı Soyadı</label>
-                        <input type="text" id="kira-tenant-name" placeholder="Örn: EMRE FIRAT">
-                    </div>
-                    <div class="form-group">
-                        <label>Kiracı T.C. Kimlik No</label>
-                        <input type="text" id="kira-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Kiracı Adresi</label>
-                        <input type="text" id="kira-tenant-address" placeholder="Örn: Emek Mah. 34. Sokak No:15 Merkez/BURDUR">
-                    </div>
-                </div>
-
-                <div class="section-title"><i class="fa-solid fa-house"></i> Taşınmaz & Kira Şartları</div>
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label>Kiralanan Taşınmazın Adresi</label>
-                        <input type="text" id="kira-address" placeholder="Örn: Zafer Mah. Cumhuriyet Cad. No:44 D:3 BURDUR">
-                    </div>
-                    <div class="form-group">
-                        <label>Sözleşme Başlangıç Tarihi</label>
-                        <input type="date" id="kira-start-date">
-                    </div>
-                    <div class="form-group">
-                        <label>Sözleşme Süresi</label>
-                        <input type="text" id="kira-duration" value="1YIL">
-                    </div>
-                    <div class="form-group">
-                        <label>Aylık Kira Bedeli (Rakamla)</label>
-                        <input type="text" id="kira-fee-amount" placeholder="Örn: 15.000">
-                    </div>
-                    <div class="form-group">
-                        <label>Aylık Kira Bedeli (Yazıyla)</label>
-                        <input type="text" id="kira-fee-text" placeholder="Örn: OnBeşBin">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Ödeme Şekli ve Günü</label>
-                        <input type="text" id="kira-payment-day" value="AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Banka Hesabı & IBAN Bilgisi</label>
-                        <input type="text" id="kira-iban" value="TR24 0001 0015 8236 8635 2750 09 IBAN numaralı ZİRAAT BANKASI">
-                    </div>
-                    <div class="form-group">
-                        <label>Kiralananın Cinsi ve Kullanımı</label>
-                        <input type="text" id="kira-type" value="EV-MESKEN">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Demirbaş ve Eşyalar</label>
-                        <textarea id="kira-fixtures" rows="2">Kapılar, pencereler, dolaplar kombi-günısı ve diğer demirbaşlar sağlam, tam ve kullanılmaya elverişli olarak teslim edilmiştir. Ev boyalı-badanalı olarak temiz şekilde teslim edilmiş olup kiracı tahliyesi durumunda evi aynı şekilde kiraya verene teslimle yükümlüdür.</textarea>
-                    </div>
-                </div>
-
-                <div class="section-title"><i class="fa-solid fa-shield-cat"></i> Depozito & Kefil Ayarları</div>
+            <!-- KİRA FORMU -->
+            <div id="kira-form-block">
                 
-                <div style="margin-bottom: 12px;">
-                    <label class="checkbox-group">
-                        <input type="checkbox" id="kira-has-deposit" onchange="toggleDepositFields()"> Depozito Bedeli Alındı
-                    </label>
-                    <div id="kira-deposit-group" class="sub-group" style="display: none;">
-                        <label>Depozito Bedeli (Tutar / Açıklama)</label>
-                        <input type="text" id="kira-deposit-amount" placeholder="Örn: 15.000 (OnBeşBin)">
-                        <div class="info-badge">
-                            <i class="fa-solid fa-circle-info"></i> Sözleşmeye eklenecek madde: <em>"Kiracı , kiraya verene [TUTAR] depozito vermiştir. Taşınmazın eksiksiz ve borçsuz teslimi halinde bu tutar kiracıya aynen iade edilecektir."</em>
+                <!-- Taraf Bilgileri -->
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-users"></i> Taraf Bilgileri</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Kiraya Veren Adı Soyadı</label>
+                            <input type="text" id="kira-landlord-name" placeholder="Örn: RAMAZAN AKAY">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiraya Veren T.C. Kimlik No</label>
+                            <input type="text" id="kira-landlord-tc" maxlength="11" placeholder="Örn: 21312312312">
+                        </div>
+                        <div class="form-group full">
+                            <label>Kiraya Veren Vekili (Varsa)</label>
+                            <input type="text" id="kira-landlord-vekil" placeholder="Örn: Av. Mert ATIŞ">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiracı Adı Soyadı</label>
+                            <input type="text" id="kira-tenant-name" placeholder="Örn: EMRE FIRAT">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiracı T.C. Kimlik No</label>
+                            <input type="text" id="kira-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
+                        </div>
+                        <div class="form-group full">
+                            <label>Kiracı Adresi</label>
+                            <input type="text" id="kira-tenant-address" placeholder="Örn: Emek Mah. 34. Sokak No:15 Merkez/BURDUR">
                         </div>
                     </div>
                 </div>
 
-                <div>
-                    <label class="checkbox-group">
-                        <input type="checkbox" id="kira-has-guarantor" onchange="toggleGuarantorFields()"> Kefil Bilgileri Ekle (Müteselsil Kefil)
-                    </label>
-                    <div id="kira-guarantor-group" class="sub-group" style="display: none;">
-                        <div class="form-grid">
-                            <div class="form-group full-width">
-                                <label>Kefil Adı Soyadı ve T.C.</label>
-                                <input type="text" id="kira-guarantor-name-tc" placeholder="Örn: GÜLER FIRAT – TC: 10112857522">
-                            </div>
-                            <div class="form-group full-width">
-                                <label>Kefil Adresi</label>
-                                <input type="text" id="kira-guarantor-address" placeholder="Örn: Emek Mah. 22051 Sok. No:21 Daire:1 Merkez/BURDUR">
-                            </div>
+                <!-- Taşınmaz & Finansal Şartlar -->
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-house-circle-check"></i> Taşınmaz & Kira Detayları</div>
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>Kiralanan Taşınmazın Adresi</label>
+                            <input type="text" id="kira-address" placeholder="Örn: Zafer Mah. Cumhuriyet Cad. No:44 D:3 BURDUR">
                         </div>
-                        <div class="info-badge">
-                            <i class="fa-solid fa-circle-info"></i> Otomatik Maddeler: <em>"Sözleşmede kefilin kefaleti ve sorumluluğu yenilenen/uzayan kira dönemlerinde de devam edecektir. Kefil müteselsil kefildir."</em>
+                        <div class="form-group">
+                            <label>Sözleşme Başlangıç Tarihi</label>
+                            <input type="date" id="kira-start-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Sözleşme Süresi</label>
+                            <input type="text" id="kira-duration" value="1YIL">
+                        </div>
+                        <div class="form-group">
+                            <label>Aylık Kira Bedeli (Rakamla)</label>
+                            <input type="text" id="kira-fee-amount" placeholder="Örn: 15.000">
+                        </div>
+                        <div class="form-group">
+                            <label>Aylık Kira Bedeli (Yazıyla)</label>
+                            <input type="text" id="kira-fee-text" placeholder="Örn: OnBeşBin">
+                        </div>
+                        <div class="form-group full">
+                            <label>Ödeme Şekli ve Günü</label>
+                            <input type="text" id="kira-payment-day" value="AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ">
+                        </div>
+                        <div class="form-group full">
+                            <label>Banka Hesabı & IBAN Bilgisi</label>
+                            <input type="text" id="kira-iban" value="TR24 0001 0015 8236 8635 2750 09 IBAN numaralı ZİRAAT BANKASI">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiralananın Cinsi ve Kullanımı</label>
+                            <input type="text" id="kira-type" value="EV-MESKEN">
+                        </div>
+                        <div class="form-group full">
+                            <label>Demirbaş ve Eşyalar</label>
+                            <textarea id="kira-fixtures" rows="2">Kapılar, pencereler, dolaplar kombi-günısı ve diğer demirbaşlar sağlam, tam ve kullanılmaya elverişli olarak teslim edilmiştir. Ev boyalı-badanalı olarak temiz şekilde teslim edilmiş olup kiracı tahliyesi durumunda evi aynı şekilde kiraya verene teslimle yükümlüdür.</textarea>
                         </div>
                     </div>
                 </div>
 
-                <div class="btn-group">
-                    <button class="btn btn-accent" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
-                    <button class="btn btn-outline" onclick="resetKiraForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
+                <!-- Depozito & Kefil -->
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-shield"></i> Depozito & Kefalet Şartları</div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="kira-has-deposit" onchange="toggleDepositFields()">
+                            <span><i class="fa-solid fa-vault"></i> Depozito Bedeli Alındı</span>
+                        </label>
+                        <div id="kira-deposit-group" class="nested-group" style="display: none;">
+                            <div class="form-group">
+                                <label>Depozito Bedeli (Tutar / Açıklama)</label>
+                                <input type="text" id="kira-deposit-amount" placeholder="Örn: 15.000 (OnBeşBin)">
+                            </div>
+                            <div class="info-pill">
+                                <i class="fa-solid fa-info-circle"></i> Eklenecek Madde: <em>"Kiracı , kiraya verene [TUTAR] depozito vermiştir. Taşınmazın eksiksiz ve borçsuz teslimi halinde bu tutar kiracıya aynen iade edilecektir."</em>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="kira-has-guarantor" onchange="toggleGuarantorFields()">
+                            <span><i class="fa-solid fa-signature"></i> Kefil Bilgileri Ekle (Müteselsil Kefil)</span>
+                        </label>
+                        <div id="kira-guarantor-group" class="nested-group" style="display: none;">
+                            <div class="form-grid">
+                                <div class="form-group full">
+                                    <label>Kefil Adı Soyadı ve T.C.</label>
+                                    <input type="text" id="kira-guarantor-name-tc" placeholder="Örn: GÜLER FIRAT – TC: 10112857522">
+                                </div>
+                                <div class="form-group full">
+                                    <label>Kefil Adresi</label>
+                                    <input type="text" id="kira-guarantor-address" placeholder="Örn: Emek Mah. 22051 Sok. No:21 Daire:1 Merkez/BURDUR">
+                                </div>
+                            </div>
+                            <div class="info-pill">
+                                <i class="fa-solid fa-info-circle"></i> Otomatik Madde: <em>"Sözleşmede kefilin kefaleti ve sorumluluğu yenilenen/uzayan kira dönemlerinde de devam edecektir. Kefil müteselsil kefildir."</em>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-bar">
+                    <button class="btn btn-shadcn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
+                    <button class="btn btn-shadcn-outline" onclick="resetKiraForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
                 </div>
             </div>
 
             <!-- TAHLİYE TAAHHÜDÜ FORMU -->
-            <div id="form-tahliye-section" style="display: none;">
-                <div class="section-title"><i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü Bilgileri</div>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Kiracı Adı Soyadı (Taahhüt Eden)</label>
-                        <input type="text" id="tahliye-tenant-name" placeholder="Örn: EMRE FIRAT">
-                    </div>
-                    <div class="form-group">
-                        <label>Kiracı T.C. Kimlik No</label>
-                        <input type="text" id="tahliye-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Kiraya Veren Adı Soyadı (Malik/Kiralayan)</label>
-                        <input type="text" id="tahliye-landlord-name" placeholder="Örn: RAMAZAN AKAY">
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Kiralanan Taşınmaz Adresi</label>
-                        <input type="text" id="tahliye-address" placeholder="Örn: Zafer Mah. Cumhuriyet Cad. No:44 D:3 BURDUR">
-                    </div>
-                    <div class="form-group">
-                        <label>Taahhüt Düzenleme Tarihi (İmza Tarihi)</label>
-                        <input type="date" id="tahliye-issue-date">
-                    </div>
-                    <div class="form-group">
-                        <label>Tahliye Edilecek Tarih</label>
-                        <input type="date" id="tahliye-eviction-date">
+            <div id="tahliye-form-block" style="display: none;">
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü Bilgileri</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Kiracı Adı Soyadı (Taahhüt Eden)</label>
+                            <input type="text" id="tahliye-tenant-name" placeholder="Örn: EMRE FIRAT">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiracı T.C. Kimlik No</label>
+                            <input type="text" id="tahliye-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
+                        </div>
+                        <div class="form-group full">
+                            <label>Kiraya Veren Adı Soyadı (Malik/Kiralayan)</label>
+                            <input type="text" id="tahliye-landlord-name" placeholder="Örn: RAMAZAN AKAY">
+                        </div>
+                        <div class="form-group full">
+                            <label>Kiralanan Taşınmaz Adresi</label>
+                            <input type="text" id="tahliye-address" placeholder="Örn: Zafer Mah. Cumhuriyet Cad. No:44 D:3 BURDUR">
+                        </div>
+                        <div class="form-group">
+                            <label>Taahhüt Düzenleme Tarihi (İmza Tarihi)</label>
+                            <input type="date" id="tahliye-issue-date">
+                        </div>
+                        <div class="form-group">
+                            <label>Tahliye Edilecek Tarih</label>
+                            <input type="date" id="tahliye-eviction-date">
+                        </div>
                     </div>
                 </div>
 
-                <div class="btn-group">
-                    <button class="btn btn-accent" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
-                    <button class="btn btn-outline" onclick="resetTahliyeForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
+                <div class="btn-bar">
+                    <button class="btn btn-shadcn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
+                    <button class="btn btn-shadcn-outline" onclick="resetTahliyeForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
                 </div>
             </div>
 
         </div>
 
-        <!-- PREVIEW PANEL -->
-        <div class="preview-wrapper">
-            <div class="paper" id="printable-area">
-                <!-- Canlı Şablon Buraya Render Edilir -->
+        <!-- MINIMALIST A4 LIVE PREVIEW INSPECTOR -->
+        <div class="preview-inspector">
+            <div class="inspector-header no-print">
+                <div class="inspector-title"><i class="fa-solid fa-eye"></i> Canlı A4 Belge Önizleme</div>
+            </div>
+
+            <div class="paper-minimal" id="printable-area">
+                <!-- Live A4 Template Content Rendered Here -->
             </div>
         </div>
+
     </div>
 </div>
 
 <script>
-    // State Management
     let currentTab = 'kira';
 
     document.getElementById('kira-start-date').value = new Date().toISOString().slice(0, 10);
     document.getElementById('tahliye-issue-date').value = new Date().toISOString().slice(0, 10);
 
-    // Event Listeners for Live Preview
     const inputs = document.querySelectorAll('input, textarea');
     inputs.forEach(input => {
         input.addEventListener('input', renderPreview);
@@ -507,10 +611,10 @@
 
     function switchTab(tab) {
         currentTab = tab;
-        document.getElementById('tab-kira-btn').classList.toggle('active', tab === 'kira');
-        document.getElementById('tab-tahliye-btn').classList.toggle('active', tab === 'tahliye');
-        document.getElementById('form-kira-section').style.display = tab === 'kira' ? 'block' : 'none';
-        document.getElementById('form-tahliye-section').style.display = tab === 'tahliye' ? 'block' : 'none';
+        document.getElementById('tab-kira').classList.toggle('active', tab === 'kira');
+        document.getElementById('tab-tahliye').classList.toggle('active', tab === 'tahliye');
+        document.getElementById('kira-form-block').style.display = tab === 'kira' ? 'block' : 'none';
+        document.getElementById('tahliye-form-block').style.display = tab === 'tahliye' ? 'block' : 'none';
         renderPreview();
     }
 
@@ -556,7 +660,6 @@
             const guarantorNameTc = document.getElementById('kira-guarantor-name-tc').value.trim();
             const guarantorAddress = document.getElementById('kira-guarantor-address').value.trim();
 
-            // Date Format
             let dateTxt = '………………………………';
             if (startDate) {
                 const parts = startDate.split('-');
@@ -564,23 +667,19 @@
             }
             const startDurationFormatted = `${dateTxt} , #${duration}#`;
 
-            // Landlord Text
             let landlordTxt = '…………………………………………………………………………………………………………';
             if (landlordVekil) landlordTxt = esc(landlordVekil);
             else if (landlordName || landlordTc) landlordTxt = `${esc(landlordName)}${landlordTc ? ' – TC: ' + esc(landlordTc) : ''}`;
 
-            // Tenant Text
             let tenantTxt = '…………………………………………………………………………………………………………';
             if (tenantName || tenantTc) tenantTxt = `${esc(tenantName)}${tenantTc ? ' – TC: ' + esc(tenantTc) : ''}`;
             if (tenantAddress) tenantTxt += `<br>${esc(tenantAddress)}`;
 
-            // Fee Text
             let feeTxt = '7.000(YediBin)TL - AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ';
             if (feeAmt || feeTxtVal) {
                 feeTxt = `${esc(feeAmt)}(${esc(feeTxtVal)})TL - ${esc(paymentDay || 'AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ')}`;
             }
 
-            // Deposit Clause
             let depositClauseText = '';
             if (hasDeposit) {
                 let depAmt = '............ TL';
@@ -674,7 +773,6 @@
                 ` : ''}
             `;
         } else {
-            // TAHLİYE TAAHHÜDÜ RENDER
             const tenantName = document.getElementById('tahliye-tenant-name').value.trim() || '...........................................................';
             const tenantTc = document.getElementById('tahliye-tenant-tc').value.trim() || '...........................................................';
             const landlordName = document.getElementById('tahliye-landlord-name').value.trim() || '...........................................................';
@@ -690,10 +788,10 @@
             };
 
             target.innerHTML = `
-                <div style="padding: 20px 10px; font-family: 'Times New Roman', Times, serif; font-size: 0.95rem; line-height: 1.6;">
-                    <h2 style="text-align: center; font-size: 1.4rem; font-weight: bold; text-decoration: underline; margin-bottom: 24px;">TAHLİYE TAAHHÜTNAMESİ</h2>
+                <div style="padding: 10px 5px; font-family: 'Times New Roman', Times, serif; font-size: 0.9rem; line-height: 1.5;">
+                    <h2 style="text-align: center; font-size: 1.3rem; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">TAHLİYE TAAHHÜTNAMESİ</h2>
 
-                    <div style="margin-bottom: 20px; line-height: 1.8;">
+                    <div style="margin-bottom: 16px; line-height: 1.7;">
                         <p><strong>TAAHHÜT EDEN (KİRACI) :</strong> ${esc(tenantName)} (T.C. No: ${esc(tenantTc)})</p>
                         <p><strong>MALİK / KİRAYA VEREN :</strong> ${esc(landlordName)}</p>
                         <p><strong>TAHLİYE EDİLECEK ADRES :</strong> ${esc(address)}</p>
@@ -701,14 +799,14 @@
                         <p><strong>TAHLİYE TARİHİ :</strong> ${formatDate(evictionDateRaw)}</p>
                     </div>
 
-                    <div style="margin-top: 24px; text-align: justify; line-height: 1.8;">
-                        <p>Halen kiracı olarak kullanmakta olduğum yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 352/1. maddesi uyarınca kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yolına başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimi gayrikabili rücu serbest irademle kabul, beyan ve taahhüt ederim.</p>
+                    <div style="margin-top: 18px; text-align: justify; line-height: 1.7;">
+                        <p>Halen kiracı olarak kullanmakta olduğum yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 352/1. maddesi uyarınca kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimi gayrikabili rücu serbest irademle kabul, beyan ve taahhüt ederim.</p>
                     </div>
 
-                    <div style="display: flex; justify-content: flex-end; margin-top: 50px;">
-                        <div style="text-align: center; width: 250px;">
+                    <div style="display: flex; justify-content: flex-end; margin-top: 40px;">
+                        <div style="text-align: center; width: 240px;">
                             <p style="font-weight: bold; margin-bottom: 6px;">TAAHHÜT EDEN (KİRACI)</p>
-                            <p style="margin-bottom: 40px;">${esc(tenantName)}</p>
+                            <p style="margin-bottom: 30px;">${esc(tenantName)}</p>
                             <p><strong>İMZA :</strong></p>
                         </div>
                     </div>
@@ -718,7 +816,7 @@
     }
 
     function resetKiraForm() {
-        document.querySelectorAll('#form-kira-section input[type="text"]').forEach(i => i.value = '');
+        document.querySelectorAll('#kira-form-block input[type="text"]').forEach(i => i.value = '');
         document.getElementById('kira-has-deposit').checked = false;
         document.getElementById('kira-has-guarantor').checked = false;
         toggleDepositFields();
@@ -727,11 +825,10 @@
     }
 
     function resetTahliyeForm() {
-        document.querySelectorAll('#form-tahliye-section input[type="text"]').forEach(i => i.value = '');
+        document.querySelectorAll('#tahliye-form-block input[type="text"]').forEach(i => i.value = '');
         renderPreview();
     }
 
-    // Initial render
     renderPreview();
 </script>
 </body>

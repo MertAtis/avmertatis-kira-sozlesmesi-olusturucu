@@ -743,34 +743,38 @@
             target.innerHTML = `
                 <h1 style="text-align: center; font-size: 1.3rem; font-weight: bold; text-decoration: underline; margin: 0 0 10px 0; letter-spacing: 0.05em;">KİRA SÖZLEŞMESİ</h1>
 
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; border: 1.5px solid #000; font-size: 0.82rem;">
+                <table style="width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 10px; border: 1.5px solid #000; font-size: 0.82rem;">
+                    <colgroup>
+                        <col style="width: 38%;">
+                        <col style="width: 62%;">
+                    </colgroup>
                     <tr>
-                        <td style="width: 48%; border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Kiralanan Taşınmazın Adresi</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${esc(address)}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Kiralanan Taşınmazın Adresi</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${esc(address)}</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Kiraya Veren Adı Soyadı – T.C.</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${landlordTxt}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Kiraya Veren Adı Soyadı – T.C.</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${landlordTxt}</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Kiracı Adı Soyadı – T.C. ve Adresi</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${tenantTxt}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Kiracı Adı Soyadı – T.C. ve Adresi</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${tenantTxt}</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Sözleşme Başlangıcı ve Süresi</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${startDurationFormatted}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Sözleşme Başlangıcı ve Süresi</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${startDurationFormatted}</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Aylık Kirası-Ödeme Şekli Ödeme Günü</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${feeTxt}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Aylık Kirası-Ödeme Şekli Ödeme Günü</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${feeTxt}</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Kiralananın Cinsi ve Kullanımı</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${esc(type)}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Kiralananın Cinsi ve Kullanımı</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${esc(type)}</td>
                     </tr>
                     <tr>
-                        <td style="border: 1px solid #000; padding: 4px 8px; font-weight: bold; vertical-align: top; background: #fafafa;">Kiralananın Durumu - Demirbaş ve Eşyalar</td>
-                        <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">${esc(fixtures)}</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; font-weight: bold; vertical-align: top; background: #fafafa; word-break: break-word; overflow-wrap: anywhere;">Kiralananın Durumu - Demirbaş ve Eşyalar</td>
+                        <td style="border: 1px solid #000; padding: 5px 8px; vertical-align: top; word-break: break-word; overflow-wrap: anywhere;">${esc(fixtures)}</td>
                     </tr>
                 </table>
 

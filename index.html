@@ -935,7 +935,13 @@
     }
 
     function resetKiraForm() {
-        document.querySelectorAll('#kira-form-block input[type="text"]').forEach(i => i.value = '');
+        document.querySelectorAll('#kira-form-block input[type="text"], #kira-form-block textarea').forEach(i => i.value = '');
+        document.getElementById('kira-start-date').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('kira-duration').value = '1YIL';
+        document.getElementById('kira-payment-day').value = 'AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ';
+        document.getElementById('kira-iban').value = 'TR00 0000 0000 0000 0000 0000 00 IBAN numaralı ZİRAAT BANKASI';
+        document.getElementById('kira-type').value = 'EV-MESKEN';
+        document.getElementById('kira-fixtures').value = 'Kapılar, pencereler, dolaplar kombi-günısı ve diğer demirbaşlar sağlam, tam ve kullanılmaya elverişli olarak teslim edilmiştir. Ev boyalı-badanalı olarak temiz şekilde teslim edilmiş olup kiracı tahliyesi durumunda evi aynı şekilde kiraya verene teslimle yükümlüdür.';
         document.getElementById('kira-has-deposit').checked = false;
         document.getElementById('kira-has-guarantor').checked = false;
         toggleDepositFields();
@@ -946,7 +952,7 @@
     }
 
     function resetTahliyeForm() {
-        document.querySelectorAll('#tahliye-form-block input[type="text"]').forEach(i => i.value = '');
+        document.querySelectorAll('#tahliye-form-block input[type="text"], #tahliye-form-block input[type="date"]').forEach(i => i.value = '');
         const chk = document.getElementById('tahliye-is-married');
         if (chk) chk.checked = false;
         toggleTahliyeSpouseFields();

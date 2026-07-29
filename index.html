@@ -582,6 +582,28 @@
                             <label>Tahliye Edilecek Tarih</label>
                             <input type="date" id="tahliye-eviction-date">
                         </div>
+
+                        <div style="margin-top: 10px; grid-column: 1 / -1;">
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="tahliye-is-married" onchange="toggleTahliyeSpouseFields()">
+                                <span><i class="fa-solid fa-heart"></i> Kiracı Evli (Eş Bilgileri ve Eş Rızası Ekle)</span>
+                            </label>
+                            <div id="tahliye-spouse-group" class="nested-group" style="display: none;">
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Kiracının Eşinin Adı Soyadı</label>
+                                        <input type="text" id="tahliye-spouse-name" placeholder="Örn: ZEYNEP KAYA">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Kiracının Eşinin T.C. Kimlik No</label>
+                                        <input type="text" id="tahliye-spouse-tc" maxlength="11" placeholder="Örn: 33123456789">
+                                    </div>
+                                </div>
+                                <div class="info-pill">
+                                    <i class="fa-solid fa-info-circle"></i> <strong>Aile Konutu Güvencesi (TBK m. 194 & m. 352/1):</strong> Eş rızası eklenerek belgede eşin açık beyanı ve imzası yer alacak, aile konutu itirazı engellenecektir.
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -636,6 +658,13 @@
     function toggleGuarantorFields() {
         const chk = document.getElementById('kira-has-guarantor');
         document.getElementById('kira-guarantor-group').style.display = chk.checked ? 'block' : 'none';
+        renderPreview();
+    }
+
+    function toggleTahliyeSpouseFields() {
+        const chk = document.getElementById('tahliye-is-married');
+        const grp = document.getElementById('tahliye-spouse-group');
+        if (grp) grp.style.display = chk && chk.checked ? 'block' : 'none';
         renderPreview();
     }
 
@@ -808,12 +837,61 @@
                 return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
             };
 
+            const isMarried = document.getElementById('tahliye-is-married') ? document.getElementById('tahliye-is-married').checked : false;
+            const spouseName = document.getElementById('tahliye-spouse-name') ? document.getElementById('tahliye-spouse-name').value.trim() || '...........................................................' : '';
+            const spouseTc = document.getElementById('tahliye-spouse-tc') ? document.getElementById('tahliye-spouse-tc').value.trim() || '...........................................................' : '';
+
+            const formatDate = d => {
+                if (!d) return '......../............/..............';
+                const p = d.split('-');
+                return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
+            };
+
+            let spouseHeaderHTML = '';
+            if (isMarried) {
+                spouseHeaderHTML = `<p style="margin-bottom: 6px;"><strong>KİRACININ EŞİ ADI SOYADI VE TC :</strong> ${esc(spouseName)} (T.C. No: ${esc(spouseTc)})</p>`;
+            }
+
+            let declarationText = `Halen kiracı olarak kullanmakta olduğum yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 352/1. maddesi uyarınca kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimi gayrikabili rücu serbest irademle kabul, beyan ve taahhüt ederim.`;
+
+            if (isMarried) {
+                declarationText = `Halen aile konutu ve kiracı olarak birlikte kullanmakta olduğumuz yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 194. ve 352/1. maddeleri uyarınca eşlerin ortak rıza, beyan ve açık muvafakati ile kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimizi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimizi gayrikabili rücu serbest irademizle kabul, beyan ve taahhüt ederiz.`;
+            }
+
+            let signatureBlockHTML = `
+                <div style="display: flex; justify-content: flex-end; margin-top: 40px;">
+                    <div style="text-align: center; width: 240px;">
+                        <p style="font-weight: bold; margin-bottom: 6px;">TAAHHÜT EDEN (KİRACI)</p>
+                        <p style="margin-bottom: 30px;">${esc(tenantName)}</p>
+                        <p><strong>İMZA :</strong></p>
+                    </div>
+                </div>
+            `;
+
+            if (isMarried) {
+                signatureBlockHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-top: 40px; font-size: 0.88rem;">
+                        <div style="text-align: center; width: 46%;">
+                            <p style="font-weight: bold; margin-bottom: 6px;">RIZA GÖSTEREN / ORTAK TAAHHÜT EDEN (EŞİ)</p>
+                            <p style="margin-bottom: 30px;">${esc(spouseName)}</p>
+                            <p><strong>İMZA :</strong></p>
+                        </div>
+                        <div style="text-align: center; width: 46%;">
+                            <p style="font-weight: bold; margin-bottom: 6px;">TAAHHÜT EDEN (KİRACI)</p>
+                            <p style="margin-bottom: 30px;">${esc(tenantName)}</p>
+                            <p><strong>İMZA :</strong></p>
+                        </div>
+                    </div>
+                `;
+            }
+
             target.innerHTML = `
                 <div style="padding: 10px 5px; font-family: 'Times New Roman', Times, serif; font-size: 0.9rem; line-height: 1.5;">
                     <h2 style="text-align: center; font-size: 1.3rem; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">TAHLİYE TAAHHÜTNAMESİ</h2>
 
                     <div style="margin-bottom: 16px; line-height: 1.7; word-break: break-word; overflow-wrap: anywhere;">
                         <p style="margin-bottom: 6px;"><strong>TAAHHÜT EDEN (KİRACI) :</strong> ${esc(tenantName)} (T.C. No: ${esc(tenantTc)})</p>
+                        ${spouseHeaderHTML}
                         <p style="margin-bottom: 6px;"><strong>MALİK / KİRAYA VEREN :</strong> ${esc(landlordName)}</p>
                         <p style="margin-bottom: 6px;"><strong>TAHLİYE EDİLECEK ADRES :</strong> ${esc(address)}</p>
                         <p style="margin-bottom: 6px;"><strong>TAAHHÜT DÜZENLEME TARİHİ :</strong> ${formatDate(issueDateRaw)}</p>
@@ -821,16 +899,10 @@
                     </div>
 
                     <div style="margin-top: 18px; text-align: justify; line-height: 1.7;">
-                        <p>Halen kiracı olarak kullanmakta olduğum yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 352/1. maddesi uyarınca kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimi gayrikabili rücu serbest irademle kabul, beyan ve taahhüt ederim.</p>
+                        <p>${declarationText}</p>
                     </div>
 
-                    <div style="display: flex; justify-content: flex-end; margin-top: 40px;">
-                        <div style="text-align: center; width: 240px;">
-                            <p style="font-weight: bold; margin-bottom: 6px;">TAAHHÜT EDEN (KİRACI)</p>
-                            <p style="margin-bottom: 30px;">${esc(tenantName)}</p>
-                            <p><strong>İMZA :</strong></p>
-                        </div>
-                    </div>
+                    ${signatureBlockHTML}
                 </div>
             `;
         }
@@ -880,6 +952,9 @@
 
     function resetTahliyeForm() {
         document.querySelectorAll('#tahliye-form-block input[type="text"]').forEach(i => i.value = '');
+        const chk = document.getElementById('tahliye-is-married');
+        if (chk) chk.checked = false;
+        toggleTahliyeSpouseFields();
         renderPreview();
     }
 

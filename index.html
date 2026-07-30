@@ -584,22 +584,6 @@
                             <input type="date" id="tahliye-issue-date">
                         </div>
 
-                        <div style="margin-top: 5px; grid-column: 1 / -1;">
-                            <label class="checkbox-card">
-                                <input type="checkbox" id="tahliye-has-eviction-date" onchange="toggleTahliyeEvictionDateFields()">
-                                <span><i class="fa-solid fa-calendar-day"></i> Tahliye Tarihi Belirle (Tarih Girmek İçin İşaretleyin)</span>
-                            </label>
-                            <div id="tahliye-eviction-date-group" class="nested-group" style="display: none;">
-                                <div class="form-group">
-                                    <label>Tahliye Edilecek Tarih</label>
-                                    <input type="date" id="tahliye-eviction-date">
-                                </div>
-                                <div class="info-pill">
-                                    <i class="fa-solid fa-info-circle"></i> İşaretlenmediğinde belgede Tahliye Tarihi kısmı boş <code>......../............/..............</code> olarak basılır, elle doldurulabilir.
-                                </div>
-                            </div>
-                        </div>
-
                         <div style="margin-top: 10px; grid-column: 1 / -1;">
                             <label class="checkbox-card">
                                 <input type="checkbox" id="tahliye-is-married" onchange="toggleTahliyeSpouseFields()">
@@ -679,17 +663,6 @@
         const chk = document.getElementById('tahliye-is-married');
         const grp = document.getElementById('tahliye-spouse-group');
         if (grp) grp.style.display = chk && chk.checked ? 'block' : 'none';
-        renderPreview();
-    }
-
-    function toggleTahliyeEvictionDateFields() {
-        const chk = document.getElementById('tahliye-has-eviction-date');
-        const grp = document.getElementById('tahliye-eviction-date-group');
-        if (grp) grp.style.display = chk && chk.checked ? 'block' : 'none';
-        if (!chk || !chk.checked) {
-            const input = document.getElementById('tahliye-eviction-date');
-            if (input) input.value = '';
-        }
         renderPreview();
     }
 
@@ -858,8 +831,7 @@
             const address = document.getElementById('tahliye-address').value.trim() || '...................................................................................................';
             
             const issueDateRaw = document.getElementById('tahliye-issue-date').value;
-            const hasEvictionDate = document.getElementById('tahliye-has-eviction-date') ? document.getElementById('tahliye-has-eviction-date').checked : false;
-            const evictionDateRaw = hasEvictionDate ? document.getElementById('tahliye-eviction-date').value : '';
+            const evictionDateRaw = '';
 
             const formatDate = d => {
                 if (!d) return '......../............/..............';
@@ -985,9 +957,6 @@
         const chk = document.getElementById('tahliye-is-married');
         if (chk) chk.checked = false;
         toggleTahliyeSpouseFields();
-        const chkEvic = document.getElementById('tahliye-has-eviction-date');
-        if (chkEvic) chkEvic.checked = false;
-        toggleTahliyeEvictionDateFields();
         renderPreview();
     }
 

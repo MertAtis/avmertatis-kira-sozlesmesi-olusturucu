@@ -848,11 +848,7 @@
                 spouseHeaderHTML = `<p style="margin-bottom: 6px;"><strong>KİRACININ EŞİ ADI SOYADI VE TC :</strong> ${esc(spouseName)} (T.C. No: ${esc(spouseTc)})</p>`;
             }
 
-            let declarationText = `Halen kiracı olarak kullanmakta olduğum yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 352/1. maddesi uyarınca kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimi gayrikabili rücu serbest irademle kabul, beyan ve taahhüt ederim.`;
-
-            if (isMarried) {
-                declarationText = `Halen aile konutu ve kiracı olarak birlikte kullanmakta olduğumuz yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 194. ve 352/1. maddeleri uyarınca eşlerin ortak rıza, beyan ve açık muvafakati ile kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimizi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimizi gayrikabili rücu serbest irademizle kabul, beyan ve taahhüt ederiz.`;
-            }
+            const declarationText = `Halen kiracı olarak kullanmakta olduğum yukarıda adres bilgileri mevcut bulunan taşınmazı, hiçbir ihtar ve ihbara gerek kalmaksızın, 6098 sayılı Türk Borçlar Kanunu’nun 352/1. maddesi uyarınca kayıtsız ve şartsız olarak, belirtilen <strong>${formatDate(evictionDateRaw)}</strong> tarihinde boşaltarak kiraya verene teslim edeceğimi; adı geçen kiraya verenin veya vekilinin icra takibine veya dava yoluna başvurması halinde yapacağı tüm masraflar ile vekâlet ücretini ödeyeceğimi gayrikabili rücu serbest irademle kabul, beyan ve taahhüt ederim.`;
 
             let signatureBlockHTML = `
                 <div style="display: flex; justify-content: flex-end; margin-top: 40px;">

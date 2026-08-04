@@ -402,8 +402,8 @@
             </div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <div class="badge" id="contract-counter-badge" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; transition: transform 0.2s ease;">
-                <i class="fa-solid fa-file-signature"></i> <strong id="contract-count-text">0</strong> Belge Hazırlandı
+            <div class="badge" id="contract-counter-badge" title="Tüm ziyaretçiler tarafından genel toplamda hazırlanan belge sayısı" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; transition: transform 0.2s ease; cursor: default;">
+                <i class="fa-solid fa-earth-americas"></i> Toplam <strong id="contract-count-text" style="margin: 0 2px;">0</strong> Belge Hazırlandı
             </div>
             <div class="badge">
                 <i class="fa-solid fa-circle-check"></i> %100 Çevrimdışı (KVKK & Meslek Sırrı Uyumlu)
@@ -986,18 +986,48 @@
         renderPreview();
     }
 
+    const COUNTER_API_KEY = 'avmertatis-kira-sozlesmesi-pdf-counter';
+
+    async function fetchGlobalCount() {
+        try {
+            const res = await fetch(`https://countapi.mileshilliard.com/api/v1/get/${COUNTER_API_KEY}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && typeof data.value === 'number') {
+                    localStorage.setItem('kira_contract_global_count', data.value.toString());
+                    updateCounterDisplay(data.value, false);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('Global counter offline:', e);
+        }
+        const cached = localStorage.getItem('kira_contract_global_count') || localStorage.getItem('kira_contract_count') || '0';
+        updateCounterDisplay(cached, false);
+    }
+
     function handlePrint() {
-        let count = parseInt(localStorage.getItem('kira_contract_count') || '0', 10);
-        count++;
-        localStorage.setItem('kira_contract_count', count.toString());
-        updateCounterDisplay(true);
+        let localCount = parseInt(localStorage.getItem('kira_contract_global_count') || localStorage.getItem('kira_contract_count') || '0', 10) + 1;
+        localStorage.setItem('kira_contract_global_count', localCount.toString());
+        updateCounterDisplay(localCount, true);
+
+        try {
+            fetch(`https://countapi.mileshilliard.com/api/v1/hit/${COUNTER_API_KEY}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data && typeof data.value === 'number') {
+                        localStorage.setItem('kira_contract_global_count', data.value.toString());
+                        updateCounterDisplay(data.value, true);
+                    }
+                }).catch(() => {});
+        } catch (e) {}
+
         window.print();
     }
 
-    function updateCounterDisplay(animate = false) {
-        const count = localStorage.getItem('kira_contract_count') || '0';
+    function updateCounterDisplay(countVal, animate = false) {
         const el = document.getElementById('contract-count-text');
-        if (el) el.textContent = count;
+        if (el) el.textContent = Number(countVal || 0).toLocaleString('tr-TR');
         if (animate) {
             const badge = document.getElementById('contract-counter-badge');
             if (badge) {
@@ -1009,7 +1039,7 @@
         }
     }
 
-    updateCounterDisplay();
+    fetchGlobalCount();
     renderPreview();
 </script>
 </body>

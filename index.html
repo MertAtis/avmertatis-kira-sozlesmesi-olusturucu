@@ -403,7 +403,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <div class="badge" id="contract-counter-badge" title="Tüm ziyaretçiler tarafından genel toplamda hazırlanan belge sayısı" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; transition: transform 0.2s ease; cursor: default;">
-                <i class="fa-solid fa-earth-americas"></i> Toplam <strong id="contract-count-text" style="margin: 0 2px;">0</strong> Belge Hazırlandı
+                <i class="fa-solid fa-earth-americas"></i> Toplam <strong id="contract-count-text" style="margin: 0 2px;">15</strong> Belge Hazırlandı
             </div>
             <div class="badge">
                 <i class="fa-solid fa-circle-check"></i> %100 Çevrimdışı (KVKK & Meslek Sırrı Uyumlu)
@@ -987,6 +987,7 @@
     }
 
     const COUNTER_API_KEY = 'avmertatis-kira-sozlesmesi-pdf-counter';
+    const COUNTER_OFFSET = 14; // Start baseline from 15 (1 + 14 = 15)
 
     async function fetchGlobalCount() {
         try {
@@ -994,20 +995,21 @@
             if (res.ok) {
                 const data = await res.json();
                 if (data && typeof data.value === 'number') {
-                    localStorage.setItem('kira_contract_global_count', data.value.toString());
-                    updateCounterDisplay(data.value, false);
+                    const total = data.value + COUNTER_OFFSET;
+                    localStorage.setItem('kira_contract_global_count', total.toString());
+                    updateCounterDisplay(total, false);
                     return;
                 }
             }
         } catch (e) {
             console.log('Global counter offline:', e);
         }
-        const cached = localStorage.getItem('kira_contract_global_count') || localStorage.getItem('kira_contract_count') || '0';
+        const cached = localStorage.getItem('kira_contract_global_count') || '15';
         updateCounterDisplay(cached, false);
     }
 
     function handlePrint() {
-        let localCount = parseInt(localStorage.getItem('kira_contract_global_count') || localStorage.getItem('kira_contract_count') || '0', 10) + 1;
+        let localCount = parseInt(localStorage.getItem('kira_contract_global_count') || '15', 10) + 1;
         localStorage.setItem('kira_contract_global_count', localCount.toString());
         updateCounterDisplay(localCount, true);
 
@@ -1016,8 +1018,9 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data && typeof data.value === 'number') {
-                        localStorage.setItem('kira_contract_global_count', data.value.toString());
-                        updateCounterDisplay(data.value, true);
+                        const total = data.value + COUNTER_OFFSET;
+                        localStorage.setItem('kira_contract_global_count', total.toString());
+                        updateCounterDisplay(total, true);
                     }
                 }).catch(() => {});
         } catch (e) {}

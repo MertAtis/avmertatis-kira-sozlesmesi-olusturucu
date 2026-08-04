@@ -438,8 +438,19 @@
                             <input type="text" id="kira-landlord-tc" maxlength="11" placeholder="Örn: 21312312312">
                         </div>
                         <div class="form-group full">
-                            <label>Kiraya Veren Vekili (Varsa / Vekaleten T.C. Bilgileri)</label>
-                            <input type="text" id="kira-landlord-vekil" placeholder="Örn: AHMET YILMAZ adına vekaleten Av. MERT ATIŞ (TC: 10000000000)">
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="kira-has-vekil" onchange="toggleVekilFields()">
+                                <span><i class="fa-solid fa-user-tie"></i> Kiraya Veren Vekili Bilgisi Var (Vekaleten)</span>
+                            </label>
+                            <div id="kira-vekil-group" class="nested-group" style="display: none;">
+                                <div class="form-group">
+                                    <label>Kiraya Veren Vekili Adı Soyadı & T.C. Bilgileri</label>
+                                    <input type="text" id="kira-landlord-vekil" placeholder="Örn: AHMET YILMAZ adına vekaleten Av. MERT ATIŞ (TC: 10000000000)">
+                                </div>
+                                <div class="info-pill">
+                                    <i class="fa-solid fa-info-circle"></i> Vekil bilgisi aktif olduğunda, taraf ve imza hanelerinde vekaleten ibaresi otomatik yer alır.
+                                </div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Kiracı Adı Soyadı</label>
@@ -662,6 +673,13 @@
         renderPreview();
     }
 
+    function toggleVekilFields() {
+        const chk = document.getElementById('kira-has-vekil');
+        const grp = document.getElementById('kira-vekil-group');
+        if (grp) grp.style.display = chk && chk.checked ? 'block' : 'none';
+        renderPreview();
+    }
+
     function toggleTahliyeSpouseFields() {
         const chk = document.getElementById('tahliye-is-married');
         const grp = document.getElementById('tahliye-spouse-group');
@@ -679,7 +697,8 @@
         if (currentTab === 'kira') {
             const landlordName = document.getElementById('kira-landlord-name').value.trim();
             const landlordTc = document.getElementById('kira-landlord-tc').value.trim();
-            const landlordVekil = document.getElementById('kira-landlord-vekil').value.trim();
+            const hasVekil = document.getElementById('kira-has-vekil') ? document.getElementById('kira-has-vekil').checked : false;
+            const landlordVekil = (hasVekil && document.getElementById('kira-landlord-vekil')) ? document.getElementById('kira-landlord-vekil').value.trim() : '';
             const tenantName = document.getElementById('kira-tenant-name').value.trim();
             const tenantTc = document.getElementById('kira-tenant-tc').value.trim();
             const tenantAddress = document.getElementById('kira-tenant-address').value.trim();
@@ -944,6 +963,9 @@
         document.getElementById('kira-fixtures').value = 'Kapılar, pencereler, dolaplar kombi-günısı ve diğer demirbaşlar sağlam, tam ve kullanılmaya elverişli olarak teslim edilmiştir. Ev boyalı-badanalı olarak temiz şekilde teslim edilmiş olup kiracı tahliyesi durumunda evi aynı şekilde kiraya verene teslimle yükümlüdür.';
         document.getElementById('kira-has-deposit').checked = false;
         document.getElementById('kira-has-guarantor').checked = false;
+        const vekilChk = document.getElementById('kira-has-vekil');
+        if (vekilChk) vekilChk.checked = false;
+        toggleVekilFields();
         toggleDepositFields();
         toggleGuarantorFields();
         customClauses = [];

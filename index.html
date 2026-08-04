@@ -26,6 +26,48 @@
             --input: #cbd5e1;
             --ring: #0f172a;
             --radius: 0.5rem;
+            --form-section-bg: #fafafa;
+            --form-section-border: #f1f5f9;
+            --label-color: #334155;
+            --input-bg: #ffffff;
+            --counter-bg: #eff6ff;
+            --counter-fg: #1d4ed8;
+            --counter-border: #bfdbfe;
+            --info-bg: #eff6ff;
+            --info-fg: #1e40af;
+            --info-border: #bfdbfe;
+            --brand-link-color: #0f172a;
+            --tab-bg: #e2e8f0;
+        }
+
+        [data-theme="dark"] {
+            --background: #090d16;
+            --foreground: #f8fafc;
+            --card: #111827;
+            --card-foreground: #f8fafc;
+            --primary: #38bdf8;
+            --primary-foreground: #0f172a;
+            --secondary: #1f2937;
+            --secondary-foreground: #f8fafc;
+            --muted: #1e293b;
+            --muted-foreground: #94a3b8;
+            --accent: #1e293b;
+            --accent-foreground: #f8fafc;
+            --border: #1f2937;
+            --input: #374151;
+            --ring: #38bdf8;
+            --form-section-bg: #172033;
+            --form-section-border: #1f2937;
+            --label-color: #cbd5e1;
+            --input-bg: #1f2937;
+            --counter-bg: #1e293b;
+            --counter-fg: #60a5fa;
+            --counter-border: #2563eb;
+            --info-bg: #1e293b;
+            --info-fg: #93c5fd;
+            --info-border: #2563eb;
+            --brand-link-color: #38bdf8;
+            --tab-bg: #1e293b;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -94,14 +136,34 @@
             border-radius: 9999px;
             font-size: 0.75rem;
             font-weight: 600;
-            background: #f0fdf4;
-            color: #166534;
-            border: 1px solid #bbf7d0;
+            background: var(--form-section-bg);
+            color: var(--foreground);
+            border: 1px solid var(--border);
+        }
+
+        .theme-toggle-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: var(--card);
+            color: var(--foreground);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
         }
 
         /* Shadcn Tabs */
         .tab-container {
-            background: #e2e8f0;
+            background: var(--tab-bg);
             padding: 4px;
             border-radius: calc(var(--radius) + 2px);
             display: inline-flex;
@@ -165,8 +227,8 @@
 
         /* Form Visibility Enhancements */
         .form-section {
-            background: #fafafa;
-            border: 1px solid #f1f5f9;
+            background: var(--form-section-bg);
+            border: 1px solid var(--form-section-border);
             border-radius: var(--radius);
             padding: 18px;
             margin-bottom: 18px;
@@ -199,13 +261,13 @@
         label {
             font-size: 0.8125rem;
             font-weight: 600;
-            color: #334155;
+            color: var(--label-color);
         }
 
         input[type="text"], input[type="date"], textarea {
             width: 100%;
             padding: 10px 14px;
-            background: #ffffff;
+            background: var(--input-bg);
             border: 1.5px solid var(--input);
             border-radius: var(--radius);
             font-family: inherit;
@@ -217,19 +279,19 @@
         }
 
         input[type="text"]::placeholder, textarea::placeholder {
-            color: #94a3b8;
+            color: var(--muted-foreground);
             font-weight: 400;
         }
 
         input[type="text"]:focus, input[type="date"]:focus, textarea:focus {
             outline: none;
             border-color: var(--ring);
-            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
         }
 
         /* Checkbox Box */
         .checkbox-card {
-            background: #ffffff;
+            background: var(--input-bg);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 12px 14px;
@@ -256,7 +318,7 @@
         }
 
         .nested-group {
-            background: #ffffff;
+            background: var(--form-section-bg);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 16px;
@@ -265,9 +327,9 @@
 
         .info-pill {
             font-size: 0.775rem;
-            color: #3b82f6;
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
+            color: var(--info-fg);
+            background: var(--info-bg);
+            border: 1px solid var(--info-border);
             padding: 8px 12px;
             border-radius: var(--radius);
             margin-top: 10px;
@@ -395,14 +457,17 @@
                 <div class="brand-title">Kira Sözleşmesi & Tahliye Taahhüdü Jeneratörü</div>
                 <div class="brand-sub">
                     Av. Mert Atış tarafından tasarlanıp yayına alınmıştır • 
-                    <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: #0f172a; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid #0f172a; padding-bottom: 1px;">
+                    <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: var(--brand-link-color); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--brand-link-color); padding-bottom: 1px;">
                         <i class="fa-brands fa-x-twitter"></i> X (@baddestwolf_)
                     </a>
                 </div>
             </div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <div class="badge" id="contract-counter-badge" title="Tüm ziyaretçiler tarafından genel toplamda hazırlanan belge sayısı" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; transition: transform 0.2s ease; cursor: default;">
+            <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Gece/Gündüz Modu Değiştir">
+                <i class="fa-solid fa-moon"></i> <span id="theme-toggle-text">Karanlık Mod</span>
+            </button>
+            <div class="badge" id="contract-counter-badge" title="Tüm ziyaretçiler tarafından genel toplamda hazırlanan belge sayısı" style="background: var(--counter-bg); color: var(--counter-fg); border-color: var(--counter-border); transition: transform 0.2s ease; cursor: default;">
                 <i class="fa-solid fa-earth-americas"></i> Toplam <strong id="contract-count-text" style="margin: 0 2px;">15</strong> Belge Hazırlandı
             </div>
             <div class="badge">
@@ -951,7 +1016,7 @@
         if (!list) return;
         if (!customClauses.length) { list.innerHTML = ''; return; }
         list.innerHTML = customClauses.map((c, i) => `
-            <div style="display:flex; align-items:flex-start; gap:8px; background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; margin-bottom:6px; font-size:0.85rem;">
+            <div style="display:flex; align-items:flex-start; gap:8px; background:var(--card); color:var(--foreground); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; margin-bottom:6px; font-size:0.85rem;">
                 <span style="flex:1; line-height:1.4;"><b>Özel Madde ${i + 1}:</b> ${esc(c)}</span>
                 <button onclick="deleteCustomClause(${i})" title="Sil" style="background:none; border:none; cursor:pointer; color:#ef4444; font-weight:bold; font-size:0.9rem; padding:0 4px;">✕</button>
             </div>
@@ -1042,6 +1107,34 @@
         }
     }
 
+    function initTheme() {
+        const savedTheme = localStorage.getItem('app_theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+        setTheme(theme);
+    }
+
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+    }
+
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('app_theme', theme);
+        const icon = document.querySelector('#theme-toggle-btn i');
+        const text = document.getElementById('theme-toggle-text');
+        if (theme === 'dark') {
+            if (icon) icon.className = 'fa-solid fa-sun';
+            if (text) text.textContent = 'Aydınlık Mod';
+        } else {
+            if (icon) icon.className = 'fa-solid fa-moon';
+            if (text) text.textContent = 'Karanlık Mod';
+        }
+    }
+
+    initTheme();
     fetchGlobalCount();
     renderPreview();
 </script>

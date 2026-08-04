@@ -70,14 +70,53 @@
             --tab-bg: #1e293b;
         }
 
+        /* 21st.dev "Silk Blend" Gradient Background */
+        .silk-background {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+            container-type: size;
+        }
+
+        .silk-layer {
+            position: absolute;
+            inset: 0;
+            background-color: #0B1E3B;
+            background-image:
+                url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.110'/></svg>"),
+                linear-gradient(180deg, #0B1E3B 0%, #1E5A8A 39%, #4F9AD0 65%, #BFE6F5 99%);
+            background-size: 120px 120px, auto;
+            background-blend-mode: overlay, normal;
+        }
+
+        [data-theme="dark"] .silk-layer {
+            background-image:
+                url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.110'/></svg>"),
+                linear-gradient(180deg, #050C18 0%, #0D2840 39%, #1A3E5C 65%, #2B577A 99%);
+        }
+
+        .silk-grain {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.110;
+            mix-blend-mode: overlay;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: var(--background);
+            background-color: #0B1E3B;
             color: var(--foreground);
             line-height: 1.5;
             padding: 24px 16px;
             -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
         }
 
         .container {
@@ -120,12 +159,13 @@
             font-size: 1.15rem;
             font-weight: 700;
             letter-spacing: -0.02em;
-            color: var(--foreground);
+            color: #ffffff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
         }
 
         .brand-sub {
             font-size: 0.8rem;
-            color: var(--muted-foreground);
+            color: #cbd5e1;
         }
 
         .badge {
@@ -396,7 +436,8 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: var(--muted-foreground);
+            color: #ffffff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -447,6 +488,18 @@
 </head>
 <body>
 
+<!-- 21st.dev "Silk Blend" Gradient Background Layer -->
+<div class="silk-background no-print" aria-hidden="true">
+    <div class="silk-layer"></div>
+    <svg aria-hidden="true" class="silk-grain">
+        <filter id="grain-1f93acd9">
+            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch" />
+            <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#grain-1f93acd9)" />
+    </svg>
+</div>
+
 <div class="container">
     
     <!-- HEADER -->
@@ -457,7 +510,7 @@
                 <div class="brand-title">Kira Sözleşmesi & Tahliye Taahhüdü Jeneratörü</div>
                 <div class="brand-sub">
                     Av. Mert Atış tarafından tasarlanıp yayına alınmıştır • 
-                    <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: var(--brand-link-color); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--brand-link-color); padding-bottom: 1px;">
+                    <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: #93c5fd; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid #93c5fd; padding-bottom: 1px;">
                         <i class="fa-brands fa-x-twitter"></i> X (@baddestwolf_)
                     </a>
                 </div>

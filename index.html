@@ -401,8 +401,13 @@
                 </div>
             </div>
         </div>
-        <div class="badge">
-            <i class="fa-solid fa-circle-check"></i> %100 Çevrimdışı (KVKK & Meslek Sırrı Uyumlu)
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div class="badge" id="contract-counter-badge" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; transition: transform 0.2s ease;">
+                <i class="fa-solid fa-file-signature"></i> <strong id="contract-count-text">0</strong> Belge Hazırlandı
+            </div>
+            <div class="badge">
+                <i class="fa-solid fa-circle-check"></i> %100 Çevrimdışı (KVKK & Meslek Sırrı Uyumlu)
+            </div>
         </div>
     </header>
 
@@ -564,7 +569,7 @@
                 </div>
 
                 <div class="btn-bar">
-                    <button class="btn btn-shadcn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
+                    <button class="btn btn-shadcn-primary" onclick="handlePrint()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
                     <button class="btn btn-shadcn-outline" onclick="resetKiraForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
                 </div>
             </div>
@@ -623,7 +628,7 @@
                 </div>
 
                 <div class="btn-bar">
-                    <button class="btn btn-shadcn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
+                    <button class="btn btn-shadcn-primary" onclick="handlePrint()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
                     <button class="btn btn-shadcn-outline" onclick="resetTahliyeForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
                 </div>
             </div>
@@ -981,6 +986,30 @@
         renderPreview();
     }
 
+    function handlePrint() {
+        let count = parseInt(localStorage.getItem('kira_contract_count') || '0', 10);
+        count++;
+        localStorage.setItem('kira_contract_count', count.toString());
+        updateCounterDisplay(true);
+        window.print();
+    }
+
+    function updateCounterDisplay(animate = false) {
+        const count = localStorage.getItem('kira_contract_count') || '0';
+        const el = document.getElementById('contract-count-text');
+        if (el) el.textContent = count;
+        if (animate) {
+            const badge = document.getElementById('contract-counter-badge');
+            if (badge) {
+                badge.style.transform = 'scale(1.15)';
+                setTimeout(() => {
+                    badge.style.transform = 'scale(1)';
+                }, 250);
+            }
+        }
+    }
+
+    updateCounterDisplay();
     renderPreview();
 </script>
 </body>

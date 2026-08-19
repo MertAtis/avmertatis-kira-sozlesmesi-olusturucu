@@ -70,8 +70,8 @@
             --tab-bg: #1e293b;
         }
 
-        /* 21st.dev "Silk Blend" Gradient Background */
-        .silk-background {
+        /* Multi-Layered Custom Gradient Background */
+        .gradient-bg {
             position: fixed;
             inset: 0;
             width: 100vw;
@@ -79,39 +79,56 @@
             z-index: -1;
             pointer-events: none;
             overflow: hidden;
-            container-type: size;
+            isolation: isolate;
         }
 
-        .silk-layer {
-            position: absolute;
-            inset: 0;
-            background-color: #0B1E3B;
-            background-image:
-                url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.110'/></svg>"),
-                linear-gradient(180deg, #0B1E3B 0%, #1E5A8A 39%, #4F9AD0 65%, #BFE6F5 99%);
-            background-size: 120px 120px, auto;
-            background-blend-mode: overlay, normal;
+        .gradient-bg .base {
+            position: absolute; inset: 0; z-index: 0;
+            background: linear-gradient(317deg, #dee0e4 0%, #96a7c7 14%, #4175be 36%, #263a50 55%, #14181c 78%, #070707 100%);
         }
 
-        [data-theme="dark"] .silk-layer {
-            background-image:
-                url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.110'/></svg>"),
-                linear-gradient(180deg, #050C18 0%, #0D2840 39%, #1A3E5C 65%, #2B577A 99%);
+        .gradient-bg .treatment {
+            position: absolute; inset: 0px; z-index: 1;
+            background-image: repeating-linear-gradient(90deg, transparent 0 10%, rgba(211, 216, 228, 0.13) 12%, rgba(50, 119, 215, 0.26) 16%, transparent 21%), repeating-linear-gradient(132deg, transparent 0 18%, rgba(20, 24, 28, 0.46) 20%, transparent 25%);
+            filter: blur(24px);
+            opacity: 0.442;
+            mask-image: linear-gradient(130deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+            -webkit-mask-image: linear-gradient(130deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
         }
 
-        .silk-grain {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0.110;
-            mix-blend-mode: overlay;
+        .gradient-bg .glow {
+            position: absolute; inset: 0; z-index: 2;
+            background: radial-gradient(ellipse at 44% 7%, rgba(255,255,255,0.33), transparent 38%), radial-gradient(ellipse at 54% 42%, rgba(50, 119, 215, 0.30), transparent 42%);
+        }
+
+        .gradient-bg .particles {
+            position: absolute; inset: 0; z-index: 3;
+            background: radial-gradient(circle at 37% 86%, rgba(255, 255, 255, 0.31) 0, transparent 2px), radial-gradient(circle at 76% 21%, rgba(211, 216, 228, 0.15) 0, transparent 1px), radial-gradient(circle at 67% 64%, rgba(255, 255, 255, 0.33) 0, transparent 3px), radial-gradient(circle at 77% 28%, rgba(255, 255, 255, 0.31) 0, transparent 3px), radial-gradient(circle at 87% 89%, rgba(255, 255, 255, 0.19) 0, transparent 3px), radial-gradient(circle at 86% 17%, rgba(255, 255, 255, 0.34) 0, transparent 3px), radial-gradient(circle at 53% 22%, rgba(211, 216, 228, 0.25) 0, transparent 2px), radial-gradient(circle at 83% 81%, rgba(255, 255, 255, 0.29) 0, transparent 2px), radial-gradient(circle at 80% 75%, rgba(255, 255, 255, 0.37) 0, transparent 1px), radial-gradient(circle at 93% 31%, rgba(211, 216, 228, 0.14) 0, transparent 2px), radial-gradient(circle at 83% 46%, rgba(255, 255, 255, 0.34) 0, transparent 1px), radial-gradient(circle at 19% 71%, rgba(255, 255, 255, 0.11) 0, transparent 2px), radial-gradient(circle at 15% 59%, rgba(211, 216, 228, 0.37) 0, transparent 1px), radial-gradient(circle at 82% 76%, rgba(255, 255, 255, 0.36) 0, transparent 3px), radial-gradient(circle at 61% 33%, rgba(255, 255, 255, 0.33) 0, transparent 3px), radial-gradient(circle at 21% 54%, rgba(211, 216, 228, 0.17) 0, transparent 2px), radial-gradient(circle at 80% 78%, rgba(211, 216, 228, 0.19) 0, transparent 3px), radial-gradient(circle at 29% 40%, rgba(211, 216, 228, 0.23) 0, transparent 3px), radial-gradient(circle at 52% 37%, rgba(255, 255, 255, 0.15) 0, transparent 3px), radial-gradient(circle at 39% 75%, rgba(255, 255, 255, 0.25) 0, transparent 2px), radial-gradient(circle at 33% 38%, rgba(211, 216, 228, 0.21) 0, transparent 3px), radial-gradient(circle at 70% 23%, rgba(211, 216, 228, 0.38) 0, transparent 2px), radial-gradient(circle at 37% 76%, rgba(211, 216, 228, 0.17) 0, transparent 1px), radial-gradient(circle at 36% 80%, rgba(211, 216, 228, 0.14) 0, transparent 2px), radial-gradient(circle at 49% 21%, rgba(211, 216, 228, 0.36) 0, transparent 3px), radial-gradient(circle at 23% 47%, rgba(255, 255, 255, 0.12) 0, transparent 2px), radial-gradient(circle at 72% 33%, rgba(211, 216, 228, 0.23) 0, transparent 2px), radial-gradient(circle at 32% 55%, rgba(211, 216, 228, 0.27) 0, transparent 1px);
+        }
+
+        .gradient-bg .vignette {
+            position: absolute; inset: 0; z-index: 4;
+            background: radial-gradient(circle at center, transparent 25%, rgba(0,0,0,0.15) 58%, rgba(0,0,0,0.92) 100%), linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.85) 100%);
+        }
+
+        .gradient-bg .noise {
+            position: absolute; inset: 0; z-index: 5;
+            mix-blend-mode: soft-light;
+            opacity: 0.17;
+            background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+            background-size: 180px 180px;
+        }
+
+        .gradient-bg .chromatic {
+            position: absolute; inset: 0; z-index: 7;
+            mix-blend-mode: screen;
+            background: linear-gradient(44deg, rgba(50, 119, 215, 0.13) 0%, transparent 50%), linear-gradient(164deg, rgba(211, 216, 228, 0.09) 0%, transparent 50%);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: #0B1E3B;
+            background-color: #070707;
             color: var(--foreground);
             line-height: 1.5;
             padding: 24px 16px;
@@ -488,16 +505,15 @@
 </head>
 <body>
 
-<!-- 21st.dev "Silk Blend" Gradient Background Layer -->
-<div class="silk-background no-print" aria-hidden="true">
-    <div class="silk-layer"></div>
-    <svg aria-hidden="true" class="silk-grain">
-        <filter id="grain-1f93acd9">
-            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch" />
-            <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#grain-1f93acd9)" />
-    </svg>
+<!-- Multi-Layered Gradient Background Layer -->
+<div class="gradient-bg no-print" aria-hidden="true">
+    <div class="base"></div>
+    <div class="treatment"></div>
+    <div class="glow"></div>
+    <div class="particles"></div>
+    <div class="vignette"></div>
+    <div class="noise"></div>
+    <div class="chromatic"></div>
 </div>
 
 <div class="container">

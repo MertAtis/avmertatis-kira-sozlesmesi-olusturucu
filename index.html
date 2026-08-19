@@ -10,155 +10,87 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --background: #e8eef6;
-            --foreground: #0f172a;
-            --card: rgba(255, 255, 255, 0.92);
-            --card-foreground: #0f172a;
-            --primary: #123258;
-            --primary-foreground: #ffffff;
-            --secondary: #f1f5f9;
-            --secondary-foreground: #0f172a;
-            --muted: #f1f5f9;
-            --muted-foreground: #475569;
-            --accent: #f8fafc;
-            --accent-foreground: #0f172a;
-            --border: rgba(255, 255, 255, 0.85);
-            --input: #cbd5e1;
-            --ring: #3b82f6;
-            --radius: 0.65rem;
-            --form-section-bg: rgba(248, 250, 252, 0.8);
-            --form-section-border: #e2e8f0;
-            --label-color: #334155;
+            --background: #fafafa;
+            --foreground: #09090b;
+            --card: #ffffff;
+            --card-foreground: #09090b;
+            --primary: #18181b;
+            --primary-foreground: #fafafa;
+            --secondary: #f4f4f5;
+            --secondary-foreground: #18181b;
+            --muted: #f4f4f5;
+            --muted-foreground: #71717a;
+            --accent: #f4f4f5;
+            --accent-foreground: #18181b;
+            --border: #e4e4e7;
+            --input: #e4e4e7;
+            --ring: #18181b;
+            --radius: 0.5rem;
+            --form-section-bg: #fafafa;
+            --form-section-border: #f4f4f5;
+            --label-color: #27272a;
             --input-bg: #ffffff;
-            --counter-bg: rgba(239, 246, 255, 0.9);
-            --counter-fg: #1d4ed8;
-            --counter-border: #bfdbfe;
-            --info-bg: rgba(239, 246, 255, 0.85);
-            --info-fg: #1e40af;
-            --info-border: #bfdbfe;
-            --brand-link-color: #1d4ed8;
-            --tab-bg: rgba(255, 255, 255, 0.65);
+            --counter-bg: #f4f4f5;
+            --counter-fg: #09090b;
+            --counter-border: #e4e4e7;
+            --info-bg: #f4f4f5;
+            --info-fg: #18181b;
+            --info-border: #e4e4e7;
+            --brand-link-color: #09090b;
+            --tab-bg: #f4f4f5;
+            --grid-dot: #e4e4e7;
+            --grid-glow: rgba(24, 24, 27, 0.03);
         }
 
         [data-theme="dark"] {
-            --background: #090e17;
-            --foreground: #f8fafc;
-            --card: rgba(17, 24, 39, 0.92);
-            --card-foreground: #f8fafc;
-            --primary: #38bdf8;
-            --primary-foreground: #0f172a;
-            --secondary: #1f2937;
-            --secondary-foreground: #f8fafc;
-            --muted: #1e293b;
-            --muted-foreground: #94a3b8;
-            --accent: #1e293b;
-            --accent-foreground: #f8fafc;
-            --border: rgba(255, 255, 255, 0.1);
-            --input: #374151;
-            --ring: #38bdf8;
-            --form-section-bg: rgba(23, 32, 51, 0.85);
-            --form-section-border: #1f2937;
-            --label-color: #cbd5e1;
-            --input-bg: #1f2937;
-            --counter-bg: #1e293b;
-            --counter-fg: #60a5fa;
-            --counter-border: #2563eb;
-            --info-bg: #1e293b;
-            --info-fg: #93c5fd;
-            --info-border: #2563eb;
-            --brand-link-color: #38bdf8;
-            --tab-bg: rgba(30, 41, 59, 0.7);
+            --background: #09090b;
+            --foreground: #fafafa;
+            --card: #121215;
+            --card-foreground: #fafafa;
+            --primary: #fafafa;
+            --primary-foreground: #18181b;
+            --secondary: #27272a;
+            --secondary-foreground: #fafafa;
+            --muted: #27272a;
+            --muted-foreground: #a1a1aa;
+            --accent: #27272a;
+            --accent-foreground: #fafafa;
+            --border: #27272a;
+            --input: #27272a;
+            --ring: #d4d4d8;
+            --form-section-bg: #18181b;
+            --form-section-border: #27272a;
+            --label-color: #e4e4e7;
+            --input-bg: #09090b;
+            --counter-bg: #27272a;
+            --counter-fg: #fafafa;
+            --counter-border: #3f3f46;
+            --info-bg: #18181b;
+            --info-fg: #e4e4e7;
+            --info-border: #27272a;
+            --brand-link-color: #fafafa;
+            --tab-bg: #18181b;
+            --grid-dot: #27272a;
+            --grid-glow: rgba(255, 255, 255, 0.03);
         }
 
-        /* Subtle Film Grain Overlay */
-        .grain-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 1;
-            pointer-events: none;
-            opacity: 0.035;
-            mix-blend-mode: multiply;
-            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-        }
-
-        /* Liquid Background Blobs - Light, Calming & Eye-Friendly */
-        .blob-field {
+        /* Authentic Shadcn Dot-Grid & Radial Glow Background */
+        .shadcn-grid-bg {
             position: fixed;
             inset: 0;
             z-index: -1;
-            overflow: hidden;
             pointer-events: none;
-            background: var(--background);
-        }
-
-        .blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(64px);
-            opacity: 0.6;
-        }
-
-        .blob-1 {
-            width: 44vw; height: 44vw;
-            top: -10%; left: -8%;
-            background: radial-gradient(circle at 30% 30%, #cbe0f5, #93b9e4);
-            animation: drift1 26s ease-in-out infinite;
-        }
-
-        .blob-2 {
-            width: 38vw; height: 38vw;
-            top: 20%; right: -10%;
-            background: radial-gradient(circle at 60% 40%, #d4e2f5, #a3bee4);
-            animation: drift2 32s ease-in-out infinite;
-        }
-
-        .blob-3 {
-            width: 34vw; height: 34vw;
-            bottom: 0%; left: 10%;
-            background: radial-gradient(circle at 50% 50%, #faecd5, #dec288);
-            animation: drift3 30s ease-in-out infinite;
-        }
-
-        .blob-4 {
-            width: 30vw; height: 30vw;
-            bottom: 10%; right: 10%;
-            background: radial-gradient(circle at 40% 60%, #c4d7ee, #8aafe0);
-            animation: drift1 22s ease-in-out infinite reverse;
-        }
-
-        [data-theme="dark"] .blob-1 {
-            background: radial-gradient(circle at 30% 30%, #1a3960, #0c1e36);
-        }
-        [data-theme="dark"] .blob-2 {
-            background: radial-gradient(circle at 60% 40%, #1e3559, #0e1c30);
-        }
-        [data-theme="dark"] .blob-3 {
-            background: radial-gradient(circle at 50% 50%, #3e3019, #1e1709);
-        }
-        [data-theme="dark"] .blob-4 {
-            background: radial-gradient(circle at 40% 60%, #183354, #0b1a2e);
-        }
-
-        @keyframes drift1 {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(4%, 6%) scale(1.08); }
-        }
-        @keyframes drift2 {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(-6%, 4%) scale(1.05); }
-        }
-        @keyframes drift3 {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(3%, -5%) scale(1.1); }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .blob { animation: none !important; }
+            background-color: var(--background);
+            background-image: 
+                radial-gradient(ellipse 80% 50% at 50% -20%, var(--grid-glow), transparent),
+                radial-gradient(var(--grid-dot) 1px, transparent 1px);
+            background-size: 100% 100%, 24px 24px;
+            background-position: 0 0, 0 0;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--background);
             color: var(--foreground);
             line-height: 1.5;
@@ -171,7 +103,7 @@
             max-width: 1400px;
             margin: 0 auto;
             position: relative;
-            z-index: 2;
+            z-index: 1;
         }
 
         /* Shadcn Header */
@@ -180,14 +112,10 @@
             justify-content: space-between;
             align-items: center;
             padding-bottom: 20px;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            border-bottom: 1px solid var(--border);
             margin-bottom: 24px;
             flex-wrap: wrap;
             gap: 16px;
-        }
-
-        [data-theme="dark"] header {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .brand {
@@ -197,27 +125,27 @@
         }
 
         .brand-icon {
-            width: 42px;
-            height: 42px;
+            width: 38px;
+            height: 38px;
             background: var(--primary);
-            color: #ffffff;
+            color: var(--primary-foreground);
             border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.25rem;
-            box-shadow: 0 4px 12px rgba(18, 50, 88, 0.2);
+            font-size: 1.1rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
         }
 
         .brand-title {
-            font-size: 1.2rem;
-            font-weight: 700;
+            font-size: 1.15rem;
+            font-weight: 600;
             letter-spacing: -0.025em;
             color: var(--foreground);
         }
 
         .brand-sub {
-            font-size: 0.82rem;
+            font-size: 0.8125rem;
             color: var(--muted-foreground);
         }
 
@@ -225,58 +153,50 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 5px 14px;
-            border-radius: 100px;
+            padding: 4px 12px;
+            border-radius: 9999px;
             font-size: 0.75rem;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px);
-            color: var(--foreground);
+            font-weight: 500;
+            background: var(--secondary);
+            color: var(--secondary-foreground);
             border: 1px solid var(--border);
-            box-shadow: 0 2px 8px rgba(10, 25, 45, 0.05);
         }
 
         .theme-toggle-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 14px;
-            border-radius: 100px;
+            padding: 5px 12px;
+            border-radius: var(--radius);
             font-size: 0.75rem;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px);
+            font-weight: 500;
+            background: var(--card);
             color: var(--foreground);
             border: 1px solid var(--border);
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 8px rgba(10, 25, 45, 0.05);
+            transition: background-color 0.15s ease, border-color 0.15s ease;
         }
 
         .theme-toggle-btn:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-            transform: translateY(-1px);
+            background: var(--secondary);
         }
 
-        /* Shadcn Tabs */
+        /* Shadcn Segmented Control Tabs */
         .tab-container {
             background: var(--tab-bg);
-            backdrop-filter: blur(16px);
-            padding: 4px;
-            border-radius: 100px;
+            padding: 3px;
+            border-radius: var(--radius);
             display: inline-flex;
-            gap: 4px;
+            gap: 3px;
             margin-bottom: 24px;
             border: 1px solid var(--border);
-            box-shadow: 0 4px 16px rgba(10, 25, 45, 0.04);
         }
 
         .tab-btn {
-            padding: 8px 18px;
-            border-radius: 100px;
-            font-weight: 600;
-            font-size: 0.85rem;
+            padding: 7px 16px;
+            border-radius: calc(var(--radius) - 2px);
+            font-weight: 500;
+            font-size: 0.84rem;
             color: var(--muted-foreground);
             background: transparent;
             border: none;
@@ -287,15 +207,14 @@
             gap: 8px;
         }
 
-        .tab-btn.active {
-            background: #ffffff;
-            color: #0f172a;
-            box-shadow: 0 2px 8px rgba(10, 25, 45, 0.08);
+        .tab-btn:hover {
+            color: var(--foreground);
         }
 
-        [data-theme="dark"] .tab-btn.active {
-            background: #1e293b;
-            color: #f8fafc;
+        .tab-btn.active {
+            background: var(--card);
+            color: var(--foreground);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
 
         /* Main Split Grid */
@@ -553,14 +472,8 @@
 </head>
 <body>
 
-<div class="grain-overlay no-print" aria-hidden="true"></div>
-
-<div class="blob-field no-print" aria-hidden="true">
-  <div class="blob blob-1"></div>
-  <div class="blob blob-2"></div>
-  <div class="blob blob-3"></div>
-  <div class="blob blob-4"></div>
-</div>
+<!-- Authentic Shadcn Dot-Grid Background Layer -->
+<div class="shadcn-grid-bg no-print" aria-hidden="true"></div>
 
 <div class="container">
     

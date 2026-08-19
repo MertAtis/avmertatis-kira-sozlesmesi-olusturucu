@@ -10,40 +10,40 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --background: #eaeff5;
+            --background: #e8eef6;
             --foreground: #0f172a;
-            --card: #ffffff;
+            --card: rgba(255, 255, 255, 0.92);
             --card-foreground: #0f172a;
-            --primary: #0f172a;
+            --primary: #123258;
             --primary-foreground: #ffffff;
             --secondary: #f1f5f9;
             --secondary-foreground: #0f172a;
             --muted: #f1f5f9;
-            --muted-foreground: #64748b;
+            --muted-foreground: #475569;
             --accent: #f8fafc;
             --accent-foreground: #0f172a;
-            --border: #cbd5e1;
+            --border: rgba(255, 255, 255, 0.85);
             --input: #cbd5e1;
-            --ring: #0f172a;
-            --radius: 0.5rem;
-            --form-section-bg: #f8fafc;
+            --ring: #3b82f6;
+            --radius: 0.65rem;
+            --form-section-bg: rgba(248, 250, 252, 0.8);
             --form-section-border: #e2e8f0;
             --label-color: #334155;
             --input-bg: #ffffff;
-            --counter-bg: #eff6ff;
+            --counter-bg: rgba(239, 246, 255, 0.9);
             --counter-fg: #1d4ed8;
             --counter-border: #bfdbfe;
-            --info-bg: #eff6ff;
+            --info-bg: rgba(239, 246, 255, 0.85);
             --info-fg: #1e40af;
             --info-border: #bfdbfe;
-            --brand-link-color: #0f172a;
-            --tab-bg: #dbe2eb;
+            --brand-link-color: #1d4ed8;
+            --tab-bg: rgba(255, 255, 255, 0.65);
         }
 
         [data-theme="dark"] {
-            --background: #090d16;
+            --background: #090e17;
             --foreground: #f8fafc;
-            --card: #111827;
+            --card: rgba(17, 24, 39, 0.92);
             --card-foreground: #f8fafc;
             --primary: #38bdf8;
             --primary-foreground: #0f172a;
@@ -53,10 +53,10 @@
             --muted-foreground: #94a3b8;
             --accent: #1e293b;
             --accent-foreground: #f8fafc;
-            --border: #1f2937;
+            --border: rgba(255, 255, 255, 0.1);
             --input: #374151;
             --ring: #38bdf8;
-            --form-section-bg: #172033;
+            --form-section-bg: rgba(23, 32, 51, 0.85);
             --form-section-border: #1f2937;
             --label-color: #cbd5e1;
             --input-bg: #1f2937;
@@ -67,60 +67,99 @@
             --info-fg: #93c5fd;
             --info-border: #2563eb;
             --brand-link-color: #38bdf8;
-            --tab-bg: #1e293b;
+            --tab-bg: rgba(30, 41, 59, 0.7);
         }
 
-        /* Multi-Layered Custom Gradient Background */
-        .gradient-bg {
+        /* Subtle Film Grain Overlay */
+        .grain-overlay {
             position: fixed;
             inset: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: -1;
+            z-index: 1;
             pointer-events: none;
+            opacity: 0.035;
+            mix-blend-mode: multiply;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+        }
+
+        /* Liquid Background Blobs - Light, Calming & Eye-Friendly */
+        .blob-field {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
             overflow: hidden;
-            isolation: isolate;
+            pointer-events: none;
+            background: var(--background);
         }
 
-        .gradient-bg .base {
-            position: absolute; inset: 0; z-index: 0;
-            background: linear-gradient(143deg, #dde2e2 0%, #9bb7c6 13%, #4465b1 43%, #2d2a52 57%, #151219 89%, #070707 100%);
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(64px);
+            opacity: 0.6;
         }
 
-        .gradient-bg .treatment {
-            position: absolute; inset: -20%; z-index: 1;
-            background-image: radial-gradient(ellipse at 67% 17%, rgba(211, 223, 227, 0.27), transparent 50%), radial-gradient(ellipse at 21% 54%, rgba(56, 102, 209, 0.35), transparent 40%), radial-gradient(ellipse at 53% 62%, rgba(21, 18, 25, 0.36), transparent 35%);
-            filter: blur(60px);
-            opacity: 0.52;
+        .blob-1 {
+            width: 44vw; height: 44vw;
+            top: -10%; left: -8%;
+            background: radial-gradient(circle at 30% 30%, #cbe0f5, #93b9e4);
+            animation: drift1 26s ease-in-out infinite;
         }
 
-        .gradient-bg .glow {
-            position: absolute; inset: 0; z-index: 2;
-            background: radial-gradient(ellipse at 45% 6%, rgba(255,255,255,0.26), transparent 38%), radial-gradient(ellipse at 39% 45%, rgba(56, 102, 209, 0.26), transparent 42%);
+        .blob-2 {
+            width: 38vw; height: 38vw;
+            top: 20%; right: -10%;
+            background: radial-gradient(circle at 60% 40%, #d4e2f5, #a3bee4);
+            animation: drift2 32s ease-in-out infinite;
         }
 
-        .gradient-bg .particles {
-            position: absolute; inset: 0; z-index: 3;
-            background: radial-gradient(circle at 73% 44%, rgba(255, 255, 255, 0.29) 0, transparent 2px), radial-gradient(circle at 18% 51%, rgba(255, 255, 255, 0.28) 0, transparent 3px), radial-gradient(circle at 60% 85%, rgba(255, 255, 255, 0.37) 0, transparent 1px), radial-gradient(circle at 29% 57%, rgba(255, 255, 255, 0.27) 0, transparent 2px), radial-gradient(circle at 87% 71%, rgba(255, 255, 255, 0.25) 0, transparent 2px), radial-gradient(circle at 28% 66%, rgba(255, 255, 255, 0.39) 0, transparent 2px), radial-gradient(circle at 73% 59%, rgba(211, 223, 227, 0.34) 0, transparent 3px), radial-gradient(circle at 68% 81%, rgba(211, 223, 227, 0.28) 0, transparent 3px), radial-gradient(circle at 78% 22%, rgba(255, 255, 255, 0.27) 0, transparent 2px), radial-gradient(circle at 66% 12%, rgba(255, 255, 255, 0.36) 0, transparent 2px), radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.38) 0, transparent 1px), radial-gradient(circle at 34% 51%, rgba(255, 255, 255, 0.28) 0, transparent 2px), radial-gradient(circle at 61% 78%, rgba(255, 255, 255, 0.37) 0, transparent 3px), radial-gradient(circle at 92% 29%, rgba(255, 255, 255, 0.37) 0, transparent 2px), radial-gradient(circle at 51% 29%, rgba(255, 255, 255, 0.30) 0, transparent 2px), radial-gradient(circle at 46% 61%, rgba(255, 255, 255, 0.20) 0, transparent 2px), radial-gradient(circle at 41% 76%, rgba(211, 223, 227, 0.21) 0, transparent 1px), radial-gradient(circle at 65% 78%, rgba(211, 223, 227, 0.22) 0, transparent 2px), radial-gradient(circle at 20% 33%, rgba(255, 255, 255, 0.22) 0, transparent 3px), radial-gradient(circle at 19% 89%, rgba(255, 255, 255, 0.37) 0, transparent 2px), radial-gradient(circle at 50% 19%, rgba(211, 223, 227, 0.40) 0, transparent 2px), radial-gradient(circle at 77% 26%, rgba(255, 255, 255, 0.22) 0, transparent 2px), radial-gradient(circle at 32% 39%, rgba(211, 223, 227, 0.29) 0, transparent 3px), radial-gradient(circle at 12% 87%, rgba(255, 255, 255, 0.13) 0, transparent 2px), radial-gradient(circle at 6% 44%, rgba(211, 223, 227, 0.14) 0, transparent 2px), radial-gradient(circle at 52% 16%, rgba(255, 255, 255, 0.22) 0, transparent 2px), radial-gradient(circle at 58% 63%, rgba(255, 255, 255, 0.13) 0, transparent 1px), radial-gradient(circle at 37% 59%, rgba(211, 223, 227, 0.23) 0, transparent 2px), radial-gradient(circle at 16% 19%, rgba(255, 255, 255, 0.39) 0, transparent 2px), radial-gradient(circle at 28% 46%, rgba(211, 223, 227, 0.31) 0, transparent 2px), radial-gradient(circle at 56% 34%, rgba(211, 223, 227, 0.16) 0, transparent 3px);
+        .blob-3 {
+            width: 34vw; height: 34vw;
+            bottom: 0%; left: 10%;
+            background: radial-gradient(circle at 50% 50%, #faecd5, #dec288);
+            animation: drift3 30s ease-in-out infinite;
         }
 
-        .gradient-bg .vignette {
-            position: absolute; inset: 0; z-index: 4;
-            background: radial-gradient(circle at center, transparent 25%, rgba(0,0,0,0.14) 58%, rgba(0,0,0,0.91) 100%), linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.83) 100%);
+        .blob-4 {
+            width: 30vw; height: 30vw;
+            bottom: 10%; right: 10%;
+            background: radial-gradient(circle at 40% 60%, #c4d7ee, #8aafe0);
+            animation: drift1 22s ease-in-out infinite reverse;
         }
 
-        .gradient-bg .noise {
-            position: absolute; inset: 0; z-index: 5;
-            mix-blend-mode: soft-light;
-            opacity: 0.21;
-            background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-            background-size: 180px 180px;
+        [data-theme="dark"] .blob-1 {
+            background: radial-gradient(circle at 30% 30%, #1a3960, #0c1e36);
+        }
+        [data-theme="dark"] .blob-2 {
+            background: radial-gradient(circle at 60% 40%, #1e3559, #0e1c30);
+        }
+        [data-theme="dark"] .blob-3 {
+            background: radial-gradient(circle at 50% 50%, #3e3019, #1e1709);
+        }
+        [data-theme="dark"] .blob-4 {
+            background: radial-gradient(circle at 40% 60%, #183354, #0b1a2e);
+        }
+
+        @keyframes drift1 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(4%, 6%) scale(1.08); }
+        }
+        @keyframes drift2 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(-6%, 4%) scale(1.05); }
+        }
+        @keyframes drift3 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(3%, -5%) scale(1.1); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .blob { animation: none !important; }
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: #070707;
+            background-color: var(--background);
             color: var(--foreground);
             line-height: 1.5;
             padding: 24px 16px;
@@ -131,6 +170,8 @@
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            position: relative;
+            z-index: 2;
         }
 
         /* Shadcn Header */
@@ -139,10 +180,14 @@
             justify-content: space-between;
             align-items: center;
             padding-bottom: 20px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
             margin-bottom: 24px;
             flex-wrap: wrap;
             gap: 16px;
+        }
+
+        [data-theme="dark"] header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .brand {
@@ -152,77 +197,84 @@
         }
 
         .brand-icon {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             background: var(--primary);
             color: #ffffff;
             border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(18, 50, 88, 0.2);
         }
 
         .brand-title {
-            font-size: 1.15rem;
+            font-size: 1.2rem;
             font-weight: 700;
-            letter-spacing: -0.02em;
-            color: #ffffff;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            letter-spacing: -0.025em;
+            color: var(--foreground);
         }
 
         .brand-sub {
-            font-size: 0.8rem;
-            color: #cbd5e1;
+            font-size: 0.82rem;
+            color: var(--muted-foreground);
         }
 
         .badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 12px;
-            border-radius: 9999px;
+            padding: 5px 14px;
+            border-radius: 100px;
             font-size: 0.75rem;
             font-weight: 600;
-            background: var(--form-section-bg);
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
             color: var(--foreground);
             border: 1px solid var(--border);
+            box-shadow: 0 2px 8px rgba(10, 25, 45, 0.05);
         }
 
         .theme-toggle-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 5px 12px;
-            border-radius: 9999px;
+            padding: 6px 14px;
+            border-radius: 100px;
             font-size: 0.75rem;
             font-weight: 600;
-            background: var(--card);
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
             color: var(--foreground);
             border: 1px solid var(--border);
             cursor: pointer;
             transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(10, 25, 45, 0.05);
         }
 
         .theme-toggle-btn:hover {
             border-color: var(--primary);
             color: var(--primary);
+            transform: translateY(-1px);
         }
 
         /* Shadcn Tabs */
         .tab-container {
             background: var(--tab-bg);
+            backdrop-filter: blur(16px);
             padding: 4px;
-            border-radius: calc(var(--radius) + 2px);
+            border-radius: 100px;
             display: inline-flex;
             gap: 4px;
             margin-bottom: 24px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 16px rgba(10, 25, 45, 0.04);
         }
 
         .tab-btn {
-            padding: 8px 16px;
-            border-radius: var(--radius);
+            padding: 8px 18px;
+            border-radius: 100px;
             font-weight: 600;
             font-size: 0.85rem;
             color: var(--muted-foreground);
@@ -236,9 +288,14 @@
         }
 
         .tab-btn.active {
-            background: var(--card);
-            color: var(--foreground);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 2px 8px rgba(10, 25, 45, 0.08);
+        }
+
+        [data-theme="dark"] .tab-btn.active {
+            background: #1e293b;
+            color: #f8fafc;
         }
 
         /* Main Split Grid */
@@ -445,8 +502,7 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: #ffffff;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            color: var(--foreground);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -456,7 +512,7 @@
             background: #ffffff;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
-            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.15);
+            box-shadow: 0 16px 40px rgba(10, 25, 45, 0.1);
             padding: 10mm 12mm;
             font-family: 'Times New Roman', Times, serif;
             color: #000;
@@ -497,14 +553,13 @@
 </head>
 <body>
 
-<!-- Multi-Layered Gradient Background Layer -->
-<div class="gradient-bg no-print" aria-hidden="true">
-    <div class="base"></div>
-    <div class="treatment"></div>
-    <div class="glow"></div>
-    <div class="particles"></div>
-    <div class="vignette"></div>
-    <div class="noise"></div>
+<div class="grain-overlay no-print" aria-hidden="true"></div>
+
+<div class="blob-field no-print" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
 </div>
 
 <div class="container">
@@ -517,7 +572,7 @@
                 <div class="brand-title">Kira Sözleşmesi & Tahliye Taahhüdü Jeneratörü</div>
                 <div class="brand-sub">
                     Av. Mert Atış tarafından tasarlanıp yayına alınmıştır • 
-                    <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: #93c5fd; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid #93c5fd; padding-bottom: 1px;">
+                    <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: var(--brand-link-color); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--brand-link-color); padding-bottom: 1px;">
                         <i class="fa-brands fa-x-twitter"></i> X (@baddestwolf_)
                     </a>
                 </div>

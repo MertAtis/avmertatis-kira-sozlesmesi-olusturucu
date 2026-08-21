@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root {
             --background: #d1d8e0;
@@ -75,7 +74,7 @@
             --grid-glow: rgba(255, 255, 255, 0.03);
         }
 
-        /* Granite Shadcn Dot-Grid & Mineral Glow Background for Light Mode */
+        /* Granite Shadcn Dot-Grid & Mineral Glow Background */
         .shadcn-grid-bg {
             position: fixed;
             inset: 0;
@@ -87,25 +86,6 @@
                 radial-gradient(var(--grid-dot) 1.2px, transparent 1.2px);
             background-size: 100% 100%, 24px 24px;
             background-position: 0 0, 0 0;
-        }
-
-        /* WaterPlane ShaderGradient WebGL Canvas for Dark Mode */
-        #darkShaderCanvas {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: -1;
-            pointer-events: none;
-            display: none;
-        }
-
-        [data-theme="dark"] #darkShaderCanvas {
-            display: block;
-        }
-
-        [data-theme="dark"] .shadcn-grid-bg {
-            display: none;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -492,11 +472,8 @@
 </head>
 <body>
 
-<!-- Authentic Shadcn Dot-Grid Background Layer for Light Mode -->
+<!-- Authentic Shadcn Dot-Grid Background Layer -->
 <div class="shadcn-grid-bg no-print" aria-hidden="true"></div>
-
-<!-- WaterPlane ShaderGradient WebGL Canvas for Dark Mode -->
-<canvas id="darkShaderCanvas" class="no-print" aria-hidden="true"></canvas>
 
 <div class="container">
     
@@ -1183,231 +1160,7 @@
             if (icon) icon.className = 'fa-solid fa-moon';
             if (text) text.textContent = 'Karanlık Mod';
         }
-        if (window.updateShaderAnimation) {
-            window.updateShaderAnimation();
-        }
     }
-
-    /* Authentic 3D ShaderGradient (waterPlane) Engine for Dark Mode */
-    (function init3DShaderGradient() {
-        const canvas = document.getElementById('darkShaderCanvas');
-        if (!canvas || typeof THREE === 'undefined') return;
-
-        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'low-power' });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-        renderer.setSize(window.innerWidth, window.innerHeight);
-
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
-
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.zoom = 9.1;
-
-        // Camera position according to cDistance=2.8, cPolarAngle=80deg, cAzimuthAngle=180deg
-        const cDist = 2.8;
-        const cPolar = 80 * Math.PI / 180;
-        const cAzim = 180 * Math.PI / 180;
-        camera.position.set(
-            cDist * Math.sin(cPolar) * Math.sin(cAzim),
-            cDist * Math.cos(cPolar),
-            cDist * Math.sin(cPolar) * Math.cos(cAzim)
-        );
-        camera.lookAt(0, 0, 0);
-        camera.updateProjectionMatrix();
-
-        const customVertexShader = `
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vWorldPos;
-            varying float vDisp;
-
-            uniform float uTime;
-            uniform float uSpeed;
-            uniform float uDensity;
-            uniform float uStrength;
-
-            // Simplex noise 3D
-            vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
-            vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
-
-            float snoise(vec3 v){
-                const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-                const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-                vec3 i  = floor(v + dot(v, C.yyy));
-                vec3 x0 = v - i + dot(i, C.xxx);
-                vec3 g = step(x0.yzx, x0.xyz);
-                vec3 l = 1.0 - g;
-                vec3 i1 = min( g.xyz, l.zxy );
-                vec3 i2 = max( g.xyz, l.zxy );
-                vec3 x1 = x0 - i1 + 1.0 * C.xxx;
-                vec3 x2 = x0 - i2 + 2.0 * C.xxx;
-                vec3 x3 = x0 - 1.0 + 3.0 * C.xxx;
-                i = mod(i, 289.0);
-                vec4 p = permute( permute( permute(
-                            i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
-                        + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
-                        + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
-                float n_ = 0.142857142857;
-                vec3  ns = n_ * D.wyz - D.xzx;
-                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-                vec4 x_ = floor(j * ns.z);
-                vec4 y_ = floor(j - 7.0 * x_);
-                vec4 x = x_ * ns.x + ns.yyyy;
-                vec4 y = y_ * ns.x + ns.yyyy;
-                vec4 h = 1.0 - abs(x) - abs(y);
-                vec4 b0 = vec4( x.xy, y.xy );
-                vec4 b1 = vec4( x.zw, y.zw );
-                vec4 s0 = floor(b0)*2.0 + 1.0;
-                vec4 s1 = floor(b1)*2.0 + 1.0;
-                vec4 sh = -step(h, vec4(0.0));
-                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
-                vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
-                vec3 p0 = vec3(a0.xy, h.x);
-                vec3 p1 = vec3(a0.zw, h.y);
-                vec3 p2 = vec3(a1.xy, h.z);
-                vec3 p3 = vec3(a1.zw, h.w);
-                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
-                p0 *= norm.x;
-                p1 *= norm.y;
-                p2 *= norm.z;
-                p3 *= norm.w;
-                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-                m = m * m;
-                return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
-            }
-
-            float getWaveElevation(vec2 p, float t) {
-                return snoise(vec3(p * uDensity * 0.45, t * 0.25)) * 0.65
-                     + snoise(vec3(p * uDensity * 0.95, t * 0.4)) * 0.35
-                     + snoise(vec3(p * uDensity * 1.8, t * 0.65)) * 0.15;
-            }
-
-            void main() {
-                vUv = uv;
-                vec3 pos = position;
-                float t = uTime * uSpeed;
-
-                float elevation = getWaveElevation(pos.xy, t);
-                pos.z += elevation * uStrength;
-                vDisp = elevation;
-
-                // Tangent-based surface normal computation
-                float delta = 0.04;
-                float eX = getWaveElevation(pos.xy + vec2(delta, 0.0), t);
-                float eY = getWaveElevation(pos.xy + vec2(0.0, delta), t);
-
-                vec3 tangentX = vec3(delta, 0.0, (eX - elevation) * uStrength);
-                vec3 tangentY = vec3(0.0, delta, (eY - elevation) * uStrength);
-                vNormal = normalize(normalMatrix * cross(tangentX, tangentY));
-
-                vec4 worldPos = modelMatrix * vec4(pos, 1.0);
-                vWorldPos = worldPos.xyz;
-                gl_Position = projectionMatrix * viewMatrix * worldPos;
-            }
-        `;
-
-        const customFragmentShader = `
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vWorldPos;
-            varying float vDisp;
-
-            uniform vec3 uColor1;
-            uniform vec3 uColor2;
-            uniform vec3 uColor3;
-            uniform vec3 uBgColor;
-
-            void main() {
-                vec3 normal = normalize(vNormal);
-                vec3 viewDir = normalize(cameraPosition - vWorldPos);
-
-                // 3D Directional light & specular highlight
-                vec3 lightDir = normalize(vec3(0.8, 1.2, 1.5));
-                float diff = max(dot(normal, lightDir), 0.0);
-
-                vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(dot(normal, halfDir), 0.0), 24.0) * 0.35;
-                float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.2);
-
-                // Exact ShaderGradient color ramp
-                float d = clamp(vDisp * 1.25 + 0.5, 0.0, 1.0);
-
-                vec3 col = mix(uBgColor, uColor3, smoothstep(0.0, 0.32, d));
-                col = mix(col, uColor1, smoothstep(0.22, 0.68, d));
-                col = mix(col, uColor2, smoothstep(0.55, 0.95, d));
-
-                // 3D light & specular reflection
-                col += spec * uColor2 * 1.2 + fresnel * uColor1 * 0.45;
-
-                // Grain
-                float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-                col += (grain - 0.5) * 0.028;
-
-                gl_FragColor = vec4(col, 1.0);
-            }
-        `;
-
-        const uniforms = {
-            uTime: { value: 8.0 },
-            uSpeed: { value: 0.3 },
-            uDensity: { value: 1.5 },
-            uStrength: { value: 1.5 },
-            uColor1: { value: new THREE.Color("#606080") },
-            uColor2: { value: new THREE.Color("#0065ca") },
-            uColor3: { value: new THREE.Color("#212121") },
-            uBgColor: { value: new THREE.Color("#000000") }
-        };
-
-        const material = new THREE.ShaderMaterial({
-            vertexShader: customVertexShader,
-            fragmentShader: customFragmentShader,
-            uniforms: uniforms,
-            wireframe: false
-        });
-
-        const geometry = new THREE.PlaneGeometry(14, 14, 140, 140);
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.rotation.x = 50 * Math.PI / 180;
-        mesh.rotation.y = 0;
-        mesh.rotation.z = -60 * Math.PI / 180;
-        scene.add(mesh);
-
-        function onResize() {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            camera.aspect = w / h;
-            camera.updateProjectionMatrix();
-            renderer.setSize(w, h);
-        }
-        window.addEventListener('resize', onResize, { passive: true });
-
-        let rafId = null;
-        let clock = new THREE.Clock();
-
-        window.updateShaderAnimation = function() {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            if (isDark) {
-                if (!rafId) {
-                    clock.start();
-                    function animate() {
-                        if (document.documentElement.getAttribute('data-theme') !== 'dark') {
-                            rafId = null;
-                            return;
-                        }
-                        uniforms.uTime.value = 8.0 + clock.getElapsedTime();
-                        renderer.render(scene, camera);
-                        rafId = requestAnimationFrame(animate);
-                    }
-                    rafId = requestAnimationFrame(animate);
-                }
-            } else {
-                if (rafId) {
-                    cancelAnimationFrame(rafId);
-                    rafId = null;
-                }
-            }
-        };
-    })();
 
     initTheme();
     fetchGlobalCount();

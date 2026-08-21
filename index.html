@@ -74,7 +74,7 @@
             --grid-glow: rgba(255, 255, 255, 0.03);
         }
 
-        /* Granite Shadcn Dot-Grid & Mineral Glow Background */
+        /* Granite Shadcn Dot-Grid & Mineral Glow Background for Light Mode */
         .shadcn-grid-bg {
             position: fixed;
             inset: 0;
@@ -86,6 +86,25 @@
                 radial-gradient(var(--grid-dot) 1.2px, transparent 1.2px);
             background-size: 100% 100%, 24px 24px;
             background-position: 0 0, 0 0;
+        }
+
+        /* WaterPlane ShaderGradient WebGL Canvas for Dark Mode */
+        #darkShaderCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            display: none;
+        }
+
+        [data-theme="dark"] #darkShaderCanvas {
+            display: block;
+        }
+
+        [data-theme="dark"] .shadcn-grid-bg {
+            display: none;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -472,8 +491,11 @@
 </head>
 <body>
 
-<!-- Authentic Shadcn Dot-Grid Background Layer -->
+<!-- Authentic Shadcn Dot-Grid Background Layer for Light Mode -->
 <div class="shadcn-grid-bg no-print" aria-hidden="true"></div>
+
+<!-- WaterPlane ShaderGradient WebGL Canvas for Dark Mode -->
+<canvas id="darkShaderCanvas" class="no-print" aria-hidden="true"></canvas>
 
 <div class="container">
     
@@ -1160,7 +1182,187 @@
             if (icon) icon.className = 'fa-solid fa-moon';
             if (text) text.textContent = 'Karanlık Mod';
         }
+        if (window.updateShaderAnimation) {
+            window.updateShaderAnimation();
+        }
     }
+
+    /* ShaderGradient waterPlane WebGL Implementation for Dark Mode */
+    (function initDarkShader() {
+        const canvas = document.getElementById('darkShaderCanvas');
+        if (!canvas) return;
+
+        const gl = canvas.getContext('webgl', { antialias: false, powerPreference: 'low-power' }) ||
+                   canvas.getContext('experimental-webgl', { antialias: false, powerPreference: 'low-power' });
+        if (!gl) return;
+
+        const vsSource = `
+            attribute vec2 a_pos;
+            void main() {
+                gl_Position = vec4(a_pos, 0.0, 1.0);
+            }
+        `;
+
+        const fsSource = `
+            precision mediump float;
+            uniform float u_time;
+            uniform vec2 u_res;
+
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+            float snoise(vec2 v) {
+                const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+                vec2 i  = floor(v + dot(v, C.yy));
+                vec2 x0 = v -   i + dot(i, C.xx);
+                vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+                vec4 x12 = x0.xyxy + C.xxzz;
+                x12.xy -= i1;
+                i = mod289(i);
+                vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+                vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+                m = m*m;
+                m = m*m;
+                vec3 x = 2.0 * fract(p * C.www) - 1.0;
+                vec3 h = abs(x) - 0.5;
+                vec3 ox = floor(x + 0.5);
+                vec3 a0 = x - ox;
+                m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+                vec3 g;
+                g.x  = a0.x  * x0.x  + h.x  * x0.y;
+                g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+                return 130.0 * dot(m, g);
+            }
+
+            float fbm(vec2 p) {
+                float v = 0.0;
+                float a = 0.5;
+                mat2 R = mat2(0.8, 0.6, -0.6, 0.8);
+                for (int i = 0; i < 4; i++) {
+                    v += a * snoise(p);
+                    p = R * p * 2.0 + vec2(1.7, 9.2);
+                    a *= 0.5;
+                }
+                return v;
+            }
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / u_res.xy;
+                float aspect = u_res.x / u_res.y;
+                vec2 p = uv;
+                p.x *= aspect;
+
+                // Rotation -60 degrees
+                float ang = -1.047197;
+                mat2 rot = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+                p = rot * (p - vec2(aspect * 0.5, 0.5));
+
+                float t = u_time * 0.3;
+                float density = 1.5;
+                float strength = 1.5;
+
+                // WaterPlane wave simulation
+                vec2 q = vec2(fbm(p * density + vec2(t * 0.2, t * 0.1)),
+                              fbm(p * density + vec2(t * 0.15, -t * 0.25)));
+
+                vec2 r = vec2(fbm(p * density + 1.2 * q + vec2(1.7, 9.2) + 0.15 * t),
+                              fbm(p * density + 1.2 * q + vec2(8.3, 2.8) + 0.12 * t));
+
+                float f = fbm(p * density + strength * r + t * 0.3);
+
+                // ShaderGradient colors: #606080, #0098ca, #212121, #000000
+                vec3 c1 = vec3(0.376, 0.376, 0.502);
+                vec3 c2 = vec3(0.000, 0.596, 0.792);
+                vec3 c3 = vec3(0.129, 0.129, 0.129);
+                vec3 bg = vec3(0.000, 0.000, 0.000);
+
+                vec3 color = mix(bg, c3, clamp((f + 0.35) * 0.85, 0.0, 1.0));
+                color = mix(color, c1, clamp(length(q) * 0.85, 0.0, 1.0));
+                color = mix(color, c2, clamp(f * f * 1.6 + r.x * 0.65, 0.0, 1.0));
+
+                // Grain texture
+                float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+                color += (grain - 0.5) * 0.032;
+
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        function createShader(type, src) {
+            const s = gl.createShader(type);
+            gl.shaderSource(s, src);
+            gl.compileShader(s);
+            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+                console.warn(gl.getShaderInfoLog(s));
+                gl.deleteShader(s);
+                return null;
+            }
+            return s;
+        }
+
+        const vs = createShader(gl.VERTEX_SHADER, vsSource);
+        const fs = createShader(gl.FRAGMENT_SHADER, fsSource);
+        if (!vs || !fs) return;
+
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+        gl.useProgram(prog);
+
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+        const aPos = gl.getAttribLocation(prog, 'a_pos');
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+        const uTime = gl.getUniformLocation(prog, 'u_time');
+        const uRes = gl.getUniformLocation(prog, 'u_res');
+
+        function resize() {
+            const pr = Math.min(window.devicePixelRatio || 1, 1.5) * 0.65;
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            canvas.width = Math.round(w * pr);
+            canvas.height = Math.round(h * pr);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.uniform2f(uRes, canvas.width, canvas.height);
+        }
+        resize();
+        window.addEventListener('resize', resize, { passive: true });
+
+        let rafId = null;
+        let startT = null;
+
+        window.updateShaderAnimation = function() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            if (isDark) {
+                if (!rafId) {
+                    function loop(now) {
+                        if (document.documentElement.getAttribute('data-theme') !== 'dark') {
+                            rafId = null;
+                            return;
+                        }
+                        if (startT === null) startT = now;
+                        const elapsed = (now - startT) * 0.001;
+                        gl.uniform1f(uTime, elapsed);
+                        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                        rafId = requestAnimationFrame(loop);
+                    }
+                    rafId = requestAnimationFrame(loop);
+                }
+            } else {
+                if (rafId) {
+                    cancelAnimationFrame(rafId);
+                    rafId = null;
+                }
+            }
+        };
+    })();
 
     initTheme();
     fetchGlobalCount();

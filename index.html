@@ -100,7 +100,7 @@
         }
 
         .container {
-            max-width: 1240px;
+            max-width: 1400px;
             margin: 0 auto;
             position: relative;
             z-index: 1;
@@ -251,8 +251,8 @@
         /* Main Split Grid */
         .app-grid {
             display: grid;
-            grid-template-columns: minmax(360px, 460px) 1fr;
-            gap: 28px;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 24px;
             align-items: start;
         }
 
@@ -438,22 +438,17 @@
         .preview-inspector {
             position: sticky;
             top: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
         }
 
         .inspector-header {
-            width: 100%;
-            max-width: 640px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
 
         .inspector-title {
-            font-size: 0.82rem;
+            font-size: 0.85rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -466,23 +461,20 @@
         .paper-minimal {
             background: #ffffff;
             border: 1px solid #cbd5e1;
-            border-radius: 4px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+            border-radius: 6px;
+            box-shadow: 0 16px 40px rgba(10, 25, 45, 0.1);
             padding: 10mm 12mm;
             font-family: 'Times New Roman', Times, serif;
             color: #000;
-            width: 100%;
-            max-width: 640px;
-            min-height: 720px;
-            max-height: calc(100vh - 110px);
+            font-size: 0.8rem;
+            line-height: 1.28;
+            max-height: 80vh;
             overflow-y: auto;
-            box-sizing: border-box;
-            transition: all 0.2s ease;
         }
 
         [data-theme="dark"] .paper-minimal {
             border-color: #374353;
-            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
         }
 
         /* Custom Scrollbar for Minimal Inspector */

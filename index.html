@@ -507,24 +507,20 @@
             }
             .tab-container {
                 display: flex;
+                flex-direction: column;
                 width: 100%;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
                 padding: 4px;
-                scrollbar-width: none;
+                gap: 4px;
                 margin-bottom: 16px;
             }
-            .tab-container::-webkit-scrollbar {
-                display: none;
-            }
             .tab-btn {
-                flex: 1 0 auto;
-                text-align: center;
-                justify-content: center;
-                padding: 10px 14px;
-                font-size: 0.84rem;
-                white-space: nowrap;
-                min-height: 44px;
+                width: 100%;
+                text-align: left;
+                justify-content: flex-start;
+                padding: 9px 14px;
+                font-size: 0.86rem;
+                min-height: 40px;
+                border-radius: 6px;
             }
             .card-panel {
                 padding: 16px 12px;
@@ -550,19 +546,19 @@
                 flex-direction: column;
                 gap: 10px;
             }
-            .paper-minimal {
-                padding: 6mm 6mm;
-                max-height: 65vh;
+            .preview-inspector {
+                display: none !important; /* Mobile screen: hide preview for clean, distraction-free filling */
             }
         }
 
-        /* PRINT MEDIA QUERIES */
+        /* PRINT MEDIA QUERIES (Mobile & Desktop 100% PDF Export) */
         @media print {
             body { background: #fff !important; padding: 0 !important; }
             .no-print { display: none !important; }
             .app-grid { display: block !important; }
-            .preview-inspector { position: static !important; }
+            .preview-inspector { display: block !important; position: static !important; }
             .paper-minimal {
+                display: block !important;
                 border: none !important;
                 box-shadow: none !important;
                 padding: 4mm 6mm !important;

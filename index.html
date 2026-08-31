@@ -100,7 +100,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1240px;
             margin: 0 auto;
             position: relative;
             z-index: 1;
@@ -251,8 +251,8 @@
         /* Main Split Grid */
         .app-grid {
             display: grid;
-            grid-template-columns: 1.1fr 0.9fr;
-            gap: 24px;
+            grid-template-columns: minmax(360px, 460px) 1fr;
+            gap: 28px;
             align-items: start;
         }
 
@@ -438,17 +438,22 @@
         .preview-inspector {
             position: sticky;
             top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .inspector-header {
+            width: 100%;
+            max-width: 640px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .inspector-title {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -461,15 +466,23 @@
         .paper-minimal {
             background: #ffffff;
             border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-shadow: 0 16px 40px rgba(10, 25, 45, 0.1);
+            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
             padding: 10mm 12mm;
             font-family: 'Times New Roman', Times, serif;
             color: #000;
-            font-size: 0.8rem;
-            line-height: 1.28;
-            max-height: 80vh;
+            width: 100%;
+            max-width: 640px;
+            min-height: 720px;
+            max-height: calc(100vh - 110px);
             overflow-y: auto;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+
+        [data-theme="dark"] .paper-minimal {
+            border-color: #374353;
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
         }
 
         /* Custom Scrollbar for Minimal Inspector */
@@ -1100,43 +1113,43 @@
                 </div>
             `;
         } else if (currentTab === 'anahtar') {
-            const address = document.getElementById('anahtar-address').value.trim() || '………………………………………………………………………………………………………………………………………………';
-            const tenantName = document.getElementById('anahtar-tenant-name').value.trim() || '………………………………………………………………';
-            const tenantTc = document.getElementById('anahtar-tenant-tc').value.trim() || '…………………………………………';
-            const landlordName = document.getElementById('anahtar-landlord-name').value.trim() || '………………………………………………………………';
+            const address = document.getElementById('anahtar-address').value.trim() || '…………………………………………………………………………………………………………';
+            const tenantName = document.getElementById('anahtar-tenant-name').value.trim() || '……………………………………………………';
+            const tenantTc = document.getElementById('anahtar-tenant-tc').value.trim() || '……………………………………';
+            const landlordName = document.getElementById('anahtar-landlord-name').value.trim() || '……………………………………………………';
             const dateRaw = document.getElementById('anahtar-date').value;
             const dateFormatted = dateRaw ? formatDate(dateRaw) : '……./……./……………';
 
             target.innerHTML = `
-                <div style="padding: 25px 20px; font-family: 'Times New Roman', Times, serif; font-size: 0.95rem; line-height: 1.6; color: #000;">
-                    <h2 style="text-align: center; font-size: 1.15rem; font-weight: bold; text-decoration: underline; margin-bottom: 36px; letter-spacing: 0.02em;">
+                <div style="padding: 15px 10px; font-family: 'Times New Roman', Times, serif; font-size: 0.9rem; line-height: 1.55; color: #000;">
+                    <h2 style="text-align: center; font-size: 1.1rem; font-weight: bold; text-decoration: underline; margin-bottom: 28px; letter-spacing: 0.02em;">
                         ANAHTAR TESLİM TUTANAĞI VE KİRA SÖZLEŞMESİNİN FESHİ PROTOKOLÜ
                     </h2>
 
-                    <div style="text-align: justify; line-height: 1.9; margin-bottom: 28px;">
-                        <p style="margin-bottom: 20px;">
+                    <div style="text-align: justify; line-height: 1.75; margin-bottom: 24px;">
+                        <p style="margin-bottom: 16px;">
                             <strong>1)</strong> <b>${esc(address)}</b> adresinde bulunan taşınmaz kiracı <b>${esc(tenantName)}</b> tarafından <b>${esc(dateFormatted)}</b> tarihinde tahliye edilmiş olup kira sözleşmesi aynı tarihte kiracı tarafından tek taraflı olarak fesh edilmiştir.
                         </p>
-                        <p style="margin-bottom: 20px;">
+                        <p style="margin-bottom: 16px;">
                             <strong>2)</strong> Kiracı taşınmaz içerisinde kendisine ait hiçbir eşyasının kalmadığını açıkça beyan ve taahhüt eder.
                         </p>
-                        <p style="margin-bottom: 20px;">
+                        <p style="margin-bottom: 16px;">
                             <strong>3)</strong> Kiraya verenin; kiracının taşınmazda oturduğu süre içerisindeki birikmiş kira, aidat, ödenmemiş faturalar gibi borçlarından kaynaklanabilecek alacakları baki kalmak ve fazlaya dair tüm hakları saklı kalmak kaydı ile taşınmazın anahtarı kirayan veren(yahut temsilcisi) <b>${esc(landlordName)}</b> 'a teslim edilmiştir.
                         </p>
                     </div>
 
-                    <div style="margin-top: 60px; font-size: 0.92rem; line-height: 1.6; display: flex; flex-direction: column; align-items: flex-end; padding-right: 20px;">
-                        <div style="width: 380px; margin-bottom: 44px;">
+                    <div style="margin-top: 40px; font-size: 0.88rem; line-height: 1.5; display: flex; flex-direction: column; align-items: flex-end; padding-right: 10px;">
+                        <div style="width: 320px; margin-bottom: 36px;">
                             <p style="font-weight: bold; margin-bottom: 2px;">ANAHTARI TESLİM ALAN</p>
-                            <p style="font-weight: bold; margin-bottom: 10px;">KİRAYA VEREN (YAHUT YETKİLİ KILDIĞI TEMSİLCİSİ)</p>
-                            <p style="margin-bottom: 6px;"><strong>Adı ve Soyadı :</strong> ${esc(landlordName)}</p>
+                            <p style="font-weight: bold; margin-bottom: 8px;">KİRAYA VEREN (YAHUT YETKİLİ KILDIĞI TEMSİLCİSİ)</p>
+                            <p style="margin-bottom: 4px;"><strong>Adı ve Soyadı :</strong> ${esc(landlordName)}</p>
                             <p><strong>İmza :</strong></p>
                         </div>
 
-                        <div style="width: 380px;">
-                            <p style="font-weight: bold; margin-bottom: 10px;">ANAHTARI TESLİM EDEN KİRACI</p>
-                            <p style="margin-bottom: 6px;"><strong>Adı ve Soyadı :</strong> ${esc(tenantName)}</p>
-                            <p style="margin-bottom: 6px;"><strong>TC :</strong> ${esc(tenantTc)}</p>
+                        <div style="width: 320px;">
+                            <p style="font-weight: bold; margin-bottom: 8px;">ANAHTARI TESLİM EDEN KİRACI</p>
+                            <p style="margin-bottom: 4px;"><strong>Adı ve Soyadı :</strong> ${esc(tenantName)}</p>
+                            <p style="margin-bottom: 4px;"><strong>TC :</strong> ${esc(tenantTc)}</p>
                             <p><strong>İmza :</strong></p>
                         </div>
                     </div>

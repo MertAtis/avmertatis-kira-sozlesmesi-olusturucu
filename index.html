@@ -840,6 +840,12 @@
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    function formatDate(d) {
+        if (!d) return '……./……./……………';
+        const p = d.split('-');
+        return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
+    }
+
     function renderPreview() {
         const target = document.getElementById('printable-area');
 
@@ -1003,12 +1009,6 @@
             
             const issueDateRaw = document.getElementById('tahliye-issue-date') ? document.getElementById('tahliye-issue-date').value : '';
             const evictionDateRaw = '';
-
-            const formatDate = d => {
-                if (!d) return '......../............/..............';
-                const p = d.split('-');
-                return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : d;
-            };
 
             const isMarried = document.getElementById('tahliye-is-married') ? document.getElementById('tahliye-is-married').checked : false;
             const spouseName = document.getElementById('tahliye-spouse-name') ? document.getElementById('tahliye-spouse-name').value.trim() || '...........................................................' : '';

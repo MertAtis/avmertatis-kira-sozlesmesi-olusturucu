@@ -181,25 +181,32 @@
             background: var(--secondary);
         }
 
-        /* Shadcn Segmented Control Tabs */
+        /* Shadcn Segmented Control Tabs (High Contrast & Legible) */
         .tab-container {
-            background: var(--tab-bg);
-            padding: 3px;
+            background: #bac5d1;
+            padding: 4px;
             border-radius: var(--radius);
             display: inline-flex;
-            gap: 3px;
+            gap: 4px;
             margin-bottom: 24px;
-            border: 1px solid var(--border);
+            border: 1.5px solid #94a3b8;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="dark"] .tab-container {
+            background: #181f2a;
+            border: 1.5px solid #3b4656;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         .tab-btn {
-            padding: 7px 16px;
+            padding: 8px 18px;
             border-radius: calc(var(--radius) - 2px);
-            font-weight: 500;
-            font-size: 0.84rem;
-            color: var(--muted-foreground);
+            font-weight: 600;
+            font-size: 0.88rem;
+            color: #1e293b;
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
             cursor: pointer;
             transition: all 0.15s ease;
             display: inline-flex;
@@ -207,14 +214,38 @@
             gap: 8px;
         }
 
+        [data-theme="dark"] .tab-btn {
+            color: #cbd5e1;
+        }
+
         .tab-btn:hover {
-            color: var(--foreground);
+            color: #000000;
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        [data-theme="dark"] .tab-btn:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
         }
 
         .tab-btn.active {
-            background: var(--card);
-            color: var(--foreground);
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            background: #ffffff !important;
+            color: #000000 !important;
+            border: 1px solid #94a3b8;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
+            font-weight: 700;
+        }
+
+        [data-theme="dark"] .tab-btn.active {
+            background: #252e3c !important;
+            color: #ffffff !important;
+            border: 1px solid #4b5563;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+            font-weight: 700;
+        }
+
+        .tab-btn i {
+            font-size: 0.95rem;
         }
 
         /* Main Split Grid */

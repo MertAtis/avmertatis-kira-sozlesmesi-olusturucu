@@ -696,11 +696,17 @@
                             <label>Kiralanan Taşınmaz Adresi</label>
                             <input type="text" id="tahliye-address" placeholder="Örn: Örnek Mah. Adalet Cad. No:15 D:4 Çankaya/ANKARA">
                         </div>
-                        <div class="form-group full">
+                        <div class="form-group">
                             <label>Taahhüt Düzenleme Tarihi (İmza Tarihi)</label>
                             <input type="date" id="tahliye-issue-date">
-                            <div class="info-pill" style="margin-top: 6px; background: #fffbebfb; color: #b45309; border: 1px solid #fde68a;">
-                                <i class="fa-solid fa-triangle-exclamation"></i> <strong>Hukuki Uyarı:</strong> Kira Sözleşmesinin düzenlenme tarihinden <u>en az 1 ay sonraki</u> tarihi girin. (Aynı tarih veya öncesi atılan imzalar Yargıtay içtihatlarınca geçersiz sayılmaktadır).
+                        </div>
+                        <div class="form-group">
+                            <label>Tahliye Edilecek Tarih (Boşaltma Tarihi)</label>
+                            <input type="date" id="tahliye-eviction-date">
+                        </div>
+                        <div class="form-group full" style="margin-top: -4px;">
+                            <div class="info-pill" style="background: #fffbebfb; color: #b45309; border: 1px solid #fde68a;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> <strong>Hukuki Uyarı:</strong> Düzenleme tarihini kira başlangıç tarihinden <u>en az 1 ay sonraki</u> bir tarih olarak belirleyin. (Aynı tarih veya öncesi atılan imzalar Yargıtay içtihatlarınca geçersiz sayılmaktadır).
                             </div>
                         </div>
 
@@ -995,14 +1001,14 @@
                 </div>
                 ` : ''}
             `;
-        } else {
+        } else if (currentTab === 'tahliye') {
             const tenantName = document.getElementById('tahliye-tenant-name').value.trim() || '...........................................................';
             const tenantTc = document.getElementById('tahliye-tenant-tc').value.trim() || '...........................................................';
             const landlordName = document.getElementById('tahliye-landlord-name').value.trim() || '...........................................................';
             const address = document.getElementById('tahliye-address').value.trim() || '...................................................................................................';
             
-            const issueDateRaw = document.getElementById('tahliye-issue-date').value;
-            const evictionDateRaw = '';
+            const issueDateRaw = document.getElementById('tahliye-issue-date') ? document.getElementById('tahliye-issue-date').value : '';
+            const evictionDateRaw = document.getElementById('tahliye-eviction-date') ? document.getElementById('tahliye-eviction-date').value : '';
 
             const formatDate = d => {
                 if (!d) return '......../............/..............';

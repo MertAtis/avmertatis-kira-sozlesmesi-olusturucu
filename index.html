@@ -672,6 +672,11 @@
 
             <!-- TAHLİYE TAAHHÜDÜ FORMU -->
             <div id="tahliye-form-block" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                    <div class="card-header-title" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;"><i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü Formu</div>
+                    <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="syncFromKiraToTahliye()" title="Kira Sözleşmesi formunda yazılan taraf ve adres bilgilerini buraya aktarır (Tarihler hukuki geçerlilik nedeniyle aktarılmaz)"><i class="fa-solid fa-arrows-rotate"></i> Kira Formundan Bilgileri Çek</button>
+                </div>
+
                 <div class="form-section">
                     <div class="form-section-head"><i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü Bilgileri</div>
                     <div class="form-grid">
@@ -1125,6 +1130,21 @@
         } else if (kLandlord) {
             document.getElementById('anahtar-landlord-name').value = kLandlord;
         }
+        renderPreview();
+    }
+
+    function syncFromKiraToTahliye() {
+        const kAddress = document.getElementById('kira-address').value.trim();
+        const kTenant = document.getElementById('kira-tenant-name').value.trim();
+        const kTenantTc = document.getElementById('kira-tenant-tc').value.trim();
+        const kLandlord = document.getElementById('kira-landlord-name').value.trim();
+
+        if (kAddress) document.getElementById('tahliye-address').value = kAddress;
+        if (kTenant) document.getElementById('tahliye-tenant-name').value = kTenant;
+        if (kTenantTc) document.getElementById('tahliye-tenant-tc').value = kTenantTc;
+        if (kLandlord) document.getElementById('tahliye-landlord-name').value = kLandlord;
+
+        // Hukuki Güvenlik Kuralı: Taahhüt ve Tahliye tarihleri asla otomatik kopyalanmaz / kullanıcı tarafından girilmelidir.
         renderPreview();
     }
 

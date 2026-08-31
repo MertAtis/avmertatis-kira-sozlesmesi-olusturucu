@@ -512,6 +512,9 @@
         <button class="tab-btn" id="tab-tahliye" onclick="switchTab('tahliye')">
             <i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü Formu
         </button>
+        <button class="tab-btn" id="tab-anahtar" onclick="switchTab('anahtar')">
+            <i class="fa-solid fa-key"></i> Anahtar Teslim Tutanağı
+        </button>
     </div>
 
     <!-- MAIN GRID -->
@@ -726,6 +729,45 @@
                 </div>
             </div>
 
+            <!-- ANAHTAR TESLİM TUTANAĞI FORMU -->
+            <div id="anahtar-form-block" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                    <div class="card-header-title" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;"><i class="fa-solid fa-key"></i> Anahtar Teslim & Fesih Formu</div>
+                    <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="syncFromKiraToAnahtar()" title="Kira Sözleşmesi formunda yazılan bilgileri buraya otomatik aktarır"><i class="fa-solid fa-arrows-rotate"></i> Kira Formundan Bilgileri Çek</button>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-file-lines"></i> Fesih & Teslim Bilgileri</div>
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>Kiralanan Taşınmazın Açık Adresi</label>
+                            <input type="text" id="anahtar-address" placeholder="Örn: Örnek Mah. Adalet Cad. No:15 D:4 Çankaya/ANKARA">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiracı Adı Soyadı</label>
+                            <input type="text" id="anahtar-tenant-name" placeholder="Örn: MEHMET KAYA">
+                        </div>
+                        <div class="form-group">
+                            <label>Kiracı T.C. Kimlik No</label>
+                            <input type="text" id="anahtar-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
+                        </div>
+                        <div class="form-group full">
+                            <label>Tahliye ve Anahtar Teslim Tarihi</label>
+                            <input type="date" id="anahtar-date">
+                        </div>
+                        <div class="form-group full">
+                            <label>Kiraya Veren (Yahut Yetkili Kıldığı Temsilcisi) Adı Soyadı</label>
+                            <input type="text" id="anahtar-landlord-name" placeholder="Örn: AHMET YILMAZ (veya Av. MERT ATIŞ)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-bar">
+                    <button class="btn btn-shadcn-primary" onclick="handlePrint()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir</button>
+                    <button class="btn btn-shadcn-outline" onclick="resetAnahtarForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
+                </div>
+            </div>
+
         </div>
 
         <!-- MINIMALIST A4 LIVE PREVIEW INSPECTOR -->
@@ -746,6 +788,8 @@
     let currentTab = 'kira';
 
     document.getElementById('kira-start-date').value = new Date().toISOString().slice(0, 10);
+    const anahtarDateEl = document.getElementById('anahtar-date');
+    if (anahtarDateEl) anahtarDateEl.value = new Date().toISOString().slice(0, 10);
 
     document.addEventListener('input', renderPreview);
     document.addEventListener('change', renderPreview);
@@ -754,8 +798,10 @@
         currentTab = tab;
         document.getElementById('tab-kira').classList.toggle('active', tab === 'kira');
         document.getElementById('tab-tahliye').classList.toggle('active', tab === 'tahliye');
+        document.getElementById('tab-anahtar').classList.toggle('active', tab === 'anahtar');
         document.getElementById('kira-form-block').style.display = tab === 'kira' ? 'block' : 'none';
         document.getElementById('tahliye-form-block').style.display = tab === 'tahliye' ? 'block' : 'none';
+        document.getElementById('anahtar-form-block').style.display = tab === 'anahtar' ? 'block' : 'none';
         renderPreview();
     }
 
@@ -1017,7 +1063,75 @@
                     ${signatureBlockHTML}
                 </div>
             `;
+        } else if (currentTab === 'anahtar') {
+            const address = document.getElementById('anahtar-address').value.trim() || '………………………………………………………………………………………………………………………………………………';
+            const tenantName = document.getElementById('anahtar-tenant-name').value.trim() || '………………………………………………………………';
+            const tenantTc = document.getElementById('anahtar-tenant-tc').value.trim() || '…………………………………………';
+            const landlordName = document.getElementById('anahtar-landlord-name').value.trim() || '………………………………………………………………';
+            const dateRaw = document.getElementById('anahtar-date').value;
+            const dateFormatted = dateRaw ? formatDate(dateRaw) : '……./……./……………';
+
+            target.innerHTML = `
+                <div style="padding: 25px 20px; font-family: 'Times New Roman', Times, serif; font-size: 0.95rem; line-height: 1.6; color: #000;">
+                    <h2 style="text-align: center; font-size: 1.15rem; font-weight: bold; text-decoration: underline; margin-bottom: 36px; letter-spacing: 0.02em;">
+                        ANAHTAR TESLİM TUTANAĞI VE KİRA SÖZLEŞMESİNİN FESHİ PROTOKOLÜ
+                    </h2>
+
+                    <div style="text-align: justify; line-height: 1.9; margin-bottom: 28px;">
+                        <p style="margin-bottom: 20px;">
+                            <strong>1)</strong> <b>${esc(address)}</b> adresinde bulunan taşınmaz kiracı <b>${esc(tenantName)}</b> tarafından <b>${esc(dateFormatted)}</b> tarihinde tahliye edilmiş olup kira sözleşmesi aynı tarihte kiracı tarafından tek taraflı olarak fesh edilmiştir.
+                        </p>
+                        <p style="margin-bottom: 20px;">
+                            <strong>2)</strong> Kiracı taşınmaz içerisinde kendisine ait hiçbir eşyasının kalmadığını açıkça beyan ve taahhüt eder.
+                        </p>
+                        <p style="margin-bottom: 20px;">
+                            <strong>3)</strong> Kiraya verenin; kiracının taşınmazda oturduğu süre içerisindeki birikmiş kira, aidat, ödenmemiş faturalar gibi borçlarından kaynaklanabilecek alacakları baki kalmak ve fazlaya dair tüm hakları saklı kalmak kaydı ile taşınmazın anahtarı kirayan veren(yahut temsilcisi) <b>${esc(landlordName)}</b> 'a teslim edilmiştir.
+                        </p>
+                    </div>
+
+                    <div style="margin-top: 60px; font-size: 0.92rem; line-height: 1.6; display: flex; flex-direction: column; align-items: flex-end; padding-right: 20px;">
+                        <div style="width: 380px; margin-bottom: 44px;">
+                            <p style="font-weight: bold; margin-bottom: 2px;">ANAHTARI TESLİM ALAN</p>
+                            <p style="font-weight: bold; margin-bottom: 10px;">KİRAYA VEREN (YAHUT YETKİLİ KILDIĞI TEMSİLCİSİ)</p>
+                            <p style="margin-bottom: 6px;"><strong>Adı ve Soyadı :</strong> ${esc(landlordName)}</p>
+                            <p><strong>İmza :</strong></p>
+                        </div>
+
+                        <div style="width: 380px;">
+                            <p style="font-weight: bold; margin-bottom: 10px;">ANAHTARI TESLİM EDEN KİRACI</p>
+                            <p style="margin-bottom: 6px;"><strong>Adı ve Soyadı :</strong> ${esc(tenantName)}</p>
+                            <p style="margin-bottom: 6px;"><strong>TC :</strong> ${esc(tenantTc)}</p>
+                            <p><strong>İmza :</strong></p>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
+    }
+
+    function syncFromKiraToAnahtar() {
+        const kAddress = document.getElementById('kira-address').value.trim();
+        const kTenant = document.getElementById('kira-tenant-name').value.trim();
+        const kTenantTc = document.getElementById('kira-tenant-tc').value.trim();
+        const kLandlord = document.getElementById('kira-landlord-name').value.trim();
+        const hasVekil = document.getElementById('kira-has-vekil') && document.getElementById('kira-has-vekil').checked;
+        const kVekil = hasVekil ? document.getElementById('kira-landlord-vekil').value.trim() : '';
+
+        if (kAddress) document.getElementById('anahtar-address').value = kAddress;
+        if (kTenant) document.getElementById('anahtar-tenant-name').value = kTenant;
+        if (kTenantTc) document.getElementById('anahtar-tenant-tc').value = kTenantTc;
+        if (kVekil) {
+            document.getElementById('anahtar-landlord-name').value = kVekil;
+        } else if (kLandlord) {
+            document.getElementById('anahtar-landlord-name').value = kLandlord;
+        }
+        renderPreview();
+    }
+
+    function resetAnahtarForm() {
+        document.querySelectorAll('#anahtar-form-block input[type="text"]').forEach(i => i.value = '');
+        document.getElementById('anahtar-date').value = new Date().toISOString().slice(0, 10);
+        renderPreview();
     }
 
     // Custom Clauses Management

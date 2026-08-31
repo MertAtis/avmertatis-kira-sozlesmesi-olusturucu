@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Hukuki Kira Sözleşmesi & Tahliye Taahhüdü Oluşturucu - Shadcn Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -322,21 +322,24 @@
 
         input[type="text"], input[type="date"], textarea {
             width: 100%;
-            padding: 10px 14px;
+            padding: 11px 14px;
             background: var(--input-bg);
             border: 1.5px solid var(--input);
             border-radius: var(--radius);
             font-family: inherit;
-            font-size: 0.9375rem;
+            font-size: 16px; /* Strictly 16px to prevent iOS Safari / Chrome mobile auto-zoom */
             color: var(--foreground);
             font-weight: 500;
             transition: all 0.15s ease-in-out;
             box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         input[type="text"]::placeholder, textarea::placeholder {
             color: var(--muted-foreground);
             font-weight: 400;
+            font-size: 15px;
         }
 
         input[type="text"]:focus, input[type="date"]:focus, textarea:focus {
@@ -486,6 +489,73 @@
             border-radius: 4px;
         }
 
+        /* MOBILE RESPONSIVE & SPEED ENHANCEMENTS */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px 10px 36px 10px;
+            }
+            .container {
+                max-width: 100%;
+            }
+            header {
+                padding-bottom: 12px;
+                margin-bottom: 16px;
+                gap: 12px;
+            }
+            .brand-title {
+                font-size: 1.02rem;
+            }
+            .tab-container {
+                display: flex;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding: 4px;
+                scrollbar-width: none;
+                margin-bottom: 16px;
+            }
+            .tab-container::-webkit-scrollbar {
+                display: none;
+            }
+            .tab-btn {
+                flex: 1 0 auto;
+                text-align: center;
+                justify-content: center;
+                padding: 10px 14px;
+                font-size: 0.84rem;
+                white-space: nowrap;
+                min-height: 44px;
+            }
+            .card-panel {
+                padding: 16px 12px;
+                border-radius: 12px;
+            }
+            .form-section {
+                padding: 14px 10px;
+                margin-bottom: 14px;
+                border-radius: 8px;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .btn {
+                min-height: 48px;
+                font-size: 0.95rem;
+                padding: 12px 16px;
+                width: 100%;
+                justify-content: center;
+            }
+            .btn-bar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .paper-minimal {
+                padding: 6mm 6mm;
+                max-height: 65vh;
+            }
+        }
+
         /* PRINT MEDIA QUERIES */
         @media print {
             body { background: #fff !important; padding: 0 !important; }
@@ -572,7 +642,7 @@
                         </div>
                         <div class="form-group">
                             <label>Kiraya Veren T.C. Kimlik No</label>
-                            <input type="text" id="kira-landlord-tc" maxlength="11" placeholder="Örn: 21312312312">
+                            <input type="text" id="kira-landlord-tc" maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="Örn: 21312312312">
                         </div>
                         <div class="form-group full">
                             <label class="checkbox-card">
@@ -595,7 +665,7 @@
                         </div>
                         <div class="form-group">
                             <label>Kiracı T.C. Kimlik No</label>
-                            <input type="text" id="kira-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
+                            <input type="text" id="kira-tenant-tc" maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="Örn: 22131231231">
                         </div>
                         <div class="form-group full">
                             <label>Kiracı Adresi</label>
@@ -622,7 +692,7 @@
                         </div>
                         <div class="form-group">
                             <label>Aylık Kira Bedeli (Rakamla)</label>
-                            <input type="text" id="kira-fee-amount" placeholder="Örn: 15.000">
+                            <input type="text" id="kira-fee-amount" inputmode="numeric" placeholder="Örn: 15.000">
                         </div>
                         <div class="form-group">
                             <label>Aylık Kira Bedeli (Yazıyla)</label>
@@ -659,7 +729,7 @@
                         <div id="kira-deposit-group" class="nested-group" style="display: none;">
                             <div class="form-group">
                                 <label>Depozito Bedeli (Tutar / Açıklama)</label>
-                                <input type="text" id="kira-deposit-amount" placeholder="Örn: 15.000 (OnBeşBin)">
+                                <input type="text" id="kira-deposit-amount" inputmode="numeric" placeholder="Örn: 15.000 (OnBeşBin)">
                             </div>
                             <div class="info-pill">
                                 <i class="fa-solid fa-info-circle"></i> Eklenecek Madde: <em>"Kiracı , kiraya verene [TUTAR] depozito vermiştir. Taşınmazın eksiksiz ve borçsuz teslimi halinde bu tutar kiracıya aynen iade edilecektir."</em>
@@ -722,7 +792,7 @@
                         </div>
                         <div class="form-group">
                             <label>Kiracı T.C. Kimlik No</label>
-                            <input type="text" id="tahliye-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
+                            <input type="text" id="tahliye-tenant-tc" maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="Örn: 22131231231">
                         </div>
                         <div class="form-group full">
                             <label>Kiraya Veren Adı Soyadı (Malik/Kiralayan)</label>
@@ -753,7 +823,7 @@
                                     </div>
                                     <div class="form-group">
                                         <label>Kiracının Eşinin T.C. Kimlik No</label>
-                                        <input type="text" id="tahliye-spouse-tc" maxlength="11" placeholder="Örn: 33123456789">
+                                        <input type="text" id="tahliye-spouse-tc" maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="Örn: 33123456789">
                                     </div>
                                 </div>
                                 <div class="info-pill">
@@ -790,7 +860,7 @@
                         </div>
                         <div class="form-group">
                             <label>Kiracı T.C. Kimlik No</label>
-                            <input type="text" id="anahtar-tenant-tc" maxlength="11" placeholder="Örn: 22131231231">
+                            <input type="text" id="anahtar-tenant-tc" maxlength="11" inputmode="numeric" pattern="[0-9]*" placeholder="Örn: 22131231231">
                         </div>
                         <div class="form-group full">
                             <label>Tahliye ve Anahtar Teslim Tarihi</label>

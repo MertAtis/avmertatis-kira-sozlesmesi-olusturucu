@@ -348,6 +348,16 @@
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
         }
 
+        textarea {
+            resize: vertical;
+            min-height: 64px;
+            line-height: 1.5;
+        }
+
+        #kira-fixtures {
+            min-height: 120px;
+        }
+
         /* Checkbox Box */
         .checkbox-card {
             background: var(--input-bg);
@@ -696,11 +706,11 @@
                         </div>
                         <div class="form-group full">
                             <label>Ödeme Şekli ve Günü</label>
-                            <input type="text" id="kira-payment-day" value="AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ">
+                            <textarea id="kira-payment-day" rows="2">AYLIK PEŞİN VE BANKADAN-HER AYIN EN GEÇ 1. GÜNÜ</textarea>
                         </div>
                         <div class="form-group full">
                             <label>Banka Hesabı & IBAN Bilgisi</label>
-                            <input type="text" id="kira-iban" value="TR00 0000 0000 0000 0000 0000 00 IBAN numaralı ZİRAAT BANKASI">
+                            <textarea id="kira-iban" rows="2">TR00 0000 0000 0000 0000 00 IBAN numaralı ZİRAAT BANKASI</textarea>
                         </div>
                         <div class="form-group">
                             <label>Kiralananın Cinsi ve Kullanımı</label>
@@ -708,7 +718,7 @@
                         </div>
                         <div class="form-group full">
                             <label>Demirbaş ve Eşyalar</label>
-                            <textarea id="kira-fixtures" rows="2">Kapılar, pencereler, dolaplar kombi-günısı ve diğer demirbaşlar sağlam, tam ve kullanılmaya elverişli olarak teslim edilmiştir. Ev boyalı-badanalı olarak temiz şekilde teslim edilmiş olup kiracı tahliyesi durumunda evi aynı şekilde kiraya verene teslimle yükümlüdür.</textarea>
+                            <textarea id="kira-fixtures" rows="5">Kapılar, pencereler, dolaplar kombi-günısı ve diğer demirbaşlar sağlam, tam ve kullanılmaya elverişli olarak teslim edilmiştir. Ev boyalı-badanalı olarak temiz şekilde teslim edilmiş olup kiracı tahliyesi durumunda evi aynı şekilde kiraya verene teslimle yükümlüdür.</textarea>
                         </div>
                     </div>
                 </div>

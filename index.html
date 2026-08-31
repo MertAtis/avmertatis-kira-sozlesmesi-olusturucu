@@ -762,11 +762,11 @@
 
                 <!-- Özel Maddeler -->
                 <div class="form-section">
-                    <div class="form-section-head"><i class="fa-solid fa-list-check"></i> Özel Maddeler <span style="font-weight: 400; color: var(--muted-foreground); font-size: 0.8rem;">(İsteğe bağlı)</span></div>
-                    <div id="kira-custom-clauses-list" style="margin-bottom: 10px;"></div>
-                    <div style="display: flex; gap: 8px; align-items: flex-start;">
-                        <textarea id="kira-new-clause" rows="2" placeholder="Örn: Evde evcil hayvan beslenemez..." style="flex: 1;"></textarea>
-                        <button class="btn btn-shadcn-outline" type="button" onclick="addCustomClause()" style="white-space: nowrap;"><i class="fa-solid fa-plus"></i> Ekle</button>
+                    <div class="form-section-head"><i class="fa-solid fa-list-check"></i> Özel Şartlar & Maddeler <span style="font-weight: 400; color: var(--muted-foreground); font-size: 0.8rem;">(İsteğe bağlı)</span></div>
+                    <div id="kira-custom-clauses-list" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <textarea id="kira-new-clause" rows="2" placeholder="Örn: Evde evcil hayvan beslenemez veya boya rengi değiştirilemez..." style="width: 100%;"></textarea>
+                        <button class="btn btn-shadcn-outline" type="button" onclick="addCustomClause()" style="width: 100%; justify-content: center; min-height: 42px; font-weight: 600;"><i class="fa-solid fa-plus"></i> Özel Madde Ekle</button>
                     </div>
                 </div>
 
@@ -1284,9 +1284,13 @@
         if (!list) return;
         if (!customClauses.length) { list.innerHTML = ''; return; }
         list.innerHTML = customClauses.map((c, i) => `
-            <div style="display:flex; align-items:flex-start; gap:8px; background:var(--card); color:var(--foreground); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; margin-bottom:6px; font-size:0.85rem;">
-                <span style="flex:1; line-height:1.4;"><b>Özel Madde ${i + 1}:</b> ${esc(c)}</span>
-                <button onclick="deleteCustomClause(${i})" title="Sil" style="background:none; border:none; cursor:pointer; color:#ef4444; font-weight:bold; font-size:0.9rem; padding:0 4px;">✕</button>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--input-bg); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; font-size: 0.88rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <div style="flex: 1; line-height: 1.45; word-break: break-word;">
+                    <strong style="color: var(--primary);">Özel Madde ${i + 1}:</strong> ${esc(c)}
+                </div>
+                <button type="button" onclick="deleteCustomClause(${i})" title="Bu maddeyi sil" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); cursor: pointer; color: #ef4444; font-weight: bold; border-radius: 6px; min-width: 34px; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; touch-action: manipulation;">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
             </div>
         `).join('');
     }

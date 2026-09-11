@@ -406,6 +406,60 @@
             line-height: 1.4;
         }
 
+        /* Makbuz Konu Seçenek Kartları */
+        .makbuz-konu-group {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr) 0.8fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        @media (max-width: 640px) {
+            .makbuz-konu-group {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        .makbuz-opt-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 44px;
+            padding: 8px 10px;
+            background: var(--input-bg);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease-in-out;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--muted-foreground);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .makbuz-opt-card input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            margin: 0;
+            pointer-events: none;
+        }
+        .makbuz-opt-card:hover {
+            border-color: var(--ring);
+            color: var(--foreground);
+        }
+        .makbuz-opt-card:has(input[type="radio"]:checked),
+        .makbuz-opt-card.active {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border-color: var(--primary);
+            font-weight: 700;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        }
+
         /* Action Buttons */
         .btn-bar {
             display: flex;
@@ -987,11 +1041,29 @@
                         </div>
                         <div class="form-group full">
                             <label>Ücretin Ne İçin Alındığı (Konu / Dosya / İş) *</label>
-                            <input type="text" id="makbuz-konu" placeholder="Örn: Hukuki Danışmanlık & Dava Masraf Avansı veya Aracılık Hizmet Bedeli">
+                            <div class="makbuz-konu-group">
+                                <label class="makbuz-opt-card active" id="card-konu-avukat" onclick="handleMakbuzKonuChange('avukat')">
+                                    <input type="radio" name="makbuz-konu-turu" value="avukat" checked>
+                                    <span><i class="fa-solid fa-scale-balanced"></i> 1) Avukatlık Ücreti</span>
+                                </label>
+                                <label class="makbuz-opt-card" id="card-konu-masraf" onclick="handleMakbuzKonuChange('masraf')">
+                                    <input type="radio" name="makbuz-konu-turu" value="masraf">
+                                    <span><i class="fa-solid fa-receipt"></i> 2) Dava Masrafları</span>
+                                </label>
+                                <label class="makbuz-opt-card" id="card-konu-emlak" onclick="handleMakbuzKonuChange('emlak')">
+                                    <input type="radio" name="makbuz-konu-turu" value="emlak">
+                                    <span><i class="fa-solid fa-building-user"></i> 3) Emlakçı Ücreti</span>
+                                </label>
+                                <label class="makbuz-opt-card" id="card-konu-diger" onclick="handleMakbuzKonuChange('diger')">
+                                    <input type="radio" name="makbuz-konu-turu" value="diger">
+                                    <span><i class="fa-solid fa-pen-to-square"></i> Diğer / Özel</span>
+                                </label>
+                            </div>
+                            <input type="text" id="makbuz-konu" oninput="renderPreview()" placeholder="Dosya No / Mahkeme / İş Detayı (İsteğe bağlı, örn: 2026/123 Esas)">
                         </div>
                         <div class="form-group full">
                             <label>Açıklama Detayı</label>
-                            <textarea id="makbuz-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.</textarea>
+                            <textarea id="makbuz-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">Hukuki danışmanlık ve avukatlık vekalet hizmet bedeli karşılığı tahsil edilmiştir.</textarea>
                         </div>
 
                         <!-- Hukuki / Özel Not -->
@@ -1446,7 +1518,9 @@
             }
             if (!yaziyla) yaziyla = 'Yalnız …………………………………………………… TürkLirası';
 
-            const konu = (document.getElementById('makbuz-konu')?.value || '').trim() || 'Hizmet Bedeli / Masraf Avansı / Tahsilat';
+            const konuTuru = document.querySelector('input[name="makbuz-konu-turu"]:checked')?.value || 'avukat';
+            const konuDetay = (document.getElementById('makbuz-konu')?.value || '').trim();
+            const konu = formatMakbuzKonu(konuTuru, konuDetay);
             const aciklama = (document.getElementById('makbuz-aciklama')?.value || '').trim() || 'İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.';
 
             const hasNot = document.getElementById('makbuz-has-not')?.checked;
@@ -1545,6 +1619,56 @@
         }
     }
 
+    function handleMakbuzKonuChange(val) {
+        ['avukat', 'masraf', 'emlak', 'diger'].forEach(t => {
+            const card = document.getElementById('card-konu-' + t);
+            if (card) {
+                if (t === val) card.classList.add('active');
+                else card.classList.remove('active');
+            }
+            const radio = document.querySelector(`input[name="makbuz-konu-turu"][value="${t}"]`);
+            if (radio) radio.checked = (t === val);
+        });
+
+        const konuInput = document.getElementById('makbuz-konu');
+        const aciklamaTextarea = document.getElementById('makbuz-aciklama');
+
+        if (val === 'avukat') {
+            if (aciklamaTextarea) aciklamaTextarea.value = 'Hukuki danışmanlık ve avukatlık vekalet hizmet bedeli karşılığı tahsil edilmiştir.';
+            if (konuInput) konuInput.placeholder = 'Dosya No / Mahkeme / İş Detayı (İsteğe bağlı, örn: 2026/123 Esas)';
+        } else if (val === 'masraf') {
+            if (aciklamaTextarea) aciklamaTextarea.value = 'Dava açılış harçları, bilirkişi ücreti, tebligat ve yargılama gider avansı karşılığı tahsil edilmiştir.';
+            if (konuInput) konuInput.placeholder = 'Mahkeme / Dosya / Masraf Kalemi (İsteğe bağlı, örn: 4. Asliye Hukuk 2026/45 E.)';
+        } else if (val === 'emlak') {
+            if (aciklamaTextarea) aciklamaTextarea.value = 'Taşınmaz alım-satım / kiralama aracılık ve gayrimenkul danışmanlık hizmet bedeli karşılığı tahsil edilmiştir.';
+            if (konuInput) konuInput.placeholder = 'Taşınmaz / Adres / Portföy Bilgisi (İsteğe bağlı, örn: Kadıköy 3+1 Daire)';
+        } else if (val === 'diger') {
+            if (aciklamaTextarea) aciklamaTextarea.value = 'İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.';
+            if (konuInput) konuInput.placeholder = 'Tahsilat konusunu buraya yazınız (Örn: Danışmanlık Hizmet Bedeli)';
+        }
+
+        renderPreview();
+    }
+
+    function formatMakbuzKonu(konuTuru, konuDetay) {
+        if (!konuDetay) {
+            if (konuTuru === 'avukat') return 'Avukatlık Ücreti';
+            if (konuTuru === 'masraf') return 'Dava Masrafları ve Gider Avansı';
+            if (konuTuru === 'emlak') return 'Emlakçı Hizmet Bedeli';
+            return 'Hizmet Bedeli / Tahsilat';
+        }
+        const lower = konuDetay.toLowerCase();
+        if (konuTuru === 'avukat') {
+            return (lower.includes('avukat') || lower.includes('ücret')) ? konuDetay : `Avukatlık Ücreti (${konuDetay})`;
+        } else if (konuTuru === 'masraf') {
+            return (lower.includes('masraf') || lower.includes('harç') || lower.includes('gider')) ? konuDetay : `Dava Masrafları (${konuDetay})`;
+        } else if (konuTuru === 'emlak') {
+            return (lower.includes('emlak') || lower.includes('hizmet')) ? konuDetay : `Emlakçı Ücreti (${konuDetay})`;
+        } else {
+            return konuDetay;
+        }
+    }
+
     function ornekMakbuzDoldur(tur) {
         if (tur === 'emlak') {
             document.getElementById('makbuz-tahsil-eden-name').value = 'Hedef Gayrimenkul & Danışmanlık';
@@ -1556,8 +1680,8 @@
             document.getElementById('makbuz-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
             document.getElementById('makbuz-tutar').value = '30000';
             updateMakbuzYaziyla(30000);
-            document.getElementById('makbuz-konu').value = 'Danışmanlık ve Aracılık Hizmet Bedeli';
-            document.getElementById('makbuz-aciklama').value = 'Danışmanlık ve operasyonel hizmet bedeli karşılığı tahsil edilmiştir.';
+            handleMakbuzKonuChange('emlak');
+            document.getElementById('makbuz-konu').value = 'Kadıköy Taşınmaz Kiralama';
             document.getElementById('makbuz-has-not').checked = false;
         } else {
             document.getElementById('makbuz-tahsil-eden-name').value = 'Av. Osman Mert ATIŞ';
@@ -1569,8 +1693,8 @@
             document.getElementById('makbuz-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
             document.getElementById('makbuz-tutar').value = '35000';
             updateMakbuzYaziyla(35000);
-            document.getElementById('makbuz-konu').value = 'Dava Açılış Harçları ve Gider Avansı';
-            document.getElementById('makbuz-aciklama').value = 'Dava açılış harçları, bilirkişi ücreti ve tebligat gider avansı karşılığı tahsil edilmiştir.';
+            handleMakbuzKonuChange('masraf');
+            document.getElementById('makbuz-konu').value = 'İstanbul 4. Asliye Hukuk Mah. 2026/123 E.';
             document.getElementById('makbuz-has-not').checked = true;
         }
         toggleMakbuzNot();
@@ -1581,6 +1705,7 @@
         document.querySelectorAll('#makbuz-form-block input[type="text"], #makbuz-form-block input[type="number"], #makbuz-form-block textarea, #makbuz-form-block input[type="tel"]').forEach(i => i.value = '');
         document.getElementById('makbuz-tarih').value = new Date().toISOString().slice(0, 10);
         document.getElementById('makbuz-odeme-sekli').value = 'Nakit';
+        handleMakbuzKonuChange('avukat');
         const chk = document.getElementById('makbuz-has-not');
         if (chk) chk.checked = false;
         toggleMakbuzNot();

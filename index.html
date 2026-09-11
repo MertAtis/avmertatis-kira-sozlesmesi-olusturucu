@@ -1068,6 +1068,27 @@
                                     <span><i class="fa-solid fa-pen-to-square"></i> 4) Diğer</span>
                                 </label>
                             </div>
+
+                            <!-- Dava Masrafı Alt Türleri (Yalnızca Dava Masrafı Seçildiğinde Görünür) -->
+                            <div id="makbuz-av-masraf-subgroup" class="nested-group" style="display: none; margin-top: 12px; border-left: 3px solid var(--primary); padding: 12px 14px;">
+                                <label style="display: block; font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; color: var(--foreground);">
+                                    <i class="fa-solid fa-list-check" style="color: var(--primary); margin-right: 4px;"></i> Dava Masrafı Kalemi (Alt Tür) *
+                                </label>
+                                <div class="makbuz-konu-group" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                                    <label class="makbuz-opt-card active" id="card-av-masraf-acilis" onclick="setAvMasrafAltTuru('acilis')">
+                                        <input type="radio" name="makbuz-av-masraf-alt-turu" value="acilis" checked>
+                                        <span><i class="fa-solid fa-folder-open"></i> 1) Dava Açılış Masrafı</span>
+                                    </label>
+                                    <label class="makbuz-opt-card" id="card-av-masraf-bilirkisi" onclick="setAvMasrafAltTuru('bilirkisi')">
+                                        <input type="radio" name="makbuz-av-masraf-alt-turu" value="bilirkisi">
+                                        <span><i class="fa-solid fa-user-check"></i> 2) Bilirkişi Ücreti</span>
+                                    </label>
+                                    <label class="makbuz-opt-card" id="card-av-masraf-tebligat" onclick="setAvMasrafAltTuru('tebligat')">
+                                        <input type="radio" name="makbuz-av-masraf-alt-turu" value="tebligat">
+                                        <span><i class="fa-solid fa-envelope-open-text"></i> 3) Tebligat ve Yargılama Gider Avansı</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group full">
@@ -1623,7 +1644,12 @@
             const dosyaNo = (document.getElementById('makbuz-av-dosya')?.value || '').trim();
 
             let konuBaslik = 'Avukatlık Ücreti';
-            if (konuTuru === 'masraf') konuBaslik = 'Dava Masrafı ve Gider Avansı';
+            if (konuTuru === 'masraf') {
+                const masrafAlt = document.querySelector('input[name="makbuz-av-masraf-alt-turu"]:checked')?.value || 'acilis';
+                if (masrafAlt === 'bilirkisi') konuBaslik = 'Bilirkişi Ücreti Avansı';
+                else if (masrafAlt === 'tebligat') konuBaslik = 'Tebligat ve Yargılama Gider Avansı';
+                else konuBaslik = 'Dava Açılış Masrafı ve Harç Avansı';
+            }
             else if (konuTuru === 'danismanlik') konuBaslik = 'Danışma Ücreti';
             else if (konuTuru === 'diger') konuBaslik = 'Hukuki Hizmet / Masraf Tahsilatı';
 
@@ -1844,6 +1870,11 @@
             if (radio) radio.checked = (t === val);
         });
 
+        const masrafSubGroup = document.getElementById('makbuz-av-masraf-subgroup');
+        if (masrafSubGroup) {
+            masrafSubGroup.style.display = (val === 'masraf') ? 'block' : 'none';
+        }
+
         const aciklamaEl = document.getElementById('makbuz-av-aciklama');
         const notTextEl = document.getElementById('makbuz-av-not-text');
         const hasNotEl = document.getElementById('makbuz-av-has-not');
@@ -1853,14 +1884,46 @@
             if (hasNotEl) hasNotEl.checked = true;
             if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ yalnızca belirtilen işe dair avukatlık vekalet ücreti karşılığı olup, dava harç ve masrafları (bilirkişi, keşif, tebligat vb.) işbu ücrete dahil değildir (Av. K. m. 173).';
         } else if (val === 'masraf') {
-            if (aciklamaEl) aciklamaEl.value = 'Dava açılış harçları, bilirkişi ücreti, tebligat ve yargılama gider avansı karşılığı tahsil edilmiştir.';
-            if (hasNotEl) hasNotEl.checked = true;
-            if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ dava açılış ve yargılama gider avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir. Yargılama masrafları harcanması nispetinde müvekkil adına belgelendirilecektir.';
+            const subRadio = document.querySelector('input[name="makbuz-av-masraf-alt-turu"]:checked');
+            const subVal = subRadio ? subRadio.value : 'acilis';
+            setAvMasrafAltTuru(subVal);
+            return;
         } else if (val === 'danismanlik') {
             if (aciklamaEl) aciklamaEl.value = 'Hukuki danışmanlık, sözleşme inceleme ve danışma hizmet bedeli karşılığı tahsil edilmiştir.';
             if (hasNotEl) hasNotEl.checked = false;
         } else if (val === 'diger') {
             if (aciklamaEl) aciklamaEl.value = 'İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.';
+        }
+
+        toggleMakbuzAvNot();
+        renderPreview();
+    }
+
+    function setAvMasrafAltTuru(subVal) {
+        ['acilis', 'bilirkisi', 'tebligat'].forEach(s => {
+            const card = document.getElementById('card-av-masraf-' + s);
+            if (card) {
+                if (s === subVal) card.classList.add('active');
+                else card.classList.remove('active');
+            }
+            const radio = document.querySelector(`input[name="makbuz-av-masraf-alt-turu"][value="${s}"]`);
+            if (radio) radio.checked = (s === subVal);
+        });
+
+        const aciklamaEl = document.getElementById('makbuz-av-aciklama');
+        const notTextEl = document.getElementById('makbuz-av-not-text');
+        const hasNotEl = document.getElementById('makbuz-av-has-not');
+        if (hasNotEl) hasNotEl.checked = true;
+
+        if (subVal === 'acilis') {
+            if (aciklamaEl) aciklamaEl.value = 'Dava açılış harçları, başvuru ve peşin harç ile gider avansı karşılığı tahsil edilmiştir.';
+            if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ dava açılış ve yargılama gider avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir. Harcamalar müvekkil nam ve hesabına mahkeme veznesine yatırılarak belgelendirilecektir (Av. K. m. 173).';
+        } else if (subVal === 'bilirkisi') {
+            if (aciklamaEl) aciklamaEl.value = 'Mahkemece tensip veya ara kararla belirlenen bilirkişi inceleme, rapor ve dosya keşif gider avansı karşılığı tahsil edilmiştir.';
+            if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ mahkeme dosyasına yatırılmak üzere bilirkişi ücreti ve delil avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir (Av. K. m. 173).';
+        } else if (subVal === 'tebligat') {
+            if (aciklamaEl) aciklamaEl.value = 'Dava ve icra takip dosyası kapsamındaki tebligat, posta, müzekkere ve dosya masraf gider avansı karşılığı tahsil edilmiştir.';
+            if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ dosya tebligat ve masraf avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir. Masraflar müvekkil nam ve hesabına harcandığı oranda belgelendirilecektir (Av. K. m. 173).';
         }
 
         toggleMakbuzAvNot();
@@ -1931,6 +1994,8 @@
         document.querySelectorAll('#makbuz-avukat-form-block input[type="text"], #makbuz-avukat-form-block input[type="number"], #makbuz-avukat-form-block textarea, #makbuz-avukat-form-block input[type="tel"]').forEach(i => i.value = '');
         document.getElementById('makbuz-av-tarih').value = new Date().toISOString().slice(0, 10);
         document.getElementById('makbuz-av-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
+        const subRadio = document.querySelector('input[name="makbuz-av-masraf-alt-turu"][value="acilis"]');
+        if (subRadio) subRadio.checked = true;
         setAvKonuTuru('ucret');
         renderPreview();
     }

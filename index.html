@@ -1076,7 +1076,7 @@
                         </div>
                         <div class="form-group full">
                             <label>Açıklama Detayı</label>
-                            <textarea id="makbuz-av-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">Belirtilen dava/iş ve vekalet ilişkisi kapsamında avukatlık vekalet ücreti karşılığı tahsil edilmiştir.</textarea>
+                            <textarea id="makbuz-av-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">Belirtilen dava/iş ve vekalet ilişkisi kapsamında avukatlık vekalet ücreti olarak tahsil edilmiştir.</textarea>
                         </div>
 
                         <!-- Hukuki Masraf Muafiyet Şerhi (Av. K. m. 173) -->
@@ -1849,7 +1849,7 @@
         const hasNotEl = document.getElementById('makbuz-av-has-not');
 
         if (val === 'ucret') {
-            if (aciklamaEl) aciklamaEl.value = 'Belirtilen dava/iş ve vekalet ilişkisi kapsamında avukatlık vekalet ücreti karşılığı tahsil edilmiştir.';
+            if (aciklamaEl) aciklamaEl.value = 'Belirtilen dava/iş ve vekalet ilişkisi kapsamında avukatlık vekalet ücreti olarak tahsil edilmiştir.';
             if (hasNotEl) hasNotEl.checked = true;
             if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ yalnızca belirtilen işe dair avukatlık vekalet ücreti karşılığı olup, dava harç ve masrafları (bilirkişi, keşif, tebligat vb.) işbu ücrete dahil değildir (Av. K. m. 173).';
         } else if (val === 'masraf') {

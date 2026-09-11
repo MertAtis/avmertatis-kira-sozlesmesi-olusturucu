@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-    <title>Hukuki Kira Sözleşmesi & Tahliye Taahhüdü Oluşturucu - Shadcn Edition</title>
+    <title>Hukuki Kira Sözleşmesi, Tahliye Taahhüdü & Alındı Makbuzu - Shadcn Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -320,7 +320,7 @@
             color: var(--label-color);
         }
 
-        input[type="text"], input[type="date"], textarea {
+        input[type="text"], input[type="date"], input[type="number"], input[type="tel"], select, textarea {
             width: 100%;
             min-height: 44px;
             padding: 11px 14px;
@@ -337,13 +337,13 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        input[type="text"]::placeholder, textarea::placeholder {
+        input[type="text"]::placeholder, input[type="number"]::placeholder, textarea::placeholder {
             color: var(--muted-foreground);
             font-weight: 400;
             font-size: 15px;
         }
 
-        input[type="text"]:focus, input[type="date"]:focus, textarea:focus {
+        input[type="text"]:focus, input[type="date"]:focus, input[type="number"]:focus, input[type="tel"]:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--ring);
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
@@ -617,7 +617,7 @@
         <div class="brand">
             <div class="brand-icon"><i class="fa-solid fa-scale-balanced"></i></div>
             <div>
-                <div class="brand-title">Kira Sözleşmesi & Tahliye Taahhüdü Jeneratörü</div>
+                <div class="brand-title">Kira Sözleşmesi, Tahliye Taahhüdü & Alındı Makbuzu</div>
                 <div class="brand-sub">
                     Av. Mert Atış tarafından tasarlanıp yayına alınmıştır • 
                     <a href="https://x.com/baddestwolf_" target="_blank" rel="noopener noreferrer" style="color: var(--brand-link-color); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--brand-link-color); padding-bottom: 1px;">
@@ -649,6 +649,9 @@
         </button>
         <button class="tab-btn" id="tab-anahtar" onclick="switchTab('anahtar')">
             <i class="fa-solid fa-key"></i> Anahtar Teslim Tutanağı
+        </button>
+        <button class="tab-btn" id="tab-makbuz" onclick="switchTab('makbuz')">
+            <i class="fa-solid fa-receipt"></i> Alındı Makbuzu (Ücret & Masraf)
         </button>
     </div>
 
@@ -908,6 +911,121 @@
                 </div>
             </div>
 
+            <!-- ALINDI MAKBUZU FORMU -->
+            <div id="makbuz-form-block" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                    <div class="card-header-title" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
+                        <i class="fa-solid fa-receipt"></i> Alındı Makbuzu (Tahsilat & Masraf)
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="syncFromKiraToMakbuz()" title="Kira Sözleşmesi formundaki taraf ve bedel bilgilerini buraya aktarır">
+                            <i class="fa-solid fa-arrows-rotate"></i> Kira Formundan Bilgileri Çek
+                        </button>
+                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekMakbuzDoldur('avukat')" title="Avukatlık dava ve masraf avansı örneği doldurur">
+                            <i class="fa-solid fa-scale-balanced"></i> Örnek (Avukat)
+                        </button>
+                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekMakbuzDoldur('emlak')" title="Emlak / Gayrimenkul hizmet bedeli örneği doldurur">
+                            <i class="fa-solid fa-building-user"></i> Örnek (Emlakçı / Genel)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Taraf Bilgileri (Tahsil Eden & Teslim Eden) -->
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-users"></i> Taraf Bilgileri (Tahsil Eden & Teslim Eden)</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Tahsil Eden (Teslim Alan) Adı Soyadı / Unvanı *</label>
+                            <input type="text" id="makbuz-tahsil-eden-name" placeholder="Örn: Av. Osman Mert Atış veya ABC Gayrimenkul">
+                        </div>
+                        <div class="form-group">
+                            <label>Tahsil Eden Meslek / Unvan / Ek Bilgi</label>
+                            <input type="text" id="makbuz-tahsil-eden-unvan" placeholder="Örn: Hukuk & Danışmanlık Bürosu veya Gayrimenkul Danışmanı">
+                        </div>
+                        <div class="form-group">
+                            <label>Tahsil Eden T.C. / Vergi No / Sicil (İsteğe bağlı)</label>
+                            <input type="text" id="makbuz-tahsil-eden-tc" placeholder="T.C. No, Vergi No veya Sicil No">
+                        </div>
+                        <div class="form-group">
+                            <label>Tahsil Eden İletişim / Adres (İsteğe bağlı)</label>
+                            <input type="text" id="makbuz-tahsil-eden-iletisim" placeholder="Örn: 05xx xxx xx xx • Kadıköy/İST">
+                        </div>
+
+                        <div class="form-group" style="margin-top: 6px;">
+                            <label>Teslim Eden (Ödeyen / Müşteri) Adı Soyadı *</label>
+                            <input type="text" id="makbuz-teslim-eden-name" placeholder="Örn: Mehmet Kaya veya ABC Ltd. Şti.">
+                        </div>
+                        <div class="form-group" style="margin-top: 6px;">
+                            <label>Teslim Eden T.C. / Vergi No</label>
+                            <input type="text" id="makbuz-teslim-eden-tc" maxlength="11" inputmode="numeric" placeholder="11 haneli T.C. veya Vergi No">
+                        </div>
+                        <div class="form-group full">
+                            <label>Teslim Eden Telefon / İletişim (İsteğe bağlı)</label>
+                            <input type="text" id="makbuz-teslim-eden-tel" placeholder="Örn: 05xx xxx xx xx">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tahsilat & Tutar Detayları -->
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-coins"></i> Tahsilat & Tutar Bilgileri</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Makbuz Düzenleme Tarihi *</label>
+                            <input type="date" id="makbuz-tarih">
+                        </div>
+                        <div class="form-group">
+                            <label>Ödeme Şekli *</label>
+                            <select id="makbuz-odeme-sekli">
+                                <option value="Nakit">Nakit</option>
+                                <option value="Banka Havalesi / EFT / FAST">Banka Havalesi / EFT / FAST</option>
+                                <option value="Kredi Kartı / Banka Kartı">Kredi Kartı / Banka Kartı</option>
+                                <option value="Senet">Senet</option>
+                                <option value="Banka Çeki">Banka Çeki</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tahsil Edilen Toplam Tutar (TL) *</label>
+                            <input type="number" id="makbuz-tutar" inputmode="numeric" oninput="updateMakbuzYaziyla(this.value)" placeholder="Örn: 25000">
+                        </div>
+                        <div class="form-group">
+                            <label>Yazıyla Tutar (Otomatik Çevrilir)</label>
+                            <input type="text" id="makbuz-yaziyla" placeholder="Örn: Yalnız YirmiBeşBin TürkLirası">
+                        </div>
+                        <div class="form-group full">
+                            <label>Ücretin Ne İçin Alındığı (Konu / Dosya / İş) *</label>
+                            <input type="text" id="makbuz-konu" placeholder="Örn: Kira ve Depozito Bedeli veya Dava & Masraf Avansı veya Emlak Danışmanlık Ücreti">
+                        </div>
+                        <div class="form-group full">
+                            <label>Açıklama Detayı</label>
+                            <textarea id="makbuz-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">İşbu makbuz konusu tahsilat eksiksiz olarak gerçekleştirilmiştir.</textarea>
+                        </div>
+
+                        <!-- Hukuki / Özel Not -->
+                        <div class="form-group full" style="margin-top: 4px;">
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="makbuz-has-not" onchange="toggleMakbuzNot()">
+                                <span><i class="fa-solid fa-file-pen"></i> Özel Not / Masraf-Muafiyet Şerhi Ekle</span>
+                            </label>
+                            <div id="makbuz-not-group" class="nested-group" style="display: none;">
+                                <div class="form-group">
+                                    <label>Özel Not / Şerh Metni</label>
+                                    <textarea id="makbuz-not-text" rows="2">Tahsil edilen meblağ yalnızca belirtilen hizmet/ücret karşılığı olup, dava harç ve masrafları (gider avansı, bilirkişi vb.) işbu ücrete dahil değildir.</textarea>
+                                </div>
+                                <div class="info-pill">
+                                    <i class="fa-solid fa-info-circle"></i> Avukatlar için Av. K. m. 173 masraf muafiyet şerhi; emlakçı ve işletmeler için özel şart ve çekinceler eklenebilir.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-bar">
+                    <button class="btn btn-shadcn-primary" onclick="handlePrint()"><i class="fa-solid fa-print"></i> Yazdır / PDF İndir (Çift Nüsha A4)</button>
+                    <button class="btn btn-shadcn-outline" onclick="resetMakbuzForm()"><i class="fa-solid fa-rotate-left"></i> Formu Temizle</button>
+                </div>
+            </div>
+
         </div>
 
         <!-- MINIMALIST A4 LIVE PREVIEW INSPECTOR -->
@@ -930,6 +1048,8 @@
     document.getElementById('kira-start-date').value = new Date().toISOString().slice(0, 10);
     const anahtarDateEl = document.getElementById('anahtar-date');
     if (anahtarDateEl) anahtarDateEl.value = new Date().toISOString().slice(0, 10);
+    const makbuzDateEl = document.getElementById('makbuz-tarih');
+    if (makbuzDateEl) makbuzDateEl.value = new Date().toISOString().slice(0, 10);
 
     document.addEventListener('input', renderPreview);
     document.addEventListener('change', renderPreview);
@@ -939,9 +1059,11 @@
         document.getElementById('tab-kira').classList.toggle('active', tab === 'kira');
         document.getElementById('tab-tahliye').classList.toggle('active', tab === 'tahliye');
         document.getElementById('tab-anahtar').classList.toggle('active', tab === 'anahtar');
+        document.getElementById('tab-makbuz').classList.toggle('active', tab === 'makbuz');
         document.getElementById('kira-form-block').style.display = tab === 'kira' ? 'block' : 'none';
         document.getElementById('tahliye-form-block').style.display = tab === 'tahliye' ? 'block' : 'none';
         document.getElementById('anahtar-form-block').style.display = tab === 'anahtar' ? 'block' : 'none';
+        document.getElementById('makbuz-form-block').style.display = tab === 'makbuz' ? 'block' : 'none';
         renderPreview();
     }
 
@@ -968,6 +1090,66 @@
         const chk = document.getElementById('tahliye-is-married');
         const grp = document.getElementById('tahliye-spouse-group');
         if (grp) grp.style.display = chk && chk.checked ? 'block' : 'none';
+        renderPreview();
+    }
+
+    function toggleMakbuzNot() {
+        const chk = document.getElementById('makbuz-has-not');
+        const grp = document.getElementById('makbuz-not-group');
+        if (grp) grp.style.display = chk && chk.checked ? 'block' : 'none';
+        renderPreview();
+    }
+
+    const B1 = ['', 'Bir', 'İki', 'Üç', 'Dört', 'Beş', 'Altı', 'Yedi', 'Sekiz', 'Dokuz'];
+    const B2 = ['', 'On', 'Yirmi', 'Otuz', 'Kırk', 'Elli', 'Altmış', 'Yetmiş', 'Seksen', 'Doksan'];
+    const BAS = ['', 'Bin', 'Milyon', 'Milyar'];
+
+    function ucBasamakliYazi(n) {
+        const yuz = Math.floor(n / 100);
+        const on = Math.floor((n % 100) / 10);
+        const bir = n % 10;
+        let res = '';
+        if (yuz > 0) res += (yuz === 1 ? 'Yüz' : B1[yuz] + 'Yüz');
+        if (on > 0) res += B2[on];
+        if (bir > 0) res += B1[bir];
+        return res;
+    }
+
+    function turkceSayiyiYaziyaCevir(tutarVal) {
+        const num = parseFloat(tutarVal);
+        if (isNaN(num) || num <= 0) return '';
+        const tam = Math.floor(num);
+        const kurus = Math.round((num - tam) * 100);
+        let grup = [];
+        let temp = tam;
+        while (temp > 0) {
+            grup.push(temp % 1000);
+            temp = Math.floor(temp / 1000);
+        }
+        if (!grup.length) grup = [0];
+        let tamYazi = '';
+        for (let i = grup.length - 1; i >= 0; i--) {
+            const h = grup[i];
+            if (h === 0) continue;
+            if (i === 1 && h === 1) {
+                tamYazi += 'Bin';
+            } else {
+                tamYazi += ucBasamakliYazi(h) + BAS[i];
+            }
+        }
+        let sonuc = 'Yalnız ' + (tamYazi || 'Sıfır') + ' TürkLirası';
+        if (kurus > 0) {
+            sonuc += ' ' + ucBasamakliYazi(kurus) + ' Kuruş';
+        }
+        return sonuc;
+    }
+
+    function updateMakbuzYaziyla(val) {
+        const num = parseFloat(val);
+        const yaziylaEl = document.getElementById('makbuz-yaziyla');
+        if (yaziylaEl && !isNaN(num) && num > 0) {
+            yaziylaEl.value = turkceSayiyiYaziyaCevir(num);
+        }
         renderPreview();
     }
 
@@ -1246,7 +1428,206 @@
                     </div>
                 </div>
             `;
+        } else if (currentTab === 'makbuz') {
+            const tahsilEdenName = (document.getElementById('makbuz-tahsil-eden-name')?.value || '').trim() || '……………………………………………………';
+            const tahsilEdenUnvan = (document.getElementById('makbuz-tahsil-eden-unvan')?.value || '').trim();
+            const tahsilEdenTc = (document.getElementById('makbuz-tahsil-eden-tc')?.value || '').trim();
+            const tahsilEdenIletisim = (document.getElementById('makbuz-tahsil-eden-iletisim')?.value || '').trim();
+
+            const teslimEdenName = (document.getElementById('makbuz-teslim-eden-name')?.value || '').trim() || '……………………………………………………';
+            const teslimEdenTc = (document.getElementById('makbuz-teslim-eden-tc')?.value || '').trim() || '……………………………………';
+            const teslimEdenTel = (document.getElementById('makbuz-teslim-eden-tel')?.value || '').trim();
+
+            const tarihRaw = document.getElementById('makbuz-tarih')?.value;
+            const tarihFormatted = tarihRaw ? formatDate(tarihRaw) : formatDate(new Date().toISOString().slice(0, 10));
+            const odemeSekli = (document.getElementById('makbuz-odeme-sekli')?.value || '').trim() || 'Nakit';
+
+            const tutarRaw = (document.getElementById('makbuz-tutar')?.value || '').trim();
+            const tutarNum = parseFloat(tutarRaw);
+            const tutarFormatli = (!isNaN(tutarNum) && tutarNum > 0)
+                ? tutarNum.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL'
+                : '………………… TL';
+
+            let yaziyla = (document.getElementById('makbuz-yaziyla')?.value || '').trim();
+            if (!yaziyla && !isNaN(tutarNum) && tutarNum > 0) {
+                yaziyla = turkceSayiyiYaziyaCevir(tutarNum);
+            }
+            if (!yaziyla) yaziyla = 'Yalnız …………………………………………………… TürkLirası';
+
+            const konu = (document.getElementById('makbuz-konu')?.value || '').trim() || 'Kira Bedeli / Hizmet Bedeli Tahsilatı';
+            const aciklama = (document.getElementById('makbuz-aciklama')?.value || '').trim() || 'İşbu makbuz konusu tahsilat eksiksiz olarak gerçekleştirilmiştir.';
+
+            const hasNot = document.getElementById('makbuz-has-not')?.checked;
+            const notText = (document.getElementById('makbuz-not-text')?.value || '').trim();
+
+            function buildNushaHtml(nushaBadge) {
+                const subMeta = [];
+                if (tahsilEdenTc) subMeta.push(`TC/VKN: ${esc(tahsilEdenTc)}`);
+                if (tahsilEdenIletisim) subMeta.push(esc(tahsilEdenIletisim));
+                const subMetaHtml = subMeta.length ? `<div style="font-size: 8.5px; color: #52525b; margin-top: 1px;">${subMeta.join(' • ')}</div>` : '';
+
+                return `
+                    <div style="border: 1px solid #18181b; border-radius: 6px; padding: 10px 14px; background: #ffffff; color: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; height: 121mm; margin: 0 auto;">
+                        <!-- Voucher Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5px solid #09090b; padding-bottom: 6px;">
+                            <div>
+                                <div style="font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em; color: #09090b; text-transform: uppercase;">${esc(tahsilEdenName)}</div>
+                                ${tahsilEdenUnvan ? `<div style="font-size: 9.5px; font-weight: 600; text-transform: uppercase; color: #52525b; margin-top: 1px;">${esc(tahsilEdenUnvan)}</div>` : ''}
+                                ${subMetaHtml}
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.04em; color: #09090b; text-transform: uppercase;">TAHSİLAT & ALINDI MAKBUZU</div>
+                                <div style="display: inline-block; font-size: 8.5px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: #f4f4f5; color: #18181b; border: 1px solid #cbd5e1; margin-top: 2px;">${nushaBadge}</div>
+                                <div style="font-size: 9.5px; color: #52525b; margin-top: 2px;"><strong>Tarih:</strong> ${esc(tarihFormatted)}</div>
+                            </div>
+                        </div>
+
+                        <!-- Data Grid Table -->
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 9.5px; table-layout: fixed;">
+                            <tr>
+                                <td style="width: 23%; background: #f8fafc; color: #475569; font-weight: 700; border: 1px solid #cbd5e1; padding: 4px 6px;">Teslim Eden (Ödeyen)</td>
+                                <td style="width: 37%; border: 1px solid #cbd5e1; padding: 4px 6px; color: #09090b; font-weight: 700;">${esc(teslimEdenName)}</td>
+                                <td style="width: 18%; background: #f8fafc; color: #475569; font-weight: 700; border: 1px solid #cbd5e1; padding: 4px 6px;">T.C. / Vergi No</td>
+                                <td style="width: 22%; border: 1px solid #cbd5e1; padding: 4px 6px; color: #09090b;">${esc(teslimEdenTc)}</td>
+                            </tr>
+                            <tr>
+                                <td style="background: #f8fafc; color: #475569; font-weight: 700; border: 1px solid #cbd5e1; padding: 4px 6px;">Tahsilat Konusu / İş</td>
+                                <td style="border: 1px solid #cbd5e1; padding: 4px 6px; color: #09090b; font-weight: 600;">${esc(konu)}</td>
+                                <td style="background: #f8fafc; color: #475569; font-weight: 700; border: 1px solid #cbd5e1; padding: 4px 6px;">Ödeme Şekli</td>
+                                <td style="border: 1px solid #cbd5e1; padding: 4px 6px; color: #09090b;">${esc(odemeSekli)}</td>
+                            </tr>
+                        </table>
+
+                        <!-- Amount Box -->
+                        <div style="border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 4px; padding: 6px 10px; display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px;">
+                            <div>
+                                <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.04em;">Tahsil Edilen Tutar:</span>
+                                <span style="font-size: 9.5px; color: #1e293b; font-style: italic; margin-left: 6px;">( ${esc(yaziyla)} )</span>
+                            </div>
+                            <div style="font-size: 14px; font-weight: 800; color: #09090b; letter-spacing: -0.01em;">${tutarFormatli}</div>
+                        </div>
+
+                        <!-- Description Box -->
+                        <div style="font-size: 9.5px; color: #1e293b; line-height: 1.4; padding: 4px 2px; margin-top: 4px; border-bottom: ${hasNot && notText ? '1px dashed #cbd5e1' : 'none'};">
+                            <strong style="color: #09090b;">Açıklama:</strong> ${esc(aciklama)}
+                        </div>
+
+                        ${(hasNot && notText) ? `
+                        <div style="font-size: 8.5px; color: #475569; line-height: 1.35; padding: 2px 2px;">
+                            <strong style="color: #09090b;">Not:</strong> ${esc(notText)}
+                        </div>` : ''}
+
+                        <!-- Signatures -->
+                        <div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 4px;">
+                            <div style="width: 45%; text-align: center;">
+                                <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #475569;">TESLİM EDEN (ÖDEYEN)</div>
+                                <div style="font-size: 9.5px; font-weight: 700; color: #09090b; margin-top: 2px;">${esc(teslimEdenName)}</div>
+                                <div style="border-top: 1px solid #94a3b8; width: 100px; margin: 16px auto 0; padding-top: 2px; font-size: 8px; color: #64748b;">İmza</div>
+                            </div>
+                            <div style="width: 45%; text-align: center;">
+                                <div style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #475569;">TAHSİL EDEN (TESLİM ALAN)</div>
+                                <div style="font-size: 9.5px; font-weight: 700; color: #09090b; margin-top: 2px;">${esc(tahsilEdenName)}</div>
+                                <div style="border-top: 1px solid #94a3b8; width: 100px; margin: 16px auto 0; padding-top: 2px; font-size: 8px; color: #64748b;">İmza</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const nusha1 = buildNushaHtml('1. Nüsha — Teslim Eden (Ödeyen)');
+            const nusha2 = buildNushaHtml('2. Nüsha — Tahsil Eden (Teslim Alan)');
+
+            target.innerHTML = `
+                <div style="padding: 2px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    ${nusha1}
+                    
+                    <!-- Cut Line between Vouchers -->
+                    <div style="display: flex; align-items: center; justify-content: center; margin: 5mm 0; position: relative; border-bottom: 1px dashed #94a3b8; height: 1px;">
+                        <span style="background: #ffffff; padding: 0 8px; font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 4px;">
+                            ✂️ Makasla Buradan Kesiniz (1 Sayfada Çift Nüsha — Sıfır Kağıt İsrafı)
+                        </span>
+                    </div>
+
+                    ${nusha2}
+                </div>
+            `;
         }
+    }
+
+    function syncFromKiraToMakbuz() {
+        const landlord = document.getElementById('kira-landlord-name')?.value.trim();
+        const hasVekil = document.getElementById('kira-has-vekil') && document.getElementById('kira-has-vekil').checked;
+        const vekil = hasVekil ? document.getElementById('kira-landlord-vekil')?.value.trim() : '';
+        const tenant = document.getElementById('kira-tenant-name')?.value.trim();
+        const tenantTc = document.getElementById('kira-tenant-tc')?.value.trim();
+        const fee = document.getElementById('kira-fee-amount')?.value.trim();
+
+        if (vekil) {
+            document.getElementById('makbuz-tahsil-eden-name').value = vekil;
+            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Avukat / Kiraya Veren Vekili';
+        } else if (landlord) {
+            document.getElementById('makbuz-tahsil-eden-name').value = landlord;
+            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Kiraya Veren / Malik';
+        }
+
+        if (tenant) document.getElementById('makbuz-teslim-eden-name').value = tenant;
+        if (tenantTc) document.getElementById('makbuz-teslim-eden-tc').value = tenantTc;
+
+        if (fee) {
+            const cleanFee = fee.replace(/[^0-9]/g, '');
+            if (cleanFee) {
+                document.getElementById('makbuz-tutar').value = cleanFee;
+                updateMakbuzYaziyla(cleanFee);
+            }
+        }
+
+        document.getElementById('makbuz-konu').value = 'Kira Bedeli Tahsilatı';
+        document.getElementById('makbuz-aciklama').value = 'Belirtilen ay kira bedeli karşılığı tahsil edilmiştir.';
+        renderPreview();
+    }
+
+    function ornekMakbuzDoldur(tur) {
+        if (tur === 'emlak') {
+            document.getElementById('makbuz-tahsil-eden-name').value = 'Hedef Gayrimenkul Danışmanlık';
+            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Gayrimenkul & Emlak Danışmanı';
+            document.getElementById('makbuz-tahsil-eden-tc').value = '1234567890';
+            document.getElementById('makbuz-tahsil-eden-iletisim').value = '0532 000 00 00 • Kadıköy/İST';
+            document.getElementById('makbuz-teslim-eden-name').value = 'Ahmet Yılmaz';
+            document.getElementById('makbuz-teslim-eden-tc').value = '12345678901';
+            document.getElementById('makbuz-teslim-eden-tel').value = '0555 123 45 67';
+            document.getElementById('makbuz-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
+            document.getElementById('makbuz-tutar').value = '30000';
+            updateMakbuzYaziyla(30000);
+            document.getElementById('makbuz-konu').value = 'Taşınmaz Kiralama Hizmet Bedeli';
+            document.getElementById('makbuz-aciklama').value = 'Taşınmaz kiralama aracılık ve danışmanlık hizmet bedeli karşılığı tahsil edilmiştir.';
+            document.getElementById('makbuz-has-not').checked = false;
+        } else {
+            document.getElementById('makbuz-tahsil-eden-name').value = 'Av. Osman Mert ATIŞ';
+            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Hukuk & Danışmanlık Bürosu';
+            document.getElementById('makbuz-tahsil-eden-tc').value = '';
+            document.getElementById('makbuz-tahsil-eden-iletisim').value = 'Baro Sicil No: 00000';
+            document.getElementById('makbuz-teslim-eden-name').value = 'Hakan Çelik';
+            document.getElementById('makbuz-teslim-eden-tc').value = '12345678901';
+            document.getElementById('makbuz-teslim-eden-tel').value = '0530 987 65 43';
+            document.getElementById('makbuz-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
+            document.getElementById('makbuz-tutar').value = '35000';
+            updateMakbuzYaziyla(35000);
+            document.getElementById('makbuz-konu').value = 'Dava Açılış Harçları ve Gider Avansı';
+            document.getElementById('makbuz-aciklama').value = 'Dava açılış harçları, bilirkişi ücreti ve tebligat gider avansı karşılığı tahsil edilmiştir.';
+            document.getElementById('makbuz-has-not').checked = true;
+        }
+        toggleMakbuzNot();
+        renderPreview();
+    }
+
+    function resetMakbuzForm() {
+        document.querySelectorAll('#makbuz-form-block input[type="text"], #makbuz-form-block input[type="number"], #makbuz-form-block textarea, #makbuz-form-block input[type="tel"]').forEach(i => i.value = '');
+        document.getElementById('makbuz-tarih').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('makbuz-odeme-sekli').value = 'Nakit';
+        const chk = document.getElementById('makbuz-has-not');
+        if (chk) chk.checked = false;
+        toggleMakbuzNot();
+        renderPreview();
     }
 
     function syncFromKiraToAnahtar() {

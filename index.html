@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; connect-src 'self' https://countapi.mileshilliard.com; img-src 'self' data: https:;">
     <title>Hukuki Kira Sözleşmesi, Tahliye Taahhüdü & Alındı Makbuzu - Shadcn Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1312,17 +1313,13 @@
         return sonuc;
     }
 
-    function updateMakbuzYaziyla(val) {
-        const num = parseFloat(val);
-        const yaziylaEl = document.getElementById('makbuz-yaziyla');
-        if (yaziylaEl && !isNaN(num) && num > 0) {
-            yaziylaEl.value = turkceSayiyiYaziyaCevir(num);
-        }
-        renderPreview();
-    }
-
     function esc(s) {
-        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     function formatDate(d) {

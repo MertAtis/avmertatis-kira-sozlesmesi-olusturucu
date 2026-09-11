@@ -918,14 +918,11 @@
                         <i class="fa-solid fa-receipt"></i> Alındı Makbuzu (Tahsilat & Masraf)
                     </div>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="syncFromKiraToMakbuz()" title="Kira Sözleşmesi formundaki taraf ve bedel bilgilerini buraya aktarır">
-                            <i class="fa-solid fa-arrows-rotate"></i> Kira Formundan Bilgileri Çek
-                        </button>
                         <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekMakbuzDoldur('avukat')" title="Avukatlık dava ve masraf avansı örneği doldurur">
                             <i class="fa-solid fa-scale-balanced"></i> Örnek (Avukat)
                         </button>
-                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekMakbuzDoldur('emlak')" title="Emlak / Gayrimenkul hizmet bedeli örneği doldurur">
-                            <i class="fa-solid fa-building-user"></i> Örnek (Emlakçı / Genel)
+                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekMakbuzDoldur('emlak')" title="Danışmanlık ve hizmet bedeli örneği doldurur">
+                            <i class="fa-solid fa-briefcase"></i> Örnek (Hizmet & Danışmanlık)
                         </button>
                     </div>
                 </div>
@@ -936,11 +933,11 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Tahsil Eden (Teslim Alan) Adı Soyadı / Unvanı *</label>
-                            <input type="text" id="makbuz-tahsil-eden-name" placeholder="Örn: Av. Osman Mert Atış veya ABC Gayrimenkul">
+                            <input type="text" id="makbuz-tahsil-eden-name" placeholder="Örn: Av. Osman Mert Atış veya ABC Danışmanlık">
                         </div>
                         <div class="form-group">
                             <label>Tahsil Eden Meslek / Unvan / Ek Bilgi</label>
-                            <input type="text" id="makbuz-tahsil-eden-unvan" placeholder="Örn: Hukuk & Danışmanlık Bürosu veya Gayrimenkul Danışmanı">
+                            <input type="text" id="makbuz-tahsil-eden-unvan" placeholder="Örn: Hukuk & Danışmanlık Bürosu veya Danışman / Yetkili">
                         </div>
                         <div class="form-group">
                             <label>Tahsil Eden T.C. / Vergi No / Sicil (İsteğe bağlı)</label>
@@ -994,11 +991,11 @@
                         </div>
                         <div class="form-group full">
                             <label>Ücretin Ne İçin Alındığı (Konu / Dosya / İş) *</label>
-                            <input type="text" id="makbuz-konu" placeholder="Örn: Kira ve Depozito Bedeli veya Dava & Masraf Avansı veya Emlak Danışmanlık Ücreti">
+                            <input type="text" id="makbuz-konu" placeholder="Örn: Hukuki Danışmanlık & Dava Masraf Avansı veya Aracılık Hizmet Bedeli">
                         </div>
                         <div class="form-group full">
                             <label>Açıklama Detayı</label>
-                            <textarea id="makbuz-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">İşbu makbuz konusu tahsilat eksiksiz olarak gerçekleştirilmiştir.</textarea>
+                            <textarea id="makbuz-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.</textarea>
                         </div>
 
                         <!-- Hukuki / Özel Not -->
@@ -1454,8 +1451,8 @@
             }
             if (!yaziyla) yaziyla = 'Yalnız …………………………………………………… TürkLirası';
 
-            const konu = (document.getElementById('makbuz-konu')?.value || '').trim() || 'Kira Bedeli / Hizmet Bedeli Tahsilatı';
-            const aciklama = (document.getElementById('makbuz-aciklama')?.value || '').trim() || 'İşbu makbuz konusu tahsilat eksiksiz olarak gerçekleştirilmiştir.';
+            const konu = (document.getElementById('makbuz-konu')?.value || '').trim() || 'Hizmet Bedeli / Masraf Avansı / Tahsilat';
+            const aciklama = (document.getElementById('makbuz-aciklama')?.value || '').trim() || 'İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.';
 
             const hasNot = document.getElementById('makbuz-has-not')?.checked;
             const notText = (document.getElementById('makbuz-not-text')?.value || '').trim();
@@ -1554,42 +1551,10 @@
         }
     }
 
-    function syncFromKiraToMakbuz() {
-        const landlord = document.getElementById('kira-landlord-name')?.value.trim();
-        const hasVekil = document.getElementById('kira-has-vekil') && document.getElementById('kira-has-vekil').checked;
-        const vekil = hasVekil ? document.getElementById('kira-landlord-vekil')?.value.trim() : '';
-        const tenant = document.getElementById('kira-tenant-name')?.value.trim();
-        const tenantTc = document.getElementById('kira-tenant-tc')?.value.trim();
-        const fee = document.getElementById('kira-fee-amount')?.value.trim();
-
-        if (vekil) {
-            document.getElementById('makbuz-tahsil-eden-name').value = vekil;
-            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Avukat / Kiraya Veren Vekili';
-        } else if (landlord) {
-            document.getElementById('makbuz-tahsil-eden-name').value = landlord;
-            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Kiraya Veren / Malik';
-        }
-
-        if (tenant) document.getElementById('makbuz-teslim-eden-name').value = tenant;
-        if (tenantTc) document.getElementById('makbuz-teslim-eden-tc').value = tenantTc;
-
-        if (fee) {
-            const cleanFee = fee.replace(/[^0-9]/g, '');
-            if (cleanFee) {
-                document.getElementById('makbuz-tutar').value = cleanFee;
-                updateMakbuzYaziyla(cleanFee);
-            }
-        }
-
-        document.getElementById('makbuz-konu').value = 'Kira Bedeli Tahsilatı';
-        document.getElementById('makbuz-aciklama').value = 'Belirtilen ay kira bedeli karşılığı tahsil edilmiştir.';
-        renderPreview();
-    }
-
     function ornekMakbuzDoldur(tur) {
         if (tur === 'emlak') {
-            document.getElementById('makbuz-tahsil-eden-name').value = 'Hedef Gayrimenkul Danışmanlık';
-            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Gayrimenkul & Emlak Danışmanı';
+            document.getElementById('makbuz-tahsil-eden-name').value = 'Hedef Gayrimenkul & Danışmanlık';
+            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Danışmanlık & Yetkili İşletme';
             document.getElementById('makbuz-tahsil-eden-tc').value = '1234567890';
             document.getElementById('makbuz-tahsil-eden-iletisim').value = '0532 000 00 00 • Kadıköy/İST';
             document.getElementById('makbuz-teslim-eden-name').value = 'Ahmet Yılmaz';
@@ -1598,8 +1563,8 @@
             document.getElementById('makbuz-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
             document.getElementById('makbuz-tutar').value = '30000';
             updateMakbuzYaziyla(30000);
-            document.getElementById('makbuz-konu').value = 'Taşınmaz Kiralama Hizmet Bedeli';
-            document.getElementById('makbuz-aciklama').value = 'Taşınmaz kiralama aracılık ve danışmanlık hizmet bedeli karşılığı tahsil edilmiştir.';
+            document.getElementById('makbuz-konu').value = 'Danışmanlık ve Aracılık Hizmet Bedeli';
+            document.getElementById('makbuz-aciklama').value = 'Danışmanlık ve operasyonel hizmet bedeli karşılığı tahsil edilmiştir.';
             document.getElementById('makbuz-has-not').checked = false;
         } else {
             document.getElementById('makbuz-tahsil-eden-name').value = 'Av. Osman Mert ATIŞ';

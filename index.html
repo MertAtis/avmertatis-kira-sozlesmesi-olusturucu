@@ -975,12 +975,12 @@
                     <div class="card-header-title" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
                         <i class="fa-solid fa-scale-balanced"></i> Avukat Alındı Makbuzu (Ücret & Masraf Avansı)
                     </div>
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekAvukatMakbuzDoldur('masraf')" title="Dava açılış harç ve masraf avansı örneği doldurur">
-                            <i class="fa-solid fa-receipt"></i> Örnek (Masraf Avansı)
-                        </button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekAvukatMakbuzDoldur('ucret')" title="Vekalet ücreti tahsilatı örneği doldurur">
-                            <i class="fa-solid fa-gavel"></i> Örnek (Vekalet Ücreti)
+                            <i class="fa-solid fa-gavel"></i> Örnek (Avukatlık Ücreti)
+                        </button>
+                        <button class="btn btn-shadcn-outline" style="padding: 6px 12px; font-size: 0.78rem;" onclick="ornekAvukatMakbuzDoldur('masraf')" title="Dava masraf avansı örneği doldurur">
+                            <i class="fa-solid fa-receipt"></i> Örnek (Dava Masrafı)
                         </button>
                     </div>
                 </div>
@@ -1051,21 +1051,21 @@
                         <div class="form-group full">
                             <label>Tahsilat Türü (Konu) *</label>
                             <div class="makbuz-konu-group">
-                                <label class="makbuz-opt-card active" id="card-av-masraf" onclick="setAvKonuTuru('masraf')">
-                                    <input type="radio" name="makbuz-av-konu-turu" value="masraf" checked>
-                                    <span><i class="fa-solid fa-receipt"></i> 1) Dava Masraf Avansı</span>
+                                <label class="makbuz-opt-card active" id="card-av-ucret" onclick="setAvKonuTuru('ucret')">
+                                    <input type="radio" name="makbuz-av-konu-turu" value="ucret" checked>
+                                    <span><i class="fa-solid fa-gavel"></i> 1) Avukatlık Ücreti</span>
                                 </label>
-                                <label class="makbuz-opt-card" id="card-av-ucret" onclick="setAvKonuTuru('ucret')">
-                                    <input type="radio" name="makbuz-av-konu-turu" value="ucret">
-                                    <span><i class="fa-solid fa-gavel"></i> 2) Vekalet Ücreti</span>
+                                <label class="makbuz-opt-card" id="card-av-masraf" onclick="setAvKonuTuru('masraf')">
+                                    <input type="radio" name="makbuz-av-konu-turu" value="masraf">
+                                    <span><i class="fa-solid fa-receipt"></i> 2) Dava Masrafı</span>
                                 </label>
                                 <label class="makbuz-opt-card" id="card-av-danismanlik" onclick="setAvKonuTuru('danismanlik')">
                                     <input type="radio" name="makbuz-av-konu-turu" value="danismanlik">
-                                    <span><i class="fa-solid fa-scale-balanced"></i> 3) Hukuki Danışmanlık</span>
+                                    <span><i class="fa-solid fa-scale-balanced"></i> 3) Danışma Ücreti</span>
                                 </label>
                                 <label class="makbuz-opt-card" id="card-av-diger" onclick="setAvKonuTuru('diger')">
                                     <input type="radio" name="makbuz-av-konu-turu" value="diger">
-                                    <span><i class="fa-solid fa-pen-to-square"></i> Diğer</span>
+                                    <span><i class="fa-solid fa-pen-to-square"></i> 4) Diğer</span>
                                 </label>
                             </div>
                         </div>
@@ -1076,7 +1076,7 @@
                         </div>
                         <div class="form-group full">
                             <label>Açıklama Detayı</label>
-                            <textarea id="makbuz-av-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">Dava açılış harçları, bilirkişi ücreti, tebligat ve yargılama gider avansı karşılığı tahsil edilmiştir.</textarea>
+                            <textarea id="makbuz-av-aciklama" rows="2" placeholder="Örn: ... karşılığı tahsil edilmiştir.">Belirtilen dava/iş ve vekalet ilişkisi kapsamında avukatlık vekalet ücreti karşılığı tahsil edilmiştir.</textarea>
                         </div>
 
                         <!-- Hukuki Masraf Muafiyet Şerhi (Av. K. m. 173) -->
@@ -1088,7 +1088,7 @@
                             <div id="makbuz-av-not-group" class="nested-group">
                                 <div class="form-group">
                                     <label>Yasal Şerh Metni</label>
-                                    <textarea id="makbuz-av-not-text" rows="2">Tahsil edilen meblağ dava açılış ve yargılama gider avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir. Yargılama masrafları harcanması nispetinde müvekkil adına belgelendirilecektir.</textarea>
+                                    <textarea id="makbuz-av-not-text" rows="2">Tahsil edilen meblağ yalnızca belirtilen işe dair avukatlık vekalet ücreti karşılığı olup, dava harç ve masrafları (bilirkişi, keşif, tebligat vb.) işbu ücrete dahil değildir (Av. K. m. 173).</textarea>
                                 </div>
                                 <div class="info-pill">
                                     <i class="fa-solid fa-info-circle"></i> <strong>Avukatlık Kanunu Madde 173/2:</strong> Avukata tevdi edilen masraf avansının vekalet ücretinden ayrı tutulması ve taraflar arasındaki uyuşmazlıkların önlenmesi için makbuz üzerinde açık şerh bulunması kanunen tavsiye edilir.
@@ -1619,12 +1619,12 @@
             }
             if (!yaziyla) yaziyla = 'Yalnız …………………………………………………… TürkLirası';
 
-            const konuTuru = document.querySelector('input[name="makbuz-av-konu-turu"]:checked')?.value || 'masraf';
+            const konuTuru = document.querySelector('input[name="makbuz-av-konu-turu"]:checked')?.value || 'ucret';
             const dosyaNo = (document.getElementById('makbuz-av-dosya')?.value || '').trim();
 
-            let konuBaslik = 'Dava Masrafları ve Gider Avansı';
-            if (konuTuru === 'ucret') konuBaslik = 'Avukatlık Vekalet Ücreti';
-            else if (konuTuru === 'danismanlik') konuBaslik = 'Hukuki Danışmanlık Ücreti';
+            let konuBaslik = 'Avukatlık Ücreti';
+            if (konuTuru === 'masraf') konuBaslik = 'Dava Masrafı ve Gider Avansı';
+            else if (konuTuru === 'danismanlik') konuBaslik = 'Danışma Ücreti';
             else if (konuTuru === 'diger') konuBaslik = 'Hukuki Hizmet / Masraf Tahsilatı';
 
             const konuTam = dosyaNo ? `${konuBaslik} (${dosyaNo})` : konuBaslik;
@@ -1834,7 +1834,7 @@
     }
 
     function setAvKonuTuru(val) {
-        ['masraf', 'ucret', 'danismanlik', 'diger'].forEach(t => {
+        ['ucret', 'masraf', 'danismanlik', 'diger'].forEach(t => {
             const card = document.getElementById('card-av-' + t);
             if (card) {
                 if (t === val) card.classList.add('active');
@@ -1848,16 +1848,16 @@
         const notTextEl = document.getElementById('makbuz-av-not-text');
         const hasNotEl = document.getElementById('makbuz-av-has-not');
 
-        if (val === 'masraf') {
-            if (aciklamaEl) aciklamaEl.value = 'Dava açılış harçları, bilirkişi ücreti, tebligat ve yargılama gider avansı karşılığı tahsil edilmiştir.';
-            if (hasNotEl) hasNotEl.checked = true;
-            if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ dava açılış ve yargılama gider avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir. Yargılama masrafları harcanması nispetinde müvekkil adına belgelendirilecektir.';
-        } else if (val === 'ucret') {
+        if (val === 'ucret') {
             if (aciklamaEl) aciklamaEl.value = 'Belirtilen dava/iş ve vekalet ilişkisi kapsamında avukatlık vekalet ücreti karşılığı tahsil edilmiştir.';
             if (hasNotEl) hasNotEl.checked = true;
             if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ yalnızca belirtilen işe dair avukatlık vekalet ücreti karşılığı olup, dava harç ve masrafları (bilirkişi, keşif, tebligat vb.) işbu ücrete dahil değildir (Av. K. m. 173).';
+        } else if (val === 'masraf') {
+            if (aciklamaEl) aciklamaEl.value = 'Dava açılış harçları, bilirkişi ücreti, tebligat ve yargılama gider avansı karşılığı tahsil edilmiştir.';
+            if (hasNotEl) hasNotEl.checked = true;
+            if (notTextEl) notTextEl.value = 'Tahsil edilen meblağ dava açılış ve yargılama gider avansı mahiyetinde olup, avukatlık vekalet ücreti işbu tutara dahil değildir. Yargılama masrafları harcanması nispetinde müvekkil adına belgelendirilecektir.';
         } else if (val === 'danismanlik') {
-            if (aciklamaEl) aciklamaEl.value = 'Hukuki danışmanlık, sözleşme inceleme ve hukuki mütalaa hizmet bedeli karşılığı tahsil edilmiştir.';
+            if (aciklamaEl) aciklamaEl.value = 'Hukuki danışmanlık, sözleşme inceleme ve danışma hizmet bedeli karşılığı tahsil edilmiştir.';
             if (hasNotEl) hasNotEl.checked = false;
         } else if (val === 'diger') {
             if (aciklamaEl) aciklamaEl.value = 'İşbu makbuz konusu ücret ve masraf tahsilatı eksiksiz olarak gerçekleştirilmiştir.';
@@ -1931,7 +1931,7 @@
         document.querySelectorAll('#makbuz-avukat-form-block input[type="text"], #makbuz-avukat-form-block input[type="number"], #makbuz-avukat-form-block textarea, #makbuz-avukat-form-block input[type="tel"]').forEach(i => i.value = '');
         document.getElementById('makbuz-av-tarih').value = new Date().toISOString().slice(0, 10);
         document.getElementById('makbuz-av-odeme-sekli').value = 'Banka Havalesi / EFT / FAST';
-        setAvKonuTuru('masraf');
+        setAvKonuTuru('ucret');
         renderPreview();
     }
 

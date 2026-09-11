@@ -936,14 +936,10 @@
                             <input type="text" id="makbuz-tahsil-eden-name" placeholder="Örn: Av. Osman Mert Atış veya ABC Danışmanlık">
                         </div>
                         <div class="form-group">
-                            <label>Tahsil Eden Meslek / Unvan / Ek Bilgi</label>
-                            <input type="text" id="makbuz-tahsil-eden-unvan" placeholder="Örn: Hukuk & Danışmanlık Bürosu veya Danışman / Yetkili">
-                        </div>
-                        <div class="form-group">
                             <label>Tahsil Eden T.C. / Vergi No / Sicil (İsteğe bağlı)</label>
                             <input type="text" id="makbuz-tahsil-eden-tc" placeholder="T.C. No, Vergi No veya Sicil No">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group full">
                             <label>Tahsil Eden İletişim / Adres (İsteğe bağlı)</label>
                             <input type="text" id="makbuz-tahsil-eden-iletisim" placeholder="Örn: 05xx xxx xx xx • Kadıköy/İST">
                         </div>
@@ -1427,7 +1423,6 @@
             `;
         } else if (currentTab === 'makbuz') {
             const tahsilEdenName = (document.getElementById('makbuz-tahsil-eden-name')?.value || '').trim() || '……………………………………………………';
-            const tahsilEdenUnvan = (document.getElementById('makbuz-tahsil-eden-unvan')?.value || '').trim();
             const tahsilEdenTc = (document.getElementById('makbuz-tahsil-eden-tc')?.value || '').trim();
             const tahsilEdenIletisim = (document.getElementById('makbuz-tahsil-eden-iletisim')?.value || '').trim();
 
@@ -1469,7 +1464,6 @@
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5px solid #09090b; padding-bottom: 6px;">
                             <div>
                                 <div style="font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em; color: #09090b; text-transform: uppercase;">${esc(tahsilEdenName)}</div>
-                                ${tahsilEdenUnvan ? `<div style="font-size: 9.5px; font-weight: 600; text-transform: uppercase; color: #52525b; margin-top: 1px;">${esc(tahsilEdenUnvan)}</div>` : ''}
                                 ${subMetaHtml}
                             </div>
                             <div style="text-align: right;">
@@ -1554,7 +1548,6 @@
     function ornekMakbuzDoldur(tur) {
         if (tur === 'emlak') {
             document.getElementById('makbuz-tahsil-eden-name').value = 'Hedef Gayrimenkul & Danışmanlık';
-            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Danışmanlık & Yetkili İşletme';
             document.getElementById('makbuz-tahsil-eden-tc').value = '1234567890';
             document.getElementById('makbuz-tahsil-eden-iletisim').value = '0532 000 00 00 • Kadıköy/İST';
             document.getElementById('makbuz-teslim-eden-name').value = 'Ahmet Yılmaz';
@@ -1568,9 +1561,8 @@
             document.getElementById('makbuz-has-not').checked = false;
         } else {
             document.getElementById('makbuz-tahsil-eden-name').value = 'Av. Osman Mert ATIŞ';
-            document.getElementById('makbuz-tahsil-eden-unvan').value = 'Hukuk & Danışmanlık Bürosu';
             document.getElementById('makbuz-tahsil-eden-tc').value = '';
-            document.getElementById('makbuz-tahsil-eden-iletisim').value = 'Baro Sicil No: 00000';
+            document.getElementById('makbuz-tahsil-eden-iletisim').value = 'Baro Sicil No: 00000 • 05xx xxx xx xx';
             document.getElementById('makbuz-teslim-eden-name').value = 'Hakan Çelik';
             document.getElementById('makbuz-teslim-eden-tc').value = '12345678901';
             document.getElementById('makbuz-teslim-eden-tel').value = '0530 987 65 43';

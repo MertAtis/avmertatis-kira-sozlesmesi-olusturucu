@@ -989,24 +989,12 @@
                 <div class="form-section">
                     <div class="form-section-head"><i class="fa-solid fa-users"></i> Avukat ve Müvekkil Bilgileri</div>
                     <div class="form-grid">
-                        <div class="form-group">
+                        <div class="form-group full">
                             <label>Tahsil Eden Avukat Adı Soyadı *</label>
                             <input type="text" id="makbuz-av-name" placeholder="Örn: Av. Osman Mert Atış">
                         </div>
-                        <div class="form-group">
-                            <label>Bağlı Olduğu Baro & Sicil No *</label>
-                            <input type="text" id="makbuz-av-baro" placeholder="Örn: İstanbul Barosu - Sicil No: 00000">
-                        </div>
-                        <div class="form-group">
-                            <label>Avukat T.C. / Vergi Dairesi & No (İsteğe bağlı)</label>
-                            <input type="text" id="makbuz-av-tc" placeholder="T.C. No veya Vergi No">
-                        </div>
-                        <div class="form-group full">
-                            <label>Büro İletişim / Adres (İsteğe bağlı)</label>
-                            <input type="text" id="makbuz-av-iletisim" placeholder="Örn: 05xx xxx xx xx • Kadıköy / İSTANBUL">
-                        </div>
 
-                        <div class="form-group" style="margin-top: 6px;">
+                        <div class="form-group">
                             <label>Teslim Eden (Müvekkil / İlgili) Adı Soyadı *</label>
                             <input type="text" id="makbuz-av-muvekkil-name" placeholder="Örn: Ahmet Yılmaz">
                         </div>
@@ -1616,9 +1604,6 @@
             `;
         } else if (currentTab === 'makbuz-avukat') {
             const avName = (document.getElementById('makbuz-av-name')?.value || '').trim() || '……………………………………………………';
-            const avBaro = (document.getElementById('makbuz-av-baro')?.value || '').trim();
-            const avTc = (document.getElementById('makbuz-av-tc')?.value || '').trim();
-            const avIletisim = (document.getElementById('makbuz-av-iletisim')?.value || '').trim();
 
             const muvekkilName = (document.getElementById('makbuz-av-muvekkil-name')?.value || '').trim() || '……………………………………………………';
             const muvekkilTc = (document.getElementById('makbuz-av-muvekkil-tc')?.value || '').trim() || '……………………………………';
@@ -1660,19 +1645,12 @@
             const notText = (document.getElementById('makbuz-av-not-text')?.value || '').trim();
 
             function buildAvNushaHtml(nushaBadge) {
-                const subMeta = [];
-                if (avBaro) subMeta.push(esc(avBaro));
-                if (avTc) subMeta.push(`TC/VKN: ${esc(avTc)}`);
-                if (avIletisim) subMeta.push(esc(avIletisim));
-                const subMetaHtml = subMeta.length ? `<div style="font-size: 8.5px; color: #52525b; margin-top: 1px;">${subMeta.join(' • ')}</div>` : '';
-
                 return `
                     <div style="border: 1px solid #18181b; border-radius: 6px; padding: 10px 14px; background: #ffffff; color: #000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; height: 121mm; margin: 0 auto;">
                         <!-- Voucher Header -->
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5px solid #09090b; padding-bottom: 6px;">
                             <div>
-                                <div style="font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em; color: #09090b; text-transform: uppercase;">${esc(avName)}</div>
-                                ${subMetaHtml}
+                                <div style="font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: #09090b; text-transform: uppercase;">${esc(avName)}</div>
                             </div>
                             <div style="text-align: right;">
                                 <div style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; color: #09090b; text-transform: uppercase;">AVUKATLIK ALINDI MAKBUZU</div>
@@ -1964,9 +1942,6 @@
 
     function ornekAvukatMakbuzDoldur(tur) {
         document.getElementById('makbuz-av-name').value = 'Av. Osman Mert ATIŞ';
-        document.getElementById('makbuz-av-baro').value = 'İstanbul Barosu - Sicil No: 00000';
-        document.getElementById('makbuz-av-tc').value = '';
-        document.getElementById('makbuz-av-iletisim').value = '05xx xxx xx xx • Kadıköy / İSTANBUL';
         document.getElementById('makbuz-av-muvekkil-name').value = 'Ahmet Yılmaz';
         document.getElementById('makbuz-av-muvekkil-tc').value = '12345678901';
         document.getElementById('makbuz-av-muvekkil-tel').value = '0532 111 22 33';

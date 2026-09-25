@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; connect-src 'self' https://countapi.mileshilliard.com; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; connect-src 'self' https://countapi.mileshilliard.com; img-src 'self' data: https:; worker-src 'self' blob:;">
     <title>Hukuki Kira Sözleşmesi, Tahliye Taahhüdü & Alındı Makbuzu - Shadcn Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -658,6 +658,294 @@
                 break-inside: avoid !important;
             }
         }
+
+        /* ================================================================
+           PDF ARAÇLARI
+           Tüm renkler mevcut tema değişkenlerinden gelir; karanlık mod
+           [data-theme="dark"] üzerinden otomatik uyum sağlar.
+           ================================================================ */
+
+        .pdf-intro {
+            font-size: 0.84rem;
+            line-height: 1.5;
+            color: var(--muted-foreground);
+            margin: 0 0 14px 0;
+        }
+
+        .pdf-libs-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            margin-bottom: 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--secondary);
+            color: var(--foreground);
+            font-size: 0.82rem;
+        }
+        .pdf-libs-status.is-ready { display: none; }
+        .pdf-libs-status.is-error {
+            border-color: #dc2626;
+            color: #dc2626;
+            background: color-mix(in srgb, #dc2626 10%, var(--card));
+        }
+        [data-theme="dark"] .pdf-libs-status.is-error { color: #f87171; }
+
+        .pdf-stage {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-bottom: 14px;
+            background: var(--form-section-bg);
+        }
+
+        .pdf-stage-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--foreground);
+            margin-bottom: 12px;
+        }
+
+        .pdf-stage-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: var(--primary-foreground);
+            font-size: 0.75rem;
+            font-weight: 700;
+            flex: 0 0 auto;
+        }
+
+        .pdf-dropzone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 24px 16px;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            color: var(--muted-foreground);
+            text-align: center;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .pdf-dropzone.is-dragover {
+            border-color: var(--ring);
+            background: var(--secondary);
+        }
+        .pdf-dropzone i { font-size: 1.6rem; }
+        .pdf-dropzone p { margin: 0; font-size: 0.85rem; }
+
+        .pdf-file-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+        .pdf-file-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            font-size: 0.82rem;
+        }
+        .pdf-file-name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            color: var(--foreground);
+        }
+        .pdf-file-meta { color: var(--muted-foreground); white-space: nowrap; }
+        .pdf-file-row.is-error { border-color: #dc2626; }
+        .pdf-file-error-msg {
+            flex: 1 1 100%;
+            color: #dc2626;
+            font-size: 0.78rem;
+            line-height: 1.4;
+        }
+        [data-theme="dark"] .pdf-file-error-msg { color: #f87171; }
+
+        .pdf-page-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .pdf-page-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .pdf-page-card {
+            position: relative;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            padding: 8px;
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .pdf-page-card.is-dragging { opacity: 0.4; }
+        .pdf-page-card.is-drop-target { border-color: var(--ring); border-width: 2px; }
+
+        .pdf-page-thumb {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            object-fit: contain;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            display: block;
+        }
+        .pdf-page-thumb-placeholder {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--secondary);
+            color: var(--muted-foreground);
+            font-size: 0.75rem;
+            text-align: center;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+        }
+
+        .pdf-page-label {
+            font-size: 0.72rem;
+            color: var(--muted-foreground);
+            overflow-wrap: anywhere;
+            line-height: 1.3;
+        }
+
+        .pdf-page-actions {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            display: flex;
+            gap: 4px;
+        }
+        .pdf-page-btn {
+            width: 26px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            color: var(--foreground);
+            cursor: pointer;
+            font-size: 0.72rem;
+            padding: 0;
+        }
+        .pdf-page-btn:hover { background: var(--secondary); }
+
+        .pdf-check {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 7px 0;
+            font-size: 0.85rem;
+            color: var(--foreground);
+            cursor: pointer;
+            line-height: 1.4;
+        }
+        .pdf-check input { margin-top: 3px; flex: 0 0 auto; }
+        .pdf-check-sub { padding-left: 24px; font-size: 0.82rem; }
+        .pdf-check-inline { padding: 0; gap: 5px; }
+
+        .pdf-compress-options {
+            margin-left: 24px;
+            padding-left: 12px;
+            border-left: 2px solid var(--border);
+        }
+
+        .pdf-quality-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.82rem;
+            color: var(--muted-foreground);
+            padding: 6px 0 6px 24px;
+        }
+
+        .btn-block { width: 100%; }
+
+        .pdf-progress-wrap { margin-top: 12px; }
+        .pdf-progress-track {
+            height: 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--card);
+            overflow: hidden;
+        }
+        .pdf-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.2s ease;
+        }
+        .pdf-progress-text {
+            margin-top: 6px;
+            font-size: 0.78rem;
+            color: var(--muted-foreground);
+        }
+
+        .pdf-result {
+            margin-top: 12px;
+            padding: 11px 13px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            font-size: 0.83rem;
+            line-height: 1.5;
+            color: var(--foreground);
+        }
+        .pdf-result.is-warning { border-color: #d97706; }
+        .pdf-result.is-error { border-color: #dc2626; }
+        [data-theme="dark"] .pdf-result.is-warning { border-color: #fbbf24; }
+        [data-theme="dark"] .pdf-result.is-error { border-color: #f87171; }
+
+        .pdf-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 9999;
+        }
+        .pdf-modal {
+            background: var(--card);
+            color: var(--card-foreground);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            max-width: 460px;
+            width: 100%;
+            padding: 20px;
+        }
+        .pdf-modal h3 { margin: 0 0 10px 0; font-size: 1rem; }
+        .pdf-modal p { margin: 0 0 16px 0; font-size: 0.85rem; line-height: 1.5; }
+        .pdf-modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+        @media (max-width: 640px) {
+            .pdf-page-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+            .pdf-dropzone { padding: 18px 12px; }
+        }
     </style>
 </head>
 <body>
@@ -710,6 +998,9 @@
         </button>
         <button class="tab-btn" id="tab-makbuz-emlak" onclick="switchTab('makbuz-emlak')">
             <i class="fa-solid fa-building-user"></i> Alındı Makbuzu (Emlakçı)
+        </button>
+        <button class="tab-btn" id="tab-pdf-araclari" onclick="switchTab('pdf-araclari')">
+            <i class="fa-solid fa-wrench"></i> PDF Araçları
         </button>
     </div>
 
@@ -1196,6 +1487,93 @@
                 </div>
             </div>
 
+            <!-- PDF ARAÇLARI: Birleştir • Düzenle • A4'e Sığdır • Küçült -->
+            <div id="pdf-araclari-form-block" style="display: none;">
+
+                <div class="form-section">
+                    <div class="form-section-head"><i class="fa-solid fa-file-circle-plus"></i> PDF Araçları</div>
+                    <p class="pdf-intro">
+                        Birden fazla PDF'yi birleştirin, sayfaları silin / sıralayın / döndürün,
+                        tüm çıktıyı A4'e sığdırın ve boyutunu küçültün. Tüm işlemler
+                        yalnızca bu tarayıcıda yapılır; hiçbir dosya sunucuya gönderilmez.
+                    </p>
+
+                    <div id="pdf-libs-status" class="pdf-libs-status">
+                        <i class="fa-solid fa-spinner"></i> Araçlar yükleniyor...
+                    </div>
+
+                    <!-- AŞAMA 1: DOSYALAR -->
+                    <div class="pdf-stage" id="pdf-stage-files">
+                        <div class="pdf-stage-head"><span class="pdf-stage-num">1</span> Dosyalar</div>
+                        <div id="pdf-dropzone" class="pdf-dropzone">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <p>PDF dosyalarını buraya sürükleyin</p>
+                            <button class="btn btn-shadcn-outline" id="pdf-file-pick-btn" type="button">
+                                <i class="fa-solid fa-folder-open"></i> Dosya Seç
+                            </button>
+                            <input type="file" id="pdf-file-input" accept="application/pdf" multiple hidden>
+                        </div>
+                        <div id="pdf-file-list" class="pdf-file-list"></div>
+                    </div>
+
+                    <!-- AŞAMA 2: SAYFALAR -->
+                    <div class="pdf-stage" id="pdf-stage-pages">
+                        <div class="pdf-stage-head"><span class="pdf-stage-num">2</span> Sayfalar</div>
+                        <div class="pdf-page-toolbar">
+                            <button class="btn btn-shadcn-outline" id="pdf-undo-btn" type="button" disabled>
+                                <i class="fa-solid fa-rotate-left"></i> Geri Al
+                            </button>
+                            <button class="btn btn-shadcn-outline" id="pdf-rotate-all-btn" type="button">
+                                <i class="fa-solid fa-rotate"></i> Tümünü Döndür
+                            </button>
+                            <button class="btn btn-shadcn-outline" id="pdf-reset-edits-btn" type="button">
+                                <i class="fa-solid fa-arrow-rotate-left"></i> Döndürmeleri ve Sıralamayı Sıfırla
+                            </button>
+                        </div>
+                        <div id="pdf-page-grid" class="pdf-page-grid"></div>
+                    </div>
+
+                    <!-- AŞAMA 3: ÇIKTI -->
+                    <div class="pdf-stage" id="pdf-stage-output">
+                        <div class="pdf-stage-head"><span class="pdf-stage-num">3</span> Çıktı</div>
+                        <label class="pdf-check">
+                            <input type="checkbox" id="pdf-opt-a4" checked>
+                            <span><i class="fa-solid fa-arrows-up-down-left-right"></i> Her sayfayı A4'e sığdır (baskıya uygun)</span>
+                        </label>
+                        <label class="pdf-check">
+                            <input type="checkbox" id="pdf-opt-compress">
+                            <span><i class="fa-solid fa-compress"></i> Boyutu küçült</span>
+                        </label>
+                        <div id="pdf-compress-options" class="pdf-compress-options" hidden>
+                            <label class="pdf-check pdf-check-sub">
+                                <input type="checkbox" id="pdf-opt-lossy">
+                                <span><i class="fa-solid fa-triangle-exclamation"></i> Metin seçilemez olsun (sayfaları görsele çevir)</span>
+                            </label>
+                            <div class="pdf-quality-row">
+                                <span>Görsel kalitesi:</span>
+                                <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.5"><span>Düşük</span></label>
+                                <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.7" checked><span>Orta</span></label>
+                                <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.85"><span>Yüksek</span></label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AŞAMA 4: İNDİR -->
+                    <div class="pdf-stage" id="pdf-stage-build">
+                        <div class="pdf-stage-head"><span class="pdf-stage-num">4</span> İndir</div>
+                        <button class="btn btn-shadcn-primary btn-block" id="pdf-build-btn" type="button">
+                            <i class="fa-solid fa-file-arrow-down"></i> PDF Oluştur ve İndir
+                        </button>
+                        <div id="pdf-progress-wrap" class="pdf-progress-wrap" hidden>
+                            <div class="pdf-progress-track"><div id="pdf-progress-bar" class="pdf-progress-bar"></div></div>
+                            <div id="pdf-progress-text" class="pdf-progress-text"></div>
+                        </div>
+                        <div id="pdf-result" class="pdf-result" hidden></div>
+                    </div>
+
+                </div>
+            </div>
+
         </div>
 
         <!-- MINIMALIST A4 LIVE PREVIEW INSPECTOR -->
@@ -1212,6 +1590,7 @@
     </div>
 </div>
 
+<script src="pdf-araclari.js"></script>
 <script>
     let currentTab = 'kira';
 
@@ -1234,6 +1613,7 @@
         document.getElementById('tab-anahtar')?.classList.toggle('active', tab === 'anahtar');
         document.getElementById('tab-makbuz-avukat')?.classList.toggle('active', tab === 'makbuz-avukat');
         document.getElementById('tab-makbuz-emlak')?.classList.toggle('active', tab === 'makbuz-emlak');
+        document.getElementById('tab-pdf-araclari')?.classList.toggle('active', tab === 'pdf-araclari');
 
         document.getElementById('kira-form-block').style.display = tab === 'kira' ? 'block' : 'none';
         document.getElementById('tahliye-form-block').style.display = tab === 'tahliye' ? 'block' : 'none';
@@ -1242,6 +1622,23 @@
         if (avBlock) avBlock.style.display = tab === 'makbuz-avukat' ? 'block' : 'none';
         const emlakBlock = document.getElementById('makbuz-emlak-form-block');
         if (emlakBlock) emlakBlock.style.display = tab === 'makbuz-emlak' ? 'block' : 'none';
+        const pdfBlock = document.getElementById('pdf-araclari-form-block');
+        if (pdfBlock) pdfBlock.style.display = tab === 'pdf-araclari' ? 'block' : 'none';
+
+        if (tab === 'pdf-araclari') {
+            loadPdfLibs().catch(err => {
+                console.error('PDF araçları yüklenemedi', err);
+                const status = document.getElementById('pdf-libs-status');
+                if (status) {
+                    status.classList.add('is-error');
+                    status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' +
+                        'PDF araçları bileşenleri yüklenemedi. ' +
+                        '<button class="btn btn-shadcn-outline" type="button" >Tekrar Dene</button>';
+                }
+            });
+            return;
+        }
+
         renderPreview();
     }
 

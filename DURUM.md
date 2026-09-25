@@ -1,7 +1,7 @@
 # Durum — PDF Araçları Sekmesi
 
 **Son güncelleme:** 26 Eylül 2026
-**Durum:** ✅ **Tamamlandı ve canlıda.** 9/9 görev bitti, 84 test geçiyor.
+**Durum:** ✅ **Tamamlandı ve canlıda.** 9/9 görev + 2 kullanıcı bildirimi düzeltildi, 99 test geçiyor.
 **Canlı:** https://mertatis.github.io/avmertatis-kira-sozlesmesi-olusturucu/
 **Branch:** `main` (cihazda `feature/pdf-araclari-sekmesi` de duruyor)
 
@@ -34,13 +34,14 @@ düzeltildi. Site canlı.
 ### Mevcut test durumu
 
 ```
-npm test   →   84 passed
+npm test   →   99 passed
 ```
 
 Test kapsamı: 16 fixture'ın üretimi, 6 kütüphane/sekme kabuğu testi, 11 dosya
 yükleme ve hata yönetimi testi, 10 sayfa düzenleme testi, 9 çıktı/A4 testi,
 6 sıkıştırma mod 1 testi, 4 kayıp mod testi, 5 A4 dönüşüm matematiği testi,
-10 inceleme bulgusu düzeltme testi (F1–F9).
+10 inceleme bulgusu düzeltme testi (F1–F9), 7 döndürme geri bildirim testi (G1–G7),
+8 birleştirme çubuğu testi (H1–H8).
 
 Ek olarak `tests/a4-rotation.spec.mjs` A4 dönüşümünün dört açısını da sayısal
 olarak doğrular: kaynak A5 sayfasının üç köşesine işaret konur ve her birinin

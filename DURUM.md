@@ -1,8 +1,9 @@
 # Durum — PDF Araçları Sekmesi
 
 **Son güncelleme:** 26 Eylül 2026
-**Durum:** 7 / 9 görev tamamlandı. Sonraki adım: Task 8.
-**Branch:** `feature/pdf-araclari-sekmesi` (henüz `main`'e birleştirilmedi, henüz push edilmedi)
+**Durum:** ✅ **Tamamlandı ve canlıda.** 9/9 görev bitti, 84 test geçiyor.
+**Canlı:** https://mertatis.github.io/avmertatis-kira-sozlesmesi-olusturucu/
+**Branch:** `main` (cihazda `feature/pdf-araclari-sekmesi` de duruyor)
 
 ---
 
@@ -10,7 +11,8 @@
 
 Mevcut tek dosyalık kira sözleşmesi jeneratörüne 6. sekme (`PDF Araçları`) eklendi:
 birleştirme, sayfa silme/sıralama/döndürme, A4'e sığdırma, iki modlu boyut küçültme.
-62 otomatik test yeşil. Canlıya alma için 2 görev kaldı.
+84 otomatik test yeşil. Bağımsız kod incelemesi yapıldı, 10 bulgu testle doğrulanarak
+düzeltildi. Site canlı.
 
 ---
 
@@ -25,18 +27,24 @@ birleştirme, sayfa silme/sıralama/döndürme, A4'e sığdırma, iki modlu boyu
 | 5 | Çıktı üretimi, birleştirme, A4 normalize | ✅ | `3f25997` |
 | 6 | Sıkıştırma mod 1 — görsel yeniden kodlama | ✅ | `c292fd3` |
 | 7 | Sıkıştırma mod 2 — görsele çevirme + onay | ✅ | `f692254` |
-| 8 | Tema, duyarlılık, regresyon taraması | ⬜ | — |
-| 9 | README, sıfırdan doğrulama, canlıya alma | ⬜ | — |
+| 8 | Tema, duyarlılık, regresyon taraması | ✅ | `875f706` |
+| 9 | README, sıfırdan doğrulama, canlıya alma | ✅ | `9f7a7cc`, `cc50c35` |
+| — | Bağımsız inceleme düzeltmeleri (10 bulgu) | ✅ | `d2dd1f5` |
 
 ### Mevcut test durumu
 
 ```
-npx playwright test   →   62 passed
+npm test   →   84 passed
 ```
 
 Test kapsamı: 16 fixture'ın üretimi, 6 kütüphane/sekme kabuğu testi, 11 dosya
 yükleme ve hata yönetimi testi, 10 sayfa düzenleme testi, 9 çıktı/A4 testi,
-6 sıkıştırma mod 1 testi, 4 kayıp mod testi, 5 A4 dönüşüm matematiği testi.
+6 sıkıştırma mod 1 testi, 4 kayıp mod testi, 5 A4 dönüşüm matematiği testi,
+10 inceleme bulgusu düzeltme testi (F1–F9).
+
+Ek olarak `tests/a4-rotation.spec.mjs` A4 dönüşümünün dört açısını da sayısal
+olarak doğrular: kaynak A5 sayfasının üç köşesine işaret konur ve her birinin
+çıktıda hangi köşeye düştüğü ölçülür.
 
 ---
 

@@ -898,6 +898,10 @@
 
         .btn-block { width: 100%; }
 
+        /* Aksiyon çubuğu yalnızca işlenecek sayfa varken görünür. */
+        #pdf-action-bar[hidden] { display: none; }
+        #pdf-action-bar { margin-bottom: 2px; }
+
         .pdf-progress-wrap { margin-top: 12px; }
         .pdf-progress-track {
             height: 8px;
@@ -1579,9 +1583,11 @@
                     <!-- AŞAMA 4: İNDİR -->
                     <div class="pdf-stage" id="pdf-stage-build">
                         <div class="pdf-stage-head"><span class="pdf-stage-num">4</span> İndir</div>
-                        <button class="btn btn-shadcn-primary btn-block" id="pdf-build-btn" type="button">
-                            <i class="fa-solid fa-file-arrow-down"></i> PDF Oluştur ve İndir
-                        </button>
+                        <div id="pdf-action-bar" hidden>
+                            <button class="btn btn-shadcn-primary btn-block" id="pdf-build-btn" type="button">
+                                <i class="fa-solid fa-file-arrow-down"></i> PDF Birleştir ve İndir
+                            </button>
+                        </div>
                         <div id="pdf-progress-wrap" class="pdf-progress-wrap" hidden>
                             <div class="pdf-progress-track"><div id="pdf-progress-bar" class="pdf-progress-bar"></div></div>
                             <div id="pdf-progress-text" class="pdf-progress-text"></div>
@@ -1664,6 +1670,12 @@
         if (emlakBlock) emlakBlock.style.display = tab === 'makbuz-emlak' ? 'block' : 'none';
         const pdfBlock = document.getElementById('pdf-araclari-form-block');
         if (pdfBlock) pdfBlock.style.display = tab === 'pdf-araclari' ? 'block' : 'none';
+
+        // PDF Araçları sekmesinde belge üretilmez; sağdaki A4 önizleme
+        // bir önceki sekmenin içeriğini göstererek yanıltıcıdır. Gizlenir
+        // ve form paneli tüm genişliği alır.
+        const inspector = document.querySelector('.preview-inspector');
+        if (inspector) inspector.style.display = tab === 'pdf-araclari' ? 'none' : '';
 
         if (tab === 'pdf-araclari') {
             loadPdfLibs().catch(err => {

@@ -961,8 +961,233 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
         await page.waitForTimeout(1200);
         const after = await page.evaluate(() => window.__thumbRenders);
 
-        // Döndürme 60 kartın 60'ını yeniden render etmemeli.
-        expect(after).toBe(before);
+        // Döndürme YALNIZCA döndürülen sayfanın küçük resmini yeniden üretir
+        // (kullanıcı ne görüyorsa basılacak odur) — 60 kartın 60'ı değil.
+        expect(after - before).toBe(1);
+
+        // Toplu döndürmede ise hepsi yeniden üretilir.
+        const beforeAll = after;
+        await page.click('#pdf-rotate-all-btn');
+        await page.waitForTimeout(3000);
+        const afterAll = await page.evaluate(() => window.__thumbRenders);
+        expect(afterAll - beforeAll).toBe(60);
     });
 });
 
+
+test.describe('döndürme görsel geri bildirimi ve önizleme paneli', () => {
+    test('G1: tek sayfa döndürülünce küçük resim ve rozet güncellenir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await expect(page.locator('.pdf-page-badge')).toHaveCount(0);
+
+        const firstThumb = page.locator('.pdf-page-card').first().locator('.pdf-page-thumb');
+        const before = await firstThumb.getAttribute('src');
+
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await expect(page.locator('.pdf-page-badge').first()).toHaveText('90°');
+        // Küçük resim yeniden üretilmeli: kaynak (data URL) değişmeli.
+        await expect.poll(async () => firstThumb.getAttribute('src'), { timeout: 60000 }).not.toBe(before);
+    });
+
+    test('G2: tüm sayfalar döndürülünce her rozet güncellenir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+
+        await page.click('#pdf-rotate-all-btn');
+        await expect(page.locator('.pdf-page-badge')).toHaveCount(4);
+        await expect(page.locator('.pdf-page-badge').first()).toHaveText('90°');
+
+        await page.click('#pdf-rotate-all-btn');
+        await expect(page.locator('.pdf-page-badge').first()).toHaveText('180°');
+        await page.click('#pdf-rotate-all-btn');
+        await expect(page.locator('.pdf-page-badge').first()).toHaveText('270°');
+        await page.click('#pdf-rotate-all-btn');
+        await expect(page.locator('.pdf-page-badge')).toHaveCount(0);
+    });
+
+    test('G3: küçük resim gerçekten döner (görüntü değişir)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        await expectCardCount(page, 5);
+        await page.waitForTimeout(600);
+
+        const thumb = page.locator('.pdf-page-card').first().locator('.pdf-page-thumb');
+        const before = await thumb.getAttribute('src');
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await expect.poll(async () => thumb.getAttribute('src'), { timeout: 60000 }).not.toBe(before);
+    });
+
+    test('G4: kaynak /Rotate küçük resimde de görünür', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        await expectCardCount(page, 2);
+
+        // CSS kutusu aspect-ratio ile sabit 3:4 olduğundan ÖLÇÜLEMEZ;
+        // kodlanmış görüntünün gerçek boyutu (naturalWidth/Height) okunur.
+        // naturalWidth/Height, görüntü çözülene kadar 0'dır; decode edilmesi
+        // beklenir. Tek bir evaluate içinde beklemek yoksa test titiz oluyor.
+        const natural = () => page.evaluate(() => {
+            const img = document.querySelector('.pdf-page-card .pdf-page-thumb');
+            return img ? { w: img.naturalWidth, h: img.naturalHeight } : null;
+        });
+        // Playwright'ın waitForFunction'ı bu sayfada yanlış negatif veriyor
+        // (snapshot yatay gösterirken de zaman aşımına uğruyor); bu yüzden
+        // açık bir yoklama döngüsü kullanılır.
+        const waitOrientation = async (want) => {
+            const deadline = Date.now() + 60000;
+            let last = null;
+            while (Date.now() < deadline) {
+                last = await page.evaluate(() => {
+                    const img = document.querySelector('.pdf-page-card .pdf-page-thumb');
+                    return img ? { w: img.naturalWidth, h: img.naturalHeight } : null;
+                });
+                if (last && last.w > 0) {
+                    // 210x148 => genişlik büyük => YATAY
+                    const ok = want === 'landscape' ? last.w > last.h : last.h > last.w;
+                    if (ok) return last;
+                }
+                await page.waitForTimeout(200);
+            }
+            throw new Error(`Küçük resim ${want} olmadı; son durum: ${JSON.stringify(last)}`);
+        };
+
+        // Kaynak zaten 90° döndükçe küçük resim YATAY olmalı.
+        expect(await waitOrientation('landscape')).toEqual({ w: 210, h: 148 });
+
+        // Kullanıcı 90° daha ekler: toplam 180°, küçük resim DİKEY olmalı.
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await expect(page.locator('.pdf-page-badge').first()).toHaveText('180°');
+        expect(await waitOrientation('portrait')).toEqual({ w: 148, h: 210 });
+    });
+
+    test('G5: düzenleme yapılmayan kartların küçük resmi korunur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await page.waitForTimeout(400);
+
+        const before = await page.locator('.pdf-page-card').nth(2).locator('.pdf-page-thumb').getAttribute('src');
+        // 1. kartı döndür — 3. kart DOKUNULMAMALI.
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await expect(page.locator('.pdf-page-badge')).toHaveCount(1);
+        const after = await page.locator('.pdf-page-card').nth(2).locator('.pdf-page-thumb').getAttribute('src');
+        expect(after).toBe(before);
+    });
+
+    test('G6: PDF sekmesinde sağdaki belge önizlemesi gizlenir', async ({ page }) => {
+        await page.goto(PAGE);
+        // Kira sekmesinde önizleme görünür.
+        await expect(page.locator('.preview-inspector')).toBeVisible();
+        expect((await page.locator('#printable-area').textContent()).trim().length).toBeGreaterThan(0);
+
+        // PDF sekmesinde gizlenmeli — o sekmede belge üretilmez.
+        await page.click('#tab-pdf-araclari');
+        await expect(page.locator('.preview-inspector')).toBeHidden();
+    });
+
+    test('G7: PDF sekmesinden başka bir sekmeye dönünce önizleme geri gelir', async ({ page }) => {
+        await page.goto(PAGE);
+        await page.click('#tab-pdf-araclari');
+        await expect(page.locator('.preview-inspector')).toBeHidden();
+        await page.click('#tab-kira');
+        await expect(page.locator('.preview-inspector')).toBeVisible();
+        expect((await page.locator('#printable-area').textContent()).trim()).toContain('KİRA SÖZLEŞMESİ');
+    });
+});
+
+test.describe('alt aksiyon çubuğu: PDF Birleştir ve İndir', () => {
+    test('H1: dosya yüklendiğinde altta birleştir ve indir butonu görünür', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf']);
+
+        const bar = page.locator('#pdf-action-bar');
+        await expect(bar).toBeVisible();
+        await expect(page.locator('#pdf-build-btn')).toBeVisible();
+        await expect(page.locator('#pdf-build-btn')).toContainText('PDF Birleştir ve İndir');
+        // Buton panelin en altında olmalı.
+        const barBox = await bar.boundingBox();
+        const cardBox = await page.locator('#pdf-araclari-form-block').boundingBox();
+        expect(barBox.y).toBeGreaterThan(cardBox.y);
+    });
+
+    test('H2: hiç dosya yokken buton gizli ve devre dışı', async ({ page }) => {
+        await openPdfTab(page);
+        await expect(page.locator('#pdf-action-bar')).toBeHidden();
+    });
+
+    test('H3: buton gerçekten birleştirip indirir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf']);
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#pdf-build-btn').click();
+        const download = await downloadPromise;
+        const chunks = [];
+        for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+
+        expect(await readPageBoxes(bytes)).toHaveLength(7);
+        const text = await extractAllText(bytes);
+        expect(text).toContain('ALFA SAYFA 1');
+        expect(text).toContain('BETA SAYFA 1');
+    });
+
+    test('H4: buton metni tek dosyada da aynıdır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expect(page.locator('#pdf-build-btn')).toContainText('PDF Birleştir ve İndir');
+    });
+
+    test('H5: dosya kaldırılınca buton tekrar gizlenir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expect(page.locator('#pdf-action-bar')).toBeVisible();
+        await page.locator('.pdf-file-row [data-remove-file]').first().click();
+        await expect(page.locator('#pdf-action-bar')).toBeHidden();
+    });
+
+    test('H6: buton A4 + küçültme onayını uygular', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-quality"][value="0.7"]').check();
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#pdf-build-btn').click();
+        const download = await downloadPromise;
+        const chunks = [];
+        for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+
+        const input = statSync(fixturePath('scanned.pdf')).size;
+        expect(bytes.length).toBeLessThan(input * 0.5);
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(5);
+        for (const box of boxes) {
+            expect(box.width).toBeCloseTo(595.28, 0);
+            expect(box.height).toBeCloseTo(841.89, 0);
+        }
+    });
+
+    test('H7: buton dar ekranda taşmaz', async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        const box = await page.locator('#pdf-build-btn').boundingBox();
+        expect(box.width).toBeLessThanOrEqual(390);
+        expect(box.x).toBeGreaterThanOrEqual(0);
+    });
+
+    test('H8: çift tıklama tek indirme yapar', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        let downloads = 0;
+        page.on('download', () => { downloads++; });
+        await page.locator('#pdf-build-btn').dblclick();
+        await page.waitForTimeout(2000);
+        expect(downloads).toBe(1);
+    });
+});

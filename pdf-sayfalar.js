@@ -46,6 +46,24 @@ async function pdfGetDoc(file) {
     return doc;
 }
 
+/**
+ * Kaynak sayfanın kendi /Rotate değeri. Kullanıcının eklediği döndürme bunun
+ * ÜSTÜNE değil ÜSTÜNE EKLENİR (pdf-cikti.js ile aynı kural).
+ */
+function pdfSourceRotation(file, srcIndex) {
+    if (!file?.doc) return 0;
+    try {
+        const raw = file.doc.getPage(srcIndex).node.get(PDFLib.PDFName.of('Rotate'));
+        const value = Number(raw?.toString?.() ?? raw);
+        if (Number.isFinite(value)) return ((Math.round(value / 90) * 90) % 360 + 360) % 360;
+    } catch { /* okunamayan sayfa: döndürme yok sayılır */ }
+    return 0;
+}
+
+function pdfEffectiveThumbRotation(entry, file) {
+    return (pdfSourceRotation(file, entry.srcIndex) + (entry.rotation || 0)) % 360;
+}
+
 /** Bir sayfanın küçük resmini üretir. Hata olursa yalnızca o kart işaretlenir. */
 async function pdfRenderThumb(entry) {
     const file = pdfFileFor(entry.fileId);
@@ -53,14 +71,18 @@ async function pdfRenderThumb(entry) {
     try {
         const doc = await pdfGetDoc(file);
         const page = await doc.getPage(entry.srcIndex + 1);
-        const viewport = page.getViewport({ scale: THUMB_SCALE });
+        // Küçük resim döndürmeyi YANSITMALI: kullanıcı ne görüyorsa basılacak
+        // odur. pdf.js 3.x'te `page.rotate` SALT OKUNURDUR; döndürme
+        // getViewport ve render seçenekleriyle verilir.
+        const rotation = pdfEffectiveThumbRotation(entry, file);
+        const viewport = page.getViewport({ scale: THUMB_SCALE, rotation });
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
         const context = canvas.getContext('2d');
         context.fillStyle = '#ffffff';
         context.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: context, viewport }).promise;
+        await page.render({ canvasContext: context, viewport, rotation }).promise;
         entry.thumbUrl = canvas.toDataURL('image/jpeg', THUMB_QUALITY);
     } catch (err) {
         console.error('Küçük resim üretilemedi', err);
@@ -167,8 +189,16 @@ function pdfRenderGrid() {
     if (reordered) {
         // Sira degistiyse tum kartlar yerinde tasinir; kucuk resimler korunur.
         for (const page of pdfState.pages) {
+            if (previous.has(page.uid)) changed.add(page.uid);
+        }
+    } else {
+        // Sira ayni ama DONDURME degismis olabilir: rozet ve kucuk resim
+        // guncellenmezse kullanici dondurdugunu goremez.
+        for (const page of pdfState.pages) {
             const el = previous.get(page.uid);
-            if (el) changed.add(page.uid);
+            if (!el) continue;
+            const shown = Number(el.dataset.rotation || 0);
+            if (shown !== (page.rotation || 0)) changed.add(page.uid);
         }
     }
 
@@ -176,12 +206,18 @@ function pdfRenderGrid() {
         if (previous.has(page.uid) && !changed.has(page.uid)) {
             return previous.get(page.uid).outerHTML;
         }
+        // Donduyse kucuk resim yeniden uretilmeli.
+        if (changed.has(page.uid) && previous.has(page.uid)) {
+            page.thumbUrl = null;
+            page.thumbError = false;
+        }
         const file = pdfFileFor(page.fileId);
         const fileName = file ? file.name : 'Bilinmeyen dosya';
         const pageNo = file && file.doc ? page.srcIndex + 1 : '?';
         const total = file ? file.pageCount : '?';
-        const rotationBadge = page.rotation
-            ? `<span class="pdf-page-badge">${page.rotation}&deg;</span>`
+        const effective = pdfEffectiveThumbRotation(page, file);
+        const rotationBadge = effective
+            ? `<span class="pdf-page-badge">${effective}&deg;</span>`
             : '';
         const thumb = page.thumbUrl
             ? `<img class="pdf-page-thumb" src="${page.thumbUrl}" alt="Sayfa ${pageNo} önizlemesi">`
@@ -189,7 +225,7 @@ function pdfRenderGrid() {
                 ? '<div class="pdf-page-thumb-placeholder">Önizlenemedi</div>'
                 : '<div class="pdf-page-thumb-placeholder">Yükleniyor...</div>';
 
-        return `<div class="pdf-page-card" draggable="true" data-uid="${page.uid}" data-index="${index}">
+        return `<div class="pdf-page-card" draggable="true" data-uid="${page.uid}" data-index="${index}" data-rotation="${page.rotation || 0}">
             <div class="pdf-page-actions">
                 <button class="pdf-page-btn" type="button" data-action="rotate" data-uid="${page.uid}"
                         title="90&deg; döndür" aria-label="Sayfayı döndür"><i class="fa-solid fa-rotate-right"></i></button>

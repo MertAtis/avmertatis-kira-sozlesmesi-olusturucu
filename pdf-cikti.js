@@ -517,18 +517,17 @@ async function pdfRasterizeToOutput(entries, quality) {
         const source = await pdfGetDoc(file);
         const page = await source.getPage(entry.srcIndex + 1);
         // Kaynak /Rotate + kullanıcı döndürmesi birlikte uygulanır.
+        // pdf.js 3.x'te `page.rotate` salt okunurdur; döndürme viewport ve
+        // render seçenekleriyle verilir.
         const rotation = pdfEffectiveRotation(entry, file);
-        const previousRotate = page.rotate;
-        if (rotation) page.rotate = rotation;
-
-        const viewport = page.getViewport({ scale });
+        const viewport = page.getViewport({ scale, rotation });
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
         const context = canvas.getContext('2d');
         context.fillStyle = '#ffffff';
         context.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: context, viewport }).promise;
+        await page.render({ canvasContext: context, viewport, rotation }).promise;
 
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
         if (!blob) throw new Error('Görsele çevirme başarısız.');
@@ -582,10 +581,12 @@ function pdfReadOutputState() {
 }
 
 function pdfUpdateBuildButton() {
+    const bar = document.getElementById('pdf-action-bar');
     const button = document.getElementById('pdf-build-btn');
-    if (!button) return;
     const hasPages = pdfState.pages.length > 0;
-    button.disabled = !hasPages || pdfState.busy;
+    // Aksiyon çubuğu yalnızca işlenecek sayfa varken görünür.
+    if (bar) bar.hidden = !hasPages;
+    if (button) button.disabled = !hasPages || pdfState.busy;
 }
 
 (function initPdfOutput() {
@@ -604,6 +605,7 @@ function pdfUpdateBuildButton() {
     pdfBus.on('pages', pdfUpdateBuildButton);
     pdfBus.on('busy', pdfUpdateBuildButton);
     pdfReadOutputState();
+    pdfUpdateBuildButton();
 })();
 
 window.pdfBuildOutput = pdfBuildOutput;

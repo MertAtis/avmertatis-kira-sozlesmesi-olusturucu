@@ -5,3 +5,4 @@ playwright-report/
 
 # Test verileri `npm run fixtures` ile yeniden üretilir; depoya girmez.
 tests/fixtures/*.pdf
+tests/.tmp-verify/

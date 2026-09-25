@@ -1,0 +1,7 @@
+node_modules/
+test-results/
+playwright-report/
+.superpowers/
+
+# Test verileri `npm run fixtures` ile yeniden üretilir; depoya girmez.
+tests/fixtures/*.pdf

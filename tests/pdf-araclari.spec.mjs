@@ -186,3 +186,128 @@ test.describe('dosya yükleme ve hata yönetimi', () => {
     });
 });
 
+/** Küçük resim ızgarasının kart sayısını bekler. */
+export async function expectCardCount(page, count) {
+    await expect(page.locator('#pdf-page-grid .pdf-page-card')).toHaveCount(count);
+}
+
+export async function pageOrder(page) {
+    return page.evaluate(() => window.pdfState.pages.map((p) => p.srcIndex));
+}
+
+test.describe('sayfa ızgarası ve düzenleme', () => {
+    test('T04: sayfa silinir, kart sayısı azalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        await expectCardCount(page, 3);
+        expect(await pageOrder(page)).toEqual([1, 2, 3]);
+    });
+
+    test('T05: kart sürüklenerek yeniden sıralanır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+
+        await dragCard(page, 0, 2);
+        // Kart 0, hedef konum 2"e taşınır: önce çıkarılır, sonra 2. indekse girer.
+        expect(await pageOrder(page)).toEqual([1, 2, 0, 3]);
+    });
+
+    test('T06: sayfa döndürülür, durum 90 derece olur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        expect(await page.evaluate(() => window.pdfState.pages[0].rotation)).toBe(90);
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        expect(await page.evaluate(() => window.pdfState.pages[0].rotation)).toBe(180);
+    });
+
+    test('T06b: tüm sayfalar döndür butonu 90 derece ekler', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await page.click('#pdf-rotate-all-btn');
+        expect(await page.evaluate(() => window.pdfState.pages.map((p) => p.rotation))).toEqual([90, 90, 90, 90]);
+    });
+
+    test('T18: geri al, eklenen son düzenlemeyi geri getirir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+
+        await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        await expectCardCount(page, 3);
+        await expect(page.locator('#pdf-undo-btn')).toBeEnabled();
+
+        await page.click('#pdf-undo-btn');
+        await expectCardCount(page, 4);
+        expect(await pageOrder(page)).toEqual([0, 1, 2, 3]);
+    });
+
+    test('T18b: düzenleme yokken geri al butonu devre dışıdır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await expect(page.locator('#pdf-undo-btn')).toBeDisabled();
+    });
+
+    test('T18c: sıralamayı ve döndürmeyi sıfırla', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await dragCard(page, 0, 3);
+        await page.click('#pdf-rotate-all-btn');
+        expect(await page.evaluate(() => window.pdfState.pages[0].rotation)).toBe(90);
+
+        await page.click('#pdf-reset-edits-btn');
+        expect(await pageOrder(page)).toEqual([0, 1, 2, 3]);
+        expect(await page.evaluate(() => window.pdfState.pages.map((p) => p.rotation))).toEqual([0, 0, 0, 0]);
+        // Sıfırlama geri alınabilir olmalı.
+        await expect(page.locator('#pdf-undo-btn')).toBeEnabled();
+    });
+
+    test('T02b: küçük resimler üretilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await expect(page.locator('.pdf-page-thumb').first()).toBeVisible();
+        const src = await page.locator('.pdf-page-thumb').first().getAttribute('src');
+        expect(src.startsWith('data:image/jpeg')).toBe(true);
+    });
+
+    test('T24: 60 sayfalık belge yüklenir, düzenlenir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['sixty-pages.pdf']);
+        await expectCardCount(page, 60);
+        await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        await expectCardCount(page, 59);
+    });
+
+    test('dosya kaldırıldığında sayfaları da kaldırılır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf']);
+        await expectCardCount(page, 7);
+        await page.locator('.pdf-file-row [data-remove-file]').first().click();
+        await expectCardCount(page, 3);
+        expect(await page.evaluate(() => window.pdfState.pages.every((p) => p.fileId === 2))).toBe(true);
+    });
+});
+
+/** HTML5 sürükle-bırakını tarayıcıda gerçekleştirir. */
+async function dragCard(page, fromIndex, toIndex) {
+    await page.evaluate(({ fromIndex, toIndex }) => {
+        const cards = document.querySelectorAll('#pdf-page-grid .pdf-page-card');
+        const from = cards[fromIndex];
+        const to = cards[toIndex];
+        const dt = new DataTransfer();
+        from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        to.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt }));
+        to.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+        from.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+    }, { fromIndex, toIndex });
+    await page.waitForTimeout(120);
+}
+

@@ -43,6 +43,10 @@ async function loadPdfLibs() {
     }
 }
 
+// pdfState.files kaydı: {id, name, size, data, doc, pageCount, error}
+// `data` ham bayt dizisidir (pdf.js küçük resim üretmek için kullanır),
+// `size` dosyanın bayt cinsinden uzunluğudur.
+
 // --- Biçimlendirme ve hata ayıklama ----------------------------------------
 
 const MB = 1024 * 1024;
@@ -97,7 +101,7 @@ const PDF_ERROR_MESSAGES = {
 // bunlar açıkça window'a atanır.
 
 const pdfState = {
-    files: [],        // {id, name, bytes, doc, pageCount, error}
+    files: [],        // {id, name, size, data, doc, pageCount, error}
     pages: [],        // {uid, fileId, srcIndex, rotation, thumbUrl, thumbError}
     output: { a4: true, compress: false, quality: 0.7, lossy: false },
     undoStack: [],
@@ -140,7 +144,7 @@ function pdfRenderFileList() {
         return `<div class="pdf-file-row" data-file-id="${file.id}">
             <i class="fa-solid fa-file-pdf"></i>
             <span class="pdf-file-name">${pdfEscapeHtml(file.name)}</span>
-            <span class="pdf-file-meta">${file.pageCount} sayfa · ${pdfFormatBytes(file.bytes)}</span>
+            <span class="pdf-file-meta">${file.pageCount} sayfa · ${pdfFormatBytes(file.size)}</span>
             <button class="pdf-page-btn" type="button" data-remove-file="${file.id}"
                     title="Dosyayı kaldır" aria-label="Dosyayı kaldır">
                 <i class="fa-solid fa-xmark"></i>
@@ -181,7 +185,7 @@ async function addFiles(fileList) {
 
         for (const file of files) {
             const fileId = pdfState.nextFileId++;
-            const record = { id: fileId, name: file.name, bytes: file.size, doc: null, pageCount: 0, error: null };
+            const record = { id: fileId, name: file.name, size: file.size, data: null, doc: null, pageCount: 0, error: null };
 
             // Boyut denetimi ayrıştırmadan ÖNCE yapılır: 60 MB bir dosyayı
             // ayrıştırmak dakikalar sürer ve tarayıcıyı kilitler.
@@ -195,6 +199,7 @@ async function addFiles(fileList) {
             try {
                 const buffer = new Uint8Array(await file.arrayBuffer());
                 const doc = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: false });
+                record.data = buffer;
                 const pageCount = doc.getPageCount();
 
                 if (!Number.isFinite(pageCount) || pageCount === 0) {
@@ -226,7 +231,7 @@ async function addFiles(fileList) {
             pdfBus.emit('files');
         }
 
-        const total = pdfState.files.reduce((sum, f) => sum + f.bytes, 0);
+        const total = pdfState.files.reduce((sum, f) => sum + f.size, 0);
         if (total > MAX_TOTAL_BYTES) {
             pdfState.files = [];
             pdfState.pages = [];

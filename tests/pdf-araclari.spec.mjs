@@ -605,3 +605,141 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
         await expect(modal).toContainText('kabul edilemez');
     });
 });
+
+test.describe('regresyon: mevcut sekmeler', () => {
+    const EXISTING_TABS = [
+        { id: 'tab-kira', field: 'kira-landlord-name' },
+        { id: 'tab-tahliye', field: 'tahliye-tenant-name' },
+        { id: 'tab-anahtar', field: 'anahtar-address' },
+        { id: 'tab-makbuz-avukat', field: 'makbuz-av-muvekkil-name' },
+        { id: 'tab-makbuz-emlak', field: 'makbuz-emlak-musteri-name' }
+    ];
+
+    for (const tab of EXISTING_TABS) {
+        test(`${tab.id}: sekmeye tıklanınca açılır ve önizleme güncellenir`, async ({ page }) => {
+            await page.goto(PAGE);
+            await page.click('#' + tab.id);
+            await expect(page.locator('#' + tab.id)).toHaveClass(/active/);
+
+            // Form paneli görünür olmalı, PDF paneli gizli kalmalı.
+            const blockId = tab.id.replace('tab-', '') + '-form-block';
+            await expect(page.locator('#' + blockId)).toBeVisible();
+            await expect(page.locator('#pdf-araclari-form-block')).toBeHidden();
+
+            // Bir alan doldurulunca önizleme değişir.
+            const before = await page.locator('#printable-area').textContent();
+            const field = page.locator('#' + tab.field);
+            if (await field.count() > 0) {
+                await field.fill('TEST DEGERI 12345');
+                await page.waitForTimeout(150);
+            }
+            const after = await page.locator('#printable-area').textContent();
+            expect(after).toContain('TEST DEGERI 12345');
+            expect(after).not.toBe(before);
+        });
+    }
+
+    test('handlePrint() window.print çağırır', async ({ page }) => {
+        await page.goto(PAGE);
+        await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
+        await page.click('#tab-kira');
+        await page.locator('button:has-text("Yazdır")').first().click();
+        expect(await page.evaluate(() => !!window.__printed)).toBe(true);
+    });
+
+    test('yazdırmada PDF paneli ve sekmesi gizlenir, kâğıt alanı kalır', async ({ page }) => {
+        await page.goto(PAGE);
+        await page.click('#tab-kira');
+        await page.emulateMedia({ media: 'print' });
+        await expect(page.locator('#pdf-araclari-form-block')).toBeHidden();
+        await expect(page.locator('#tab-pdf-araclari')).toBeHidden();
+        await expect(page.locator('#printable-area')).toBeVisible();
+    });
+});
+
+test.describe('tema ve duyarlılık', () => {
+    test('T21: karanlık modda PDF paneli okunabilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await page.click('#theme-toggle-btn');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+        const panel = page.locator('#pdf-araclari-form-block');
+        const styles = await panel.evaluate((el) => {
+            const cs = getComputedStyle(el);
+            const card = el.querySelector('.pdf-stage');
+            return {
+                background: cs.backgroundColor,
+                color: cs.color,
+                cardBg: getComputedStyle(card).backgroundColor,
+                cardBorder: getComputedStyle(card).borderTopColor
+            };
+        });
+
+        // Panel koyu arka plan üzerinde açık metin göstermeli.
+        const lum = (c) => {
+            const m = c.match(/\d+/g).map(Number);
+            return (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255;
+        };
+        expect(lum(styles.color)).toBeGreaterThan(0.5);      // açık metin
+        expect(lum(styles.cardBg)).toBeLessThan(0.5);        // koyu kart
+        expect(styles.cardBorder).not.toBe(styles.cardBg);    // kenar görünür
+    });
+
+    test('T23: 390 px genişlikte yatay kaydırma yok', async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await page.waitForTimeout(300);
+
+        const overflow = await page.evaluate(() => {
+            const doc = document.documentElement;
+            const widest = [...document.querySelectorAll('#pdf-araclari-form-block *')]
+                .map((el) => ({ sel: el.id || el.className, right: el.getBoundingClientRect().right }))
+                .filter((e) => e.right > 391)
+                .slice(0, 5);
+            return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, widest };
+        });
+        expect(overflow.scrollWidth).toBeLessThanOrEqual(391);
+        expect(overflow.widest).toEqual([]);
+    });
+
+    test('T23b: 390 px genişlikte küçük resimler kullanılabilir boyutta kalır', async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+
+        const metrics = await page.locator('#pdf-page-card, .pdf-page-card').first().evaluate((el) => {
+            const grid = getComputedStyle(el.parentElement);
+            const rect = el.getBoundingClientRect();
+            return {
+                columns: grid.gridTemplateColumns.split(' ').length,
+                cardWidth: rect.width
+            };
+        }).catch(async () => {
+            const el = page.locator('.pdf-page-card').first();
+            return {
+                columns: await el.evaluate((e) => getComputedStyle(e.parentElement).gridTemplateColumns.split(' ').length),
+                cardWidth: (await el.boundingBox()).width
+            };
+        });
+
+        // 1-2 sütun: tek sütun boşa yer bırakır, 3 sütan karta küçültür.
+        expect(metrics.columns).toBeGreaterThanOrEqual(1);
+        expect(metrics.columns).toBeLessThanOrEqual(2);
+        // Küçük resim okunabilir kalmalı.
+        expect(metrics.cardWidth).toBeGreaterThanOrEqual(100);
+    });
+
+    test('modal dar ekranda taşmaz', async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        const box = await page.locator('#pdf-lossy-modal .pdf-modal').boundingBox();
+        expect(box.width).toBeLessThanOrEqual(390);
+        expect(box.x).toBeGreaterThanOrEqual(0);
+    });
+});

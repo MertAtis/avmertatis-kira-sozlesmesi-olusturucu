@@ -6,19 +6,22 @@ import { createRequire } from 'node:module';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// pdf.js, Node'da canvas olmadığı için DOMMatrix/Path2D uyarısı basar.
+// Metin çıkarımı bu uyarıdan etkilenmez; test çıktısını okunur tutmak için
+// yalnızca bu uyarı susturulur.
+const isPolyfillNoise = (args) => /Cannot polyfill|Require stack|^\s*-\s*\/Users/.test(String(args[0]));
+for (const level of ['warn', 'log', 'error']) {
+    const original = console[level];
+    console[level] = (...args) => {
+        if (isPolyfillNoise(args)) return;
+        original(...args);
+    };
+}
+
 const require = createRequire(import.meta.url);
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { PDFDocument, PDFName, PDFDict } = require('pdf-lib');
 const pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
-
-// pdf.js, Node'da canvas olmadığı için DOMMatrix/Path2D uyarısı basar.
-// Metin çıkarımı bu uyarıdan etkilenmez; test çıktısını okunur tutmak için
-// yalnızca bu uyarı susturulur.
-const originalWarn = console.warn;
-console.warn = (...args) => {
-    if (/Cannot polyfill/.test(String(args[0]))) return;
-    originalWarn(...args);
-};
 
 // Node ortamında gerçek worker yüklenir; fake worker DOMMatrix gerektirir
 // ve çalışmaz.
@@ -41,8 +44,10 @@ export async function readPageBoxes(bytes) {
 
 /** Tüm sayfaların metnini tek string'de birleştirir. */
 export async function extractAllText(bytes) {
+    // pdf.js, veriyi worker'a TRANSFER edip ayırıyor (detach). Aynı bayt
+    // dizisini sonra pdf-lib'nin okuması gerekebildiği için kopya verilir.
     const doc = await pdfjs.getDocument({
-        data: bytes,
+        data: bytes.slice(),
         standardFontDataUrl: STANDARD_FONT_DATA
     }).promise;
     let out = '';

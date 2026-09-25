@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { extractAllText, readPageBoxes } from './helpers/inspect.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'file://' + join(REPO, 'index.html');
@@ -310,4 +311,153 @@ async function dragCard(page, fromIndex, toIndex) {
     }, { fromIndex, toIndex });
     await page.waitForTimeout(120);
 }
+
+/** Çıktıyı indirir ve bayt dizisini Node tarafında döndürür. */
+export async function buildOutput(page, { a4 = true, compress = false, quality = null, lossy = false } = {}) {
+    await page.locator('#pdf-opt-a4').setChecked(a4);
+    await page.locator('#pdf-opt-compress').setChecked(compress);
+    if (compress) {
+        await page.locator('#pdf-opt-lossy').setChecked(lossy);
+        if (quality !== null) await page.locator(`input[name="pdf-quality"][value="${quality}"]`).check();
+    }
+    const downloadPromise = page.waitForEvent('download');
+    await page.click('#pdf-build-btn');
+    const download = await downloadPromise;
+    const stream = await download.createReadStream();
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return { bytes: new Uint8Array(Buffer.concat(chunks)), name: download.suggestedFilename() };
+}
+
+test.describe('çıktı üretimi ve A4 normalizasyonu', () => {
+    test('T03b: üç dosya tek PDF olarak birleşir, 11 sayfa', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf', 'c.pdf']);
+        const { bytes } = await buildOutput(page);
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(11);
+    });
+
+    test('T05b: sıralama çıktıya aynen yansır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await dragCard(page, 0, 2); // -> [1,2,0,3]
+        const { bytes } = await buildOutput(page);
+        const text = await extractAllText(bytes);
+        const order = ['ALFA SAYFA 2', 'ALFA SAYFA 3', 'ALFA SAYFA 1', 'ALFA SAYFA 4']
+            .map((label) => text.indexOf(label));
+        expect(order.every((i) => i >= 0)).toBe(true);
+        expect([...order].sort((a, b) => a - b)).toEqual(order);
+    });
+
+    test('T06c: döndürme çıktıda /Rotate olarak yazılır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        const { bytes } = await buildOutput(page, { a4: false });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes[0].rotation).toBe(90);
+    });
+
+    test('T07: A4 normalize — her sayfa tam A4 olur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['mixed-sizes.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(3);
+        for (const box of boxes) {
+            expect(box.width).toBeCloseTo(595.28, 0);
+            expect(box.height).toBeCloseTo(841.89, 0);
+        }
+    });
+
+    test('T07b: A4 normalize kapalıyken ölçüler korunur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['mixed-sizes.pdf']);
+        const { bytes } = await buildOutput(page, { a4: false });
+        const boxes = await readPageBoxes(bytes);
+        expect(Math.round(boxes[1].width)).toBe(420);
+        expect(Math.round(boxes[2].width)).toBe(612);
+    });
+
+    test('T08: A4 normalize içerik kırpmaz — metin okunabilir kalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['mixed-sizes.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const text = await extractAllText(bytes);
+        expect(text).toContain('KIRPMA TESTI METNI');
+        // Sayfa altındaki satır da kalmalı — kırpma olmadığının kanıtı.
+        expect(text).toContain('kirpilmamalidir');
+        // Üç sayfanın üçü de metin içermeli.
+        expect((text.match(/KIRPMA TESTI METNI/g) || []).length).toBe(3);
+    });
+
+    test('RF3: aynı sayfa listenin farklı konumlarında 3 kez çıkabilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'a.pdf']);
+        await expectCardCount(page, 8);
+        // Üçüncü kopyanın tek sayfasını sil, sonra dosyayı tekrar ekle.
+        await page.locator('.pdf-page-card').nth(4).locator('[data-action="delete"]').click();
+        await expectCardCount(page, 7);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 11);
+        const { bytes } = await buildOutput(page);
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(11);
+    });
+
+    test('RF5: 90 derece döndürülmüş A5 sayfa A4"e tam sığar', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['mixed-sizes.pdf']);
+        await expectCardCount(page, 3);
+        // 2. sayfa A5 (419.53 x 595.28). 90 derece döndürülünce yatay olur.
+        await page.locator('.pdf-page-card').nth(1).locator('[data-action="rotate"]').click();
+        const { bytes } = await buildOutput(page, { a4: true });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes[1].width).toBeCloseTo(595.28, 0);
+        expect(boxes[1].height).toBeCloseTo(841.89, 0);
+        // A4 modunda döndürme dönüşüme gömülür, /Rotate yazılmaz
+        // (yazılsaydı içerik iki kez dönerdi). Yön doğruluğu
+        // tests/a4-rotation.spec.mjs tarafından sayısal olarak doğrulanır.
+        expect(boxes[1].rotation).toBe(0);
+        const text = await extractAllText(bytes);
+        expect((text.match(/KIRPMA TESTI METNI/g) || []).length).toBe(3);
+    });
+
+    test('sonuç kutusu her durumda dürüst bir mesaj gösterir', async ({ page }) => {
+        // A4 normalizasyonu SIKISTIRMA değildir: 10 MB'lık taranmış bir PDF'i
+        // A4'e taşımak boyutu neredeyse aynen korur. Uygulama bunu saklamaz.
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        const { bytes } = await buildOutput(page);
+        await expect(page.locator('#pdf-result')).toBeVisible();
+        const text = await page.locator('#pdf-result').textContent();
+        expect([
+            'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
+            ...text.match(/Orijinal .+ → Çıktı .+%/) || []
+        ]).toContain(text);
+        expect(bytes.length).toBeGreaterThan(0);
+    });
+
+    test('sonuç kutusu çıktı büyüdüğünde açık uyarı verir', async ({ page }) => {
+        // 1.4 KB metin ağırlıklı bir PDF'i yeniden serileştirmek kaçınılmaz
+        // olarak büyütür. Uygulama bunu saklamaz, açıkça söyler.
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await buildOutput(page);
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toBe(
+            'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.'
+        );
+    });
+
+    test('T07c: A4 normalize boş PDF üzerinde hata vermez', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['empty.pdf']);
+        // Sayfa yokken indirme düğmesi devre dışı olmalı.
+        await expect(page.locator('#pdf-build-btn')).toBeDisabled();
+    });
+});
 

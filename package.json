@@ -1,0 +1,17 @@
+{
+  "name": "kira-sozlesmesi-olusturucu",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hukuki Kira Sözleşmesi jeneratörü + tarayıcı tabanlı PDF araçları. Geliştirme bağımlılıkları yalnızca testler içindir; uygulama çalışma zamanında bunları kullanmaz.",
+  "scripts": {
+    "sync-libs": "node tests/sync-libs.mjs",
+    "fixtures": "node tests/fixtures/build-fixtures.mjs",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "3.11.174"
+  }
+}

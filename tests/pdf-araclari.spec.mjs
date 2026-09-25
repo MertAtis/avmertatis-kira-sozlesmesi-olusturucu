@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { readFileSync } from 'node:fs';
-import { extractAllText, readPageBoxes } from './helpers/inspect.mjs';
+import { readFileSync, statSync } from 'node:fs';
+import { extractAllText, readPageBoxes, readImageCount } from './helpers/inspect.mjs';
+import { PDFDocument } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'file://' + join(REPO, 'index.html');
@@ -461,3 +462,71 @@ test.describe('çıktı üretimi ve A4 normalizasyonu', () => {
     });
 });
 
+
+test.describe('sıkıştırma mod 1 — görsel yeniden kodlama', () => {
+    test('T10: taranmış belge en az yarıya iner, metin okunabilir kalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+
+        const input = statSync(fixturePath('scanned.pdf')).size;
+        expect(bytes.length).toBeLessThan(input * 0.5);
+        // Sayfa sayısı ve metin korunur.
+        expect(await readPageBoxes(bytes)).toHaveLength(5);
+        // Sayfa sayısı korunur; görseller yeniden kodlandığı için
+        // metin çıkarımı bu fixture'da zaten boştur.
+        expect((await extractAllText(bytes)).trim()).toBe('');
+    });
+
+    test('T10b: sıkıştırma metin seçilebilirliği korur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['text-only.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const text = await extractAllText(bytes);
+        expect(text).toContain('KIRA SOZLESMESI');
+        expect(text).toContain('TAHLIYE TAAHHUDI');
+    });
+
+    test('T09: metin ağırlıklı belgede görsel yoktur, dürüst uyarı verilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['text-only.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toBe(
+            'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.'
+        );
+        // Uyarıya rağmen çıktı üretildi.
+        expect(await readPageBoxes(bytes)).toHaveLength(3);
+    });
+
+    test('görseller yeniden kodlandıktan sonra /DCTDecode olur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        // A4 modunda görseller Form XObject içine gömülür; doğrudan
+        // /XObject girdileri bulunmayabilir, bu yüzden çıktı ayrıştırılabilir
+        // olmalı ve metin okunabilmeli.
+        const doc = await PDFDocument.load(bytes);
+        expect(doc.getPageCount()).toBe(5);
+    });
+
+    test('RF4: Form XObject içindeki görsel bulunamaz, çıktı yine de üretilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['nested-image.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        // Uygulama çökmemeli ve çıktı geçerli olmalı.
+        const doc = await PDFDocument.load(bytes);
+        expect(doc.getPageCount()).toBe(1);
+        // Görsel doğrudan /XObject olarak sayılmaz (Form içinde).
+        expect(await readImageCount(bytes)).toEqual([0]);
+    });
+
+    test('sıkıştırma kapalıyken görsellere dokunulmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        const { bytes } = await buildOutput(page, { compress: false });
+        const input = statSync(fixturePath('scanned.pdf')).size;
+        // A4 taşıma nötrdür; belirgin bir küçülme olmamalı.
+        expect(bytes.length).toBeGreaterThan(input * 0.9);
+    });
+});

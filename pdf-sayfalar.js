@@ -37,8 +37,9 @@ async function pdfEnsureWorker() {
 async function pdfGetDoc(file) {
     if (pdfDocCache.has(file.id)) return pdfDocCache.get(file.id);
     await pdfEnsureWorker();
-    if (!file.data) return null;
-    const bytes = file.data;
+    // pdf.js veriyi worker'a TRANSFER edip ayırıyor (detach). Aynı baytlar
+    // çıktı üretiminde de gerekebildiği için kopya verilir.
+    const bytes = file.data.slice();
     const task = pdfjsLib.getDocument({ data: bytes });
     const doc = await task.promise;
     pdfDocCache.set(file.id, doc);

@@ -155,9 +155,12 @@ async function pdfBuildOutput() {
 
         // Sıkıştırma modu 1 (Task 6) pdfCompressImages ile sağlanır; o modül
         // yüklenmemişse sıkıştırma atlanır (çıktı yine de üretilir).
-        if (pdfState.output.compress && !pdfState.output.lossy
-            && typeof window.pdfCompressImages === 'function') {
-            const replaced = await window.pdfCompressImages(doc, pdfState.output.quality);
+        if (pdfState.output.compress && !pdfState.output.lossy) {
+            // flush() nesneleri context'e kaydeder. Bu olmadan sayfa
+            // kaynaklarındaki PDFRef'ler çözülemiyor ve sıkıştırma hiçbir
+            // görseli bulamadan sessizce başarısız oluyor.
+            await doc.flush();
+            const replaced = await pdfCompressImages(doc, pdfState.output.quality);
             pdfShowProgress(entries.length, entries.length,
                 `${replaced} görsel yeniden kodlandı`);
         }
@@ -231,6 +234,158 @@ async function pdfOnBuildClick() {
             : (err?.message === RESULT_TEXT.noPages ? RESULT_TEXT.noPages : RESULT_TEXT.generic);
         pdfShowResult(message, 'error');
     }
+}
+
+// --- Sıkıştırma mod 1: gömülü görselleri yeniden kodlama -------------------
+
+// spec §5.1 atlama kuralları. Hepsi sağlanmazsa görsel atlanır.
+const MIN_RECODE_BYTES = 20 * 1024;
+
+/**
+ * Sayfadaki /Image XObject'lerini JPEG olarak yeniden kodlar.
+ * Sayfa içerik akışı ve yazı tipleri olduğu gibi kalır — metin seçilebilir
+ * ve aranabilir olmaya devam eder. Dönüş: yeniden kodlanan görsel sayısı.
+ *
+ * Form XObject'lerin İÇİ de gezilir. Bu zorunludur: A4 normalizasyonu
+ * (varsayılan açık) her sayfayı bir Form XObject içine gömer, dolayısıyla
+ * yalnızca sayfa düzeyine bakıldığında HİÇBİR görsel bulunamaz ve sıkıştırma
+ * sessizce hiçbir iş yapmaz.
+ *
+ * Doğrulanmış pdf-lib 1.17.1 API notları:
+ *  - `page.node.Resources` bir ÖZELLİK değil METOTtur: `page.node.Resources()`
+ *  - `/XObject` değeri bir PDFRef'tir; `lookupMaybe(PDFName.of('XObject'), PDFDict)`
+ *    ve sonra `lookup(key)` ile çözülür
+ *  - `xobj.contents` doğrudan atanabilir; `save()` sırasında serileştirilir,
+ *    yeni PDFRef kaydı gerekmez
+ *  - `PDFRawStream.of` imzası `(dict, contents)` sırasındadır (burada gerekmiyor)
+ */
+async function pdfCompressImages(doc, quality) {
+    const { PDFName, PDFDict } = PDFLib;
+    let replaced = 0;
+
+    // PDFDict.get() bir PDFRef döndürür. Bellekteki bir referansı
+    // PDFDict.lookup() çözemeyebilir (save() çağrıldıktan sonra çalışır);
+    // bu yüzden daima context.lookup() kullanılır.
+    const resolve = (value) => (value && value.tag ? doc.context.lookup(value) : value);
+
+    // Form XObject'ler birbirine gömülü olabilir; döngüsel referansları
+    // önlemek için işlenmiş nesneler bir Set ile izlenir.
+    const visited = new Set();
+
+    const visitResources = async (resources) => {
+        const resDict = resolve(resources);
+        if (!resDict || typeof resDict.lookupMaybe !== 'function') return;
+        const xoDict = resDict.lookupMaybe(PDFName.of('XObject'), PDFDict);
+        if (!xoDict) return;
+
+        for (const key of xoDict.keys()) {
+            const xobj = resolve(xoDict.get(key));
+            if (!xobj || !xobj.dict) continue;
+            if (visited.has(xobj)) continue;
+            visited.add(xobj);
+
+            const subtype = String(xobj.dict.lookup(PDFName.of('Subtype')) ?? '');
+            if (subtype === '/Form') {
+                await visitResources(resolve(xobj.dict.lookup(PDFName.of('Resources'))));
+                continue;
+            }
+            if (subtype !== '/Image') continue;
+
+            if (await pdfRecodeImage(xobj, quality)) replaced++;
+        }
+    };
+
+    for (const page of doc.getPages()) {
+        await visitResources(resolve(page.node.Resources()));
+    }
+
+    return replaced;
+}
+
+/** Tek bir görseli yeniden kodlar. Uygun değilse false döner. */
+async function pdfRecodeImage(xobj, quality) {
+    const { PDFName } = PDFLib;
+    const dict = xobj.dict;
+
+    const bits = Number(dict.lookup(PDFName.of('BitsPerComponent')));
+    const colorSpace = String(dict.lookup(PDFName.of('ColorSpace')) ?? '');
+    const filter = dict.lookup(PDFName.of('Filter'));
+    const width = Number(dict.lookup(PDFName.of('Width')));
+    const height = Number(dict.lookup(PDFName.of('Height')));
+
+    // spec §5.1: bu beş koşulun hepsi sağlanmalı.
+    if (bits !== 8) return false;
+    if (colorSpace !== '/DeviceRGB' && colorSpace !== '/DeviceGray') return false;
+    if (dict.has(PDFName.of('SMask'))) return false;
+    if (filter && String(filter) === '/DCTDecode') return false;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return false;
+
+    const raw = xobj.contents;
+    if (!raw || raw.length < MIN_RECODE_BYTES) return false;
+
+    try {
+        const jpeg = await pdfRecodeToJpeg(raw, width, height, colorSpace === '/DeviceGray', quality);
+        xobj.contents = jpeg;
+        dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+        dict.delete(PDFName.of('DecodeParms'));
+        dict.delete(PDFName.of('SMask'));
+        return true;
+    } catch (err) {
+        // Tek bir görselin çözülememesi işlemi durdurmaz.
+        console.warn('Görsel yeniden kodlanamadı, atlandı:', err);
+        return false;
+    }
+}
+
+/** FlateDecode ham pikselleri çözüp JPEG olarak yeniden kodlar. */
+async function pdfRecodeToJpeg(compressed, width, height, grayscale, quality) {
+    const channels = grayscale ? 1 : 3;
+    const raw = await pdfInflate(compressed, width * height * channels);
+
+    const canvas = window.OffscreenCanvas
+        ? new OffscreenCanvas(width, height)
+        : Object.assign(document.createElement('canvas'), { width, height });
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas bağlamı alınamadı');
+
+    if (grayscale) {
+        // Canvas'a yazarken gri pikselleri üç kanala açıyoruz; renk uzayı
+        // DeviceGray olarak kalır, sıkıştırma sonrası doğru görünür.
+        const rgba = new Uint8ClampedArray(width * height * 4);
+        for (let i = 0, j = 0; i < width * height; i++) {
+            const v = raw[i];
+            rgba[j++] = v; rgba[j++] = v; rgba[j++] = v; rgba[j++] = 255;
+        }
+        context.putImageData(new ImageData(rgba, width, height), 0, 0);
+    } else {
+        const rgba = new Uint8ClampedArray(width * height * 4);
+        for (let i = 0, j = 0; i < width * height; i++) {
+            rgba[j++] = raw[i * 3];
+            rgba[j++] = raw[i * 3 + 1];
+            rgba[j++] = raw[i * 3 + 2];
+            rgba[j++] = 255;
+        }
+        context.putImageData(new ImageData(rgba, width, height), 0, 0);
+    }
+
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+    return new Uint8Array(await blob.arrayBuffer());
+}
+
+/** zlib (FlateDecode) çözer. Tarayıcıda DecompressionStream kullanılır. */
+async function pdfInflate(data, expectedLength) {
+    if (typeof DecompressionStream === 'function') {
+        const stream = new Blob([data]).stream()
+            .pipeThrough(new DecompressionStream('deflate'));
+        const out = new Uint8Array(await new Response(stream).arrayBuffer());
+        if (expectedLength && out.length !== expectedLength) {
+            throw new Error(`Beklenen ${expectedLength} bayt, çözülen ${out.length}`);
+        }
+        return out;
+    }
+    // DecompressionStream yoksa (çok eski tarayıcı) çözümleme yapılamaz;
+    // görsel atlanır, çıktı yine de üretilir.
+    throw new Error('DecompressionStream desteklenmiyor');
 }
 
 // --- Kayıp mod: görsele çevirme -------------------------------------------
@@ -332,6 +487,7 @@ function pdfUpdateBuildButton() {
 window.pdfBuildOutput = pdfBuildOutput;
 window.pdfPlaceOnA4 = pdfPlaceOnA4;
 window.pdfRasterize = pdfRasterize;
+window.pdfCompressImages = pdfCompressImages;
 window.pdfTriggerDownload = pdfTriggerDownload;
 window.pdfSafeFileName = pdfSafeFileName;
 window.pdfShowResult = pdfShowResult;

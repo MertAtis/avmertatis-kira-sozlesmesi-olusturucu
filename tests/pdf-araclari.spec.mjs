@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync, statSync } from 'node:fs';
-import { extractAllText, readPageBoxes, readImageCount } from './helpers/inspect.mjs';
+import { extractAllText, readPageBoxes, readImageCount, textPositions } from './helpers/inspect.mjs';
 import { PDFDocument } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -435,10 +435,8 @@ test.describe('çıktı üretimi ve A4 normalizasyonu', () => {
         const { bytes } = await buildOutput(page);
         await expect(page.locator('#pdf-result')).toBeVisible();
         const text = await page.locator('#pdf-result').textContent();
-        expect([
-            'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
-            ...text.match(/Orijinal .+ → Çıktı .+%/) || []
-        ]).toContain(text);
+        // Sıkıştırma kapalıyken neden küçülmediği açıkça söylenmelidir.
+        expect(text).toContain('Sıkıştırma seçeneği kapalıydı');
         expect(bytes.length).toBeGreaterThan(0);
     });
 
@@ -447,7 +445,17 @@ test.describe('çıktı üretimi ve A4 normalizasyonu', () => {
         // olarak büyütür. Uygulama bunu saklamaz, açıkça söyler.
         await openPdfTab(page);
         await uploadFixtures(page, ['a.pdf']);
-        await buildOutput(page);
+        await buildOutput(page, { compress: false });
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('Sıkıştırma seçeneği kapalıydı');
+        expect(text).toContain('Boyutu küçült');
+    });
+
+    test('sıkıştırma AÇIKKEN küçülme yoksa görsel mesajı verilir', async ({ page }) => {
+        // Aynı senaryo, bu kez sıkıştırma istendi: farklı ve doğru mesaj.
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await buildOutput(page, { compress: true, quality: '0.7' });
         const text = await page.locator('#pdf-result').textContent();
         expect(text).toBe(
             'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.'
@@ -743,3 +751,218 @@ test.describe('tema ve duyarlılık', () => {
         expect(box.x).toBeGreaterThanOrEqual(0);
     });
 });
+
+// --- İnceleme bulguları için regresyon testleri ---------------------------
+
+test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
+    test('F1: kaynak PDF in /Rotate değeri A4 çıktısında da uygulanır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+
+        // Metin çıkarılamıyorsa sayfa gerçekten görsele dönmüş demektir;
+        // burada asıl önemli: dönüşüm YATAY kutuyu A4'e sığdırmış olmalı.
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(2);
+        for (const box of boxes) {
+            expect(box.width).toBeCloseTo(595.28, 0);
+            expect(box.height).toBeCloseTo(841.89, 0);
+        }
+        // Döndürülmüş içerik A4'e sığdırılırken küçültülmüş olmalı:
+        // dönen A4 (842 yükseklik -> 595 genişlik) A4'e birebir sığar ve
+        // ölçek 1'dir. Döndürme yok sayılırsa ölçek 1 olur da konum kayar.
+        // Doğrudan ölçüm: metin konumu A4'ün sağ üstünde olmalı (90° CW).
+        const positions = await textPositions(bytes);
+        expect(positions.length).toBeGreaterThan(0);
+        // "KAYNAK DONDURULMUS" kaynakta sol üstte; 90° saat yönünde
+        // döndürülünce sağ üste düşer.
+        for (const p of positions) {
+            expect(p.x).toBeGreaterThan(595.28 * 0.4);
+            expect(p.y).toBeGreaterThan(841.89 * 0.6);
+        }
+    });
+
+    test('F1b: kullanıcı döndürmesine KAYNAK /Rotate eklenir, üstüne yazılmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        // Kart zaten döndürülü görünüyor; bir kez daha basıp toplam 180'e
+        // ulaşmak istiyoruz ama /Rotate 90 olan kaynakta 90+90 = 180 olmalı.
+        await expectCardCount(page, 2);
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        const { bytes } = await buildOutput(page, { a4: false });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes[0].rotation).toBe(180);
+    });
+
+    test('F2: dosya kaldırıldıktan sonra geri al hayalet kart üretmez', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf']);
+        await expectCardCount(page, 7);
+
+        // Önce bir sayfayı döndür (geri al yığınına girsin), sonra dosyayı kaldır.
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await page.locator('.pdf-file-row [data-remove-file]').first().click();
+        await expectCardCount(page, 3);
+
+        // Dosya kaldırıldı: geri alma yığını temizlenmeli, çünkü eski kayıt
+        // kaldırılmış dosyanın sayfalarını geri getirip "Bilinmeyen dosya"
+        // kartları doğuruyor.
+        await expect(page.locator('#pdf-undo-btn')).toBeDisabled();
+
+        const state = await page.evaluate(() => ({
+            cards: document.querySelectorAll('#pdf-page-grid .pdf-page-card').length,
+            pages: pdfState.pages.length,
+            orphans: pdfState.pages.filter((p) => !pdfState.files.some((f) => f.id === p.fileId)).length,
+            unknown: [...document.querySelectorAll('.pdf-page-label')]
+                .filter((el) => el.textContent.includes('Bilinmeyen')).length
+        }));
+        expect(state.orphans).toBe(0);
+        expect(state.unknown).toBe(0);
+        expect(state.cards).toBe(state.pages);
+        expect(state.cards).toBe(3);
+
+        // Ters sıra da güvenli olmalı: önce geri al, sonra dosyayı kaldır.
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await page.click('#pdf-undo-btn');
+        await page.locator('.pdf-file-row [data-remove-file]').first().click();
+        const after = await page.evaluate(() => ({
+            orphans: pdfState.pages.filter((p) => !pdfState.files.some((f) => f.id === p.fileId)).length,
+            cards: document.querySelectorAll('#pdf-page-grid .pdf-page-card').length,
+            pages: pdfState.pages.length
+        }));
+        expect(after.orphans).toBe(0);
+        expect(after.cards).toBe(after.pages);
+    });
+
+    test('F3: kayıp mod vektör belgeyi iki kez kurmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf']);
+
+        // copyPages çağrı sayısını say: kayıp modda hiç çağrılmamalı.
+        await page.evaluate(() => {
+            window.__copyCalls = 0;
+            const original = PDFLib.PDFDocument.prototype.copyPages;
+            PDFLib.PDFDocument.prototype.copyPages = function (...args) {
+                window.__copyCalls++;
+                return original.apply(this, args);
+            };
+        });
+
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        await page.click('#pdf-lossy-confirm');
+        await expect(page.locator('#pdf-progress-wrap')).toBeHidden({ timeout: 60000 });
+
+        expect(await page.evaluate(() => window.__copyCalls)).toBe(0);
+    });
+
+    test('F4: toplam boyut sınırı aşılınca dosya listesi de yenilenir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expect(page.locator('#pdf-file-list .pdf-file-row')).toHaveCount(1);
+
+        // Sınırı test için düşür: 1 KB üstü toplam reddedilsin.
+        await page.evaluate(() => { window.pdfLimits.maxTotalBytes = 1024; });
+        await uploadFixtures(page, ['b.pdf']);
+
+        // Yalnızca reddedilen dosya geri alınır; daha önce yüklenenler korunur
+        // (kullanıcının emeği silinmemeli) ve liste durumu yansıtır.
+        const rows = await fileListRows(page);
+        const state = await page.evaluate(() => ({
+            files: pdfState.files.length,
+            loaded: pdfState.files.filter((f) => f.doc).length,
+            pages: pdfState.pages.length
+        }));
+        expect(state.files).toBe(2);
+        expect(state.loaded).toBe(1);
+        expect(state.pages).toBe(4);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toContain('a.pdf');
+        expect(rows[1]).toContain('Yüklenemedi');
+    });
+
+    test('F5: meşguliyet sırasında yeni dosya eklenmez', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        const before = await page.evaluate(() => pdfState.pages.length);
+
+        // busy=true iken addFiles çağrısı yok sayılmalı.
+        await page.evaluate(() => { pdfSetBusy(true); });
+        const bytesB = Array.from(readFileSync(fixturePath('b.pdf')));
+        await page.evaluate(async (arr) => {
+            const file = new File([new Uint8Array(arr)], 'b.pdf', { type: 'application/pdf' });
+            await addFiles([file]);
+        }, bytesB);
+        const during = await page.evaluate(() => pdfState.pages.length);
+        expect(during).toBe(before);
+        await page.evaluate(() => { pdfSetBusy(false); });
+    });
+
+    test('F6: çift tıklama iki çıktı üretmez', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        let downloads = 0;
+        page.on('download', () => { downloads++; });
+
+        await page.evaluate(() => { pdfSetBusy(true); });
+        await page.evaluate(() => { pdfOnBuildClick(); });
+        await page.waitForTimeout(400);
+        expect(downloads).toBe(0);
+        await page.evaluate(() => { pdfSetBusy(false); });
+
+        await page.click('#pdf-build-btn');
+        await page.waitForTimeout(1500);
+        expect(downloads).toBe(1);
+    });
+
+    test('F7: kütüphane indirilemezse "Tekrar Dene" çalışır', async ({ page }) => {
+        await page.route('**/pdf-lib.min.js', (route) => route.abort());
+        await page.goto(PAGE);
+        await page.click('#tab-pdf-araclari');
+        await expect(page.locator('#pdf-libs-status')).toHaveClass(/is-error/, { timeout: 30000 });
+        await expect(page.locator('#pdf-libs-status')).toContainText('yüklenemedi');
+
+        // Engel kaldırılır, "Tekrar Dene" tıklanır ve kütüphaneler yüklenir.
+        await page.unroute('**/pdf-lib.min.js');
+        await page.click('#pdf-retry-libs-btn');
+        await expect.poll(() => page.evaluate(() => !!window.pdfState?.libsLoaded), { timeout: 30000 })
+            .toBe(true);
+    });
+
+    test('F8: sıkıştırma kapalıyken dürüst mesaj verilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await buildOutput(page, { compress: false });
+        const text = await page.locator('#pdf-result').textContent();
+        // "sıkıştırılacak büyük görsel bulunamadı" yanlış: kullanıcı hiç
+        // sıkıştırma istemedi. Dürüst mesaj bunu söylemeli.
+        expect(text.toLowerCase()).toContain('sıkıştırma seçeneği kapalıydı');
+        expect(text).not.toContain('büyük görsel bulunamadı');
+    });
+
+    test('F9: düzenleme küçük resimleri yeniden kodlamaz', async ({ page }) => {
+        await openPdfTab(page);
+        // toDataURL çağrılarını say: her çağrı bir küçük resim kodlamasıdır.
+        await page.evaluate(() => {
+            window.__thumbRenders = 0;
+            const original = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function (...args) {
+                window.__thumbRenders++;
+                return original.apply(this, args);
+            };
+        });
+        await uploadFixtures(page, ['sixty-pages.pdf']);
+        await expectCardCount(page, 60);
+        await page.waitForTimeout(500);
+
+        const before = await page.evaluate(() => window.__thumbRenders);
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+        await page.waitForTimeout(1200);
+        const after = await page.evaluate(() => window.__thumbRenders);
+
+        // Döndürme 60 kartın 60'ını yeniden render etmemeli.
+        expect(after).toBe(before);
+    });
+});
+

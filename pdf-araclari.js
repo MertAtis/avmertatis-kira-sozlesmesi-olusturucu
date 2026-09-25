@@ -14,14 +14,49 @@
 function loadScript(src) {
     return new Promise((resolve, reject) => {
         const existing = document.querySelector(`script[data-pdf-src="${src}"]`);
+        // Başarıyla yüklenmişse tekrar indirilmez.
         if (existing && existing.dataset.pdfLoaded === '1') return resolve();
+        // Yarım kalan deneme varsa kaldırılır; aksi halde aynı src için
+        // üst üste <script> etiketleri birikir ve yeniden deneme çalışmaz.
+        existing?.remove();
         const s = document.createElement('script');
         s.src = src;
         s.dataset.pdfSrc = src;
         s.onload = () => { s.dataset.pdfLoaded = '1'; resolve(); };
-        s.onerror = () => reject(new Error('Yükleme hatası: ' + src));
+        s.onerror = () => { s.remove(); reject(new Error('Yükleme hatası: ' + src)); };
         document.head.appendChild(s);
     });
+}
+
+// Kütüphane yüklenemediğinde "Tekrar Dene" çalışır (spec §6).
+async function pdfRetryLibs() {
+    const status = document.getElementById('pdf-libs-status');
+    const showError = () => {
+        if (!status) return;
+        status.classList.add('is-error');
+        status.classList.remove('is-ready');
+        status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> '
+            + 'PDF araçları bileşenleri yüklenemedi. '
+            + '<button class="btn btn-shadcn-outline" id="pdf-retry-libs-btn" '
+            + 'type="button" onclick="pdfRetryLibs()">Tekrar Dene</button>';
+    };
+
+    if (status) {
+        status.classList.remove('is-error');
+        status.classList.remove('is-ready');
+        status.innerHTML = '<i class="fa-solid fa-spinner"></i> Araçlar yükleniyor...';
+    }
+    try {
+        await loadPdfLibs();
+        if (status) {
+            status.classList.add('is-ready');
+            status.innerHTML = '<i class="fa-solid fa-circle-check"></i> Araçlar hazır';
+        }
+        pdfRenderFileList();
+    } catch (err) {
+        console.error('PDF araçları yüklenemedi', err);
+        showError();
+    }
 }
 
 async function loadPdfLibs() {
@@ -50,8 +85,9 @@ async function loadPdfLibs() {
 // --- Biçimlendirme ve hata ayıklama ----------------------------------------
 
 const MB = 1024 * 1024;
-const MAX_FILE_BYTES = 50 * MB;
-const MAX_TOTAL_BYTES = 150 * MB;
+// Testlerin küçük değerlerle sınırı tetikleyebilmesi için window'a açılır.
+const pdfLimits = { maxFileBytes: 50 * MB, maxTotalBytes: 150 * MB };
+window.pdfLimits = pdfLimits;
 
 const MEMORY_ERROR_PATTERNS = [
     'out of memory',
@@ -160,8 +196,12 @@ function pdfRemoveFile(fileId) {
     if (index === -1) return;
     pdfState.files.splice(index, 1);
     pdfState.pages = pdfState.pages.filter((p) => p.fileId !== fileId);
+    // Geri alma yığını temizlenmeli: eski kayıtlar kaldırılmış dosyanın
+    // sayfalarını geri getirir ve "Bilinmeyen dosya" kartları doğar.
+    pdfState.undoStack = [];
     pdfBus.emit('files');
     pdfBus.emit('pages');
+    pdfBus.emit('undo');
 }
 
 // --- Meşgul durumu ----------------------------------------------------------
@@ -178,6 +218,10 @@ function pdfSetBusy(isBusy) {
 async function addFiles(fileList) {
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
+    // Meşguliyet sırasında yeni dosya kabul edilmez. Aksi halde pdfBuildOutput
+    // iterasyon yaptığı dizi mutasyona uğrar ve ikinci bir pdfSetBusy(false)
+    // butonları erken etkinleştirir.
+    if (pdfState.busy) return;
 
     pdfSetBusy(true);
     try {
@@ -189,8 +233,18 @@ async function addFiles(fileList) {
 
             // Boyut denetimi ayrıştırmadan ÖNCE yapılır: 60 MB bir dosyayı
             // ayrıştırmak dakikalar sürer ve tarayıcıyı kilitler.
-            if (file.size > MAX_FILE_BYTES) {
+            if (file.size > pdfLimits.maxFileBytes) {
                 record.error = PDF_ERROR_MESSAGES.tooLarge;
+                pdfState.files.push(record);
+                pdfBus.emit('files');
+                continue;
+            }
+
+            // Toplam sınır da ayrıştırmadan ÖNCE denetlenir. Yalnızca bu
+            // dosya reddedilir; daha önce yüklenenler kullanıcının emeğidir.
+            const runningTotal = pdfState.files.reduce((sum, f) => sum + f.size, 0);
+            if (runningTotal + file.size > pdfLimits.maxTotalBytes) {
+                record.error = PDF_ERROR_MESSAGES.totalTooLarge;
                 pdfState.files.push(record);
                 pdfBus.emit('files');
                 continue;
@@ -229,14 +283,6 @@ async function addFiles(fileList) {
 
             pdfState.files.push(record);
             pdfBus.emit('files');
-        }
-
-        const total = pdfState.files.reduce((sum, f) => sum + f.size, 0);
-        if (total > MAX_TOTAL_BYTES) {
-            pdfState.files = [];
-            pdfState.pages = [];
-            pdfState.undoStack = [];
-            pdfShowError('Toplam dosya boyutu', PDF_ERROR_MESSAGES.totalTooLarge);
         }
 
         pdfBus.emit('pages');
@@ -315,4 +361,5 @@ window.pdfFormatBytes = pdfFormatBytes;
 window.pdfSetBusy = pdfSetBusy;
 window.pdfShowError = pdfShowError;
 window.pdfRemoveFile = pdfRemoveFile;
+window.pdfRetryLibs = pdfRetryLibs;
 window.addFiles = addFiles;

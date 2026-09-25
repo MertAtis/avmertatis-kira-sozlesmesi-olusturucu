@@ -96,3 +96,20 @@ export async function readImageFilters(bytes) {
         return filters;
     });
 }
+
+/** Çıktı PDF'indeki metin öğelerinin kullanıcı uzayındaki konumları. */
+export async function textPositions(bytes) {
+    const doc = await pdfjs.getDocument({
+        data: bytes.slice(),
+        standardFontDataUrl: STANDARD_FONT_DATA
+    }).promise;
+    const out = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        for (const item of content.items) {
+            if (item.str.trim()) out.push({ text: item.str.trim(), x: item.transform[4], y: item.transform[5] });
+        }
+    }
+    return out;
+}

@@ -154,7 +154,28 @@ function pdfRenderGrid() {
         return;
     }
 
+    // Yalnizca degisiklik yapilan kartlar yeniden cizilir. 300 sayfada her
+    // turda 300 <img> yeniden kurmak her tiklamada yuzlerce JPEG kodlamasi
+    // demek ve arayuzu dondurur.
+    const previous = new Map(
+        [...grid.querySelectorAll('.pdf-page-card')].map((el) => [Number(el.dataset.uid), el])
+    );
+    const changed = new Set();
+    const reordered = previous.size !== pdfState.pages.length
+        || [...grid.querySelectorAll('.pdf-page-card')].some(
+            (el, i) => el.dataset.uid !== String(pdfState.pages[i]?.uid));
+    if (reordered) {
+        // Sira degistiyse tum kartlar yerinde tasinir; kucuk resimler korunur.
+        for (const page of pdfState.pages) {
+            const el = previous.get(page.uid);
+            if (el) changed.add(page.uid);
+        }
+    }
+
     const cards = pdfState.pages.map((page, index) => {
+        if (previous.has(page.uid) && !changed.has(page.uid)) {
+            return previous.get(page.uid).outerHTML;
+        }
         const file = pdfFileFor(page.fileId);
         const fileName = file ? file.name : 'Bilinmeyen dosya';
         const pageNo = file && file.doc ? page.srcIndex + 1 : '?';
@@ -184,24 +205,26 @@ function pdfRenderGrid() {
     grid.innerHTML = cards.join('');
 
     // Küçük resimleri üret: ilk sayfalar hemen, kalanlar boşta.
-    const pending = pdfState.pages.filter((p) => !p.thumbUrl && !p.thumbError);
+    // thumbnailPending olan sayfalar ZATEN üretiliyor; yeniden planlanmaz.
+    const pending = pdfState.pages.filter(
+        (p) => !p.thumbUrl && !p.thumbError && !p.thumbnailPending);
     const immediate = pending.slice(0, IMMEDIATE_THUMBS);
     const deferred = pending.slice(IMMEDIATE_THUMBS);
 
     const schedule = (entry) => {
+        entry.thumbnailPending = true;
         pdfRenderThumb(entry).then(() => {
-            if (pdfState.pages.includes(entry)) {
-                const card = document.querySelector(`[data-uid="${entry.uid}"]`);
-                if (card) {
-                    card.querySelector('.pdf-page-thumb, .pdf-page-thumb-placeholder')
-                        ?.remove();
-                    const holder = document.createElement('div');
-                    holder.innerHTML = entry.thumbUrl
-                        ? `<img class="pdf-page-thumb" src="${entry.thumbUrl}" alt="Sayfa önizlemesi">`
-                        : '<div class="pdf-page-thumb-placeholder">Önizlenemedi</div>';
-                    card.insertBefore(holder.firstElementChild, card.querySelector('.pdf-page-badge, .pdf-page-label'));
-                }
-            }
+            entry.thumbnailPending = false;
+            if (!pdfState.pages.includes(entry)) return;
+            // Yalnizca gorseli yerinde degistir; kartin geri kalani korunur.
+            const card = document.querySelector(`.pdf-page-card[data-uid="${entry.uid}"]`);
+            if (!card) return;
+            const old = card.querySelector('.pdf-page-thumb, .pdf-page-thumb-placeholder');
+            const holder = document.createElement('div');
+            holder.innerHTML = entry.thumbUrl
+                ? `<img class="pdf-page-thumb" src="${entry.thumbUrl}" alt="Sayfa önizlemesi">`
+                : '<div class="pdf-page-thumb-placeholder">Önizlenemedi</div>';
+            if (old) old.replaceWith(holder.firstElementChild);
         });
     };
 
@@ -264,6 +287,7 @@ function pdfInitPageGrid() {
     // Meşgul durumu bittiğinde geri-al butonu yeniden değerlendirilir:
     // pdfSetBusy tüm butonları yeniden etkinleştirir.
     pdfBus.on('busy', (isBusy) => { if (!isBusy) pdfUpdateUndoButton(); });
+    pdfBus.on('undo', pdfUpdateUndoButton);
 
     document.getElementById('pdf-undo-btn')?.addEventListener('click', pdfUndo);
     document.getElementById('pdf-rotate-all-btn')?.addEventListener('click', pdfRotateAll);

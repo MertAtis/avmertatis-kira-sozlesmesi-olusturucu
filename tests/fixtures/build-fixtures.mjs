@@ -8,7 +8,7 @@ import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync, existsSync, statSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PDFDocument, PDFName, PDFRawStream, StandardFonts, rgb, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFRawStream, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from 'pdf-lib';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)));
 
@@ -343,6 +343,19 @@ async function build() {
             popGraphicsState()
         );
         made.push(write('nested-image.pdf', await doc.save()));
+    }
+
+    // Kaynak belge KENDİ /Rotate 90 taşıyor. Küçük resimde pdf.js bunu
+    // uygular; çıktıda da uygulanmalı. Yoksa sayfa yanlış yönde basılır.
+    {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        for (let i = 1; i <= 2; i++) {
+            const page = doc.addPage(A4);
+            page.setRotation(degrees(90));
+            page.drawText('KAYNAK DONDURULMUS ' + i, { x: 40, y: 700, size: 22, font });
+        }
+        made.push(write('source-rotated.pdf', await doc.save()));
     }
 
     made.push(write('encrypted.pdf', buildEncryptedPdf()));

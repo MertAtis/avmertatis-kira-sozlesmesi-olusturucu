@@ -1673,7 +1673,8 @@
                     status.classList.add('is-error');
                     status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' +
                         'PDF araçları bileşenleri yüklenemedi. ' +
-                        '<button class="btn btn-shadcn-outline" type="button" >Tekrar Dene</button>';
+                        '<button class="btn btn-shadcn-outline" id="pdf-retry-libs-btn" ' +
+                        'type="button" onclick="pdfRetryLibs()">Tekrar Dene</button>';
                 }
             });
             return;

@@ -69,6 +69,12 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
     const { width: w, height: h } = srcPage.getSize();
     const target = targetDoc.addPage([A4_WIDTH, A4_HEIGHT]);
 
+    // Bozuk PDF'lerde MediaBox sıfır ya da geçersiz olabilir; ölçek NaN olur
+    // ve bozuk çıktı yazılır. Böyle sayfalar boş A4 olarak bırakılır.
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 1 || h <= 1) {
+        return target;
+    }
+
     const quarterTurn = rotation === 90 || rotation === 270;
     const boxW = quarterTurn ? h : w;
     const boxH = quarterTurn ? w : h;
@@ -107,6 +113,24 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
  * pdfState.pages sırasına göre yeni bir belge kurar.
  * Dönüş: {bytes, originalSize, outputSize}
  */
+/**
+ * Kaynak sayfanın kendi /Rotate değeri ile kullanıcının eklediği döndürmeyi
+ * toplar. İkisi ÜSTÜNE yazılmaz, toplanır: /Rotate 90 olan bir sayfaya bir kez
+ * daha basıldığında sonuç 180 olmalıdır, 90 değil.
+ *
+ * Bu değer atlanırsa çıktı yanlış yönde basılır: küçük resimde pdf.js kaynak
+ * /Rotate'u uygular (doğru görünür), çıktıda ise sayfa dik çıkar.
+ */
+function pdfEffectiveRotation(entry, file) {
+    let source = 0;
+    if (file?.doc) {
+        const raw = file.doc.getPage(entry.srcIndex).node.get(PDFLib.PDFName.of('Rotate'));
+        const value = Number(raw?.toString?.() ?? raw);
+        if (Number.isFinite(value)) source = ((Math.round(value / 90) * 90) % 360 + 360) % 360;
+    }
+    return (source + (entry.rotation || 0)) % 360;
+}
+
 async function pdfBuildOutput() {
     const entries = pdfState.pages;
     if (entries.length === 0) throw new Error(RESULT_TEXT.noPages);
@@ -116,6 +140,15 @@ async function pdfBuildOutput() {
 
     try {
         const originalSize = pdfState.files.reduce((sum, f) => sum + (f.size || 0), 0);
+
+        // Kayıp mod ÖNCE kontrol edilir: rasterizasyon kaynak PDF'leri doğrudan
+        // okur, vektör kopyasına gerek yoktur. Aksi halde 300 sayfalık belgede
+        // hem vektör kopya hem JPEG'ler hem ikinci belge bellekte tutulur.
+        if (pdfState.output.lossy) {
+            const bytes = await pdfRasterizeToOutput(entries, pdfState.output.quality);
+            return { bytes, originalSize, outputSize: bytes.length };
+        }
+
         const doc = await PDFLib.PDFDocument.create();
         let count = 0;
 
@@ -124,9 +157,13 @@ async function pdfBuildOutput() {
             if (!file || !file.doc) continue;
 
             const [copied] = await doc.copyPages(file.doc, [entry.srcIndex]);
+            // pdf-lib copyPages /Rotate'u korur; A4 dönüşümü kendi matrisinde
+            // uygulayacağı için burada temizlenir, yoksa çift döner.
+            const rotation = pdfEffectiveRotation(entry, file);
+            copied.node.delete(PDFLib.PDFName.of('Rotate'));
 
             if (pdfState.output.a4) {
-                const isExactA4 = !entry.rotation
+                const isExactA4 = !rotation
                     && Math.abs(copied.getWidth() - A4_WIDTH) < 1
                     && Math.abs(copied.getHeight() - A4_HEIGHT) < 1;
                 if (isExactA4) {
@@ -135,11 +172,11 @@ async function pdfBuildOutput() {
                 } else {
                     // A4 modunda döndürme dönüşüme gömülür; /Rotate yazılmaz.
                     // Yazılsaydı içerik iki kez dönerdi.
-                    await pdfPlaceOnA4(doc, copied, entry.rotation);
+                    await pdfPlaceOnA4(doc, copied, rotation);
                 }
             } else {
-                // Dönüşüm uygulanmadığında /Rotate korunur.
-                if (entry.rotation) copied.setRotation(PDFLib.degrees(entry.rotation));
+                // Dönüşüm uygulanmadığında /Rotate yazılır (kaynak + kullanıcı).
+                if (rotation) copied.setRotation(PDFLib.degrees(rotation));
                 doc.addPage(copied);
             }
 
@@ -152,15 +189,6 @@ async function pdfBuildOutput() {
 
         doc.setTitle('PDF Araçları ile oluşturuldu');
         doc.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
-
-        // Kayıp mod: sayfalar 150 DPI JPEG olarak yeniden basılır. Metin
-        // seçilemez hale gelir; bu yüzden çağırmadan önce onay alınır
-        // (pdfOnBuildClick). A4 daima zorunludur, bu yüzden yeni bir belge
-        // kurulur ve sayfa taşıma dönüşümüne gerek yoktur.
-        if (pdfState.output.lossy) {
-            const bytes = await pdfRasterizeToOutput(entries, pdfState.output.quality);
-            return { bytes, originalSize, outputSize: bytes.length };
-        }
 
         // Sıkıştırma modu 1: gömülü görselleri JPEG olarak yeniden kodlar,
         // metin ve vektör içerik olduğu gibi kalır.
@@ -191,7 +219,15 @@ async function pdfBuildOutput() {
 /** Tarayici indirme adinda yol ayiraclari ve kontrol karakterleri gecersizdir. */
 function pdfSafeFileName(name) {
     const base = String(name || '').split(/[\\/]/).pop();
-    return base.replace(/[\\:*?"<>|]/g, '_').replace(/[\u0000-\u001f\u007f]/g, '_').trim() || 'belge.pdf';
+    const cleaned = base
+        .replace(/[\\:*?"<>|]/g, '_')
+        .replace(/[\u0000-\u001f\u007f]/g, '_')
+        // Windows sondaki nokta ve boşluğu sessizce düşürür; uzantı kaybolur.
+        .replace(/[. ]+$/, '')
+        .trim();
+    // Tamamen nokta olan ad ('.', '..') geçerli bir dosya adı değildir.
+    if (!cleaned || /^[.]+$/.test(cleaned)) return 'belge.pdf';
+    return cleaned;
 }
 
 /** Tek dosya indiriliyorsa adi korunur, birden fazlasi birlestirilmis ad alir. */
@@ -249,6 +285,8 @@ function pdfConfirmLossy() {
 }
 
 async function pdfOnBuildClick() {
+    // Çift tıklama iki çıktı üretmesin.
+    if (pdfState.busy) return;
     if (pdfState.pages.length === 0) {
         pdfShowResult(RESULT_TEXT.noPages, 'warning');
         return;
@@ -274,10 +312,20 @@ async function pdfOnBuildClick() {
         pdfTriggerDownload(bytes, pdfOutputFileName());
 
         if (outputSize >= originalSize) {
-            pdfShowResult(
-                'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
-                'warning'
-            );
+            // Kullanıcı sıkıştırmayı hiç açmadıysa "görsel bulunamadı" demek
+            // yanlış olur: o zaman asıl neden sıkıştırmanın kapalı olmasıdır.
+            if (!pdfState.output.compress) {
+                pdfShowResult(
+                    `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}. `
+                    + 'Sıkıştırma seçeneği kapalıydı; küçültmek için "Boyutu küçült" kutusunu işaretleyin.',
+                    'warning'
+                );
+            } else {
+                pdfShowResult(
+                    'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
+                    'warning'
+                );
+            }
         } else {
             const saved = Math.round((1 - outputSize / originalSize) * 100);
             pdfShowResult(
@@ -468,7 +516,10 @@ async function pdfRasterizeToOutput(entries, quality) {
 
         const source = await pdfGetDoc(file);
         const page = await source.getPage(entry.srcIndex + 1);
-        if (entry.rotation) page.rotate = entry.rotation;
+        // Kaynak /Rotate + kullanıcı döndürmesi birlikte uygulanır.
+        const rotation = pdfEffectiveRotation(entry, file);
+        const previousRotate = page.rotate;
+        if (rotation) page.rotate = rotation;
 
         const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');

@@ -153,9 +153,18 @@ async function pdfBuildOutput() {
         doc.setTitle('PDF Araçları ile oluşturuldu');
         doc.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
 
-        // Sıkıştırma modu 1 (Task 6) pdfCompressImages ile sağlanır; o modül
-        // yüklenmemişse sıkıştırma atlanır (çıktı yine de üretilir).
-        if (pdfState.output.compress && !pdfState.output.lossy) {
+        // Kayıp mod: sayfalar 150 DPI JPEG olarak yeniden basılır. Metin
+        // seçilemez hale gelir; bu yüzden çağırmadan önce onay alınır
+        // (pdfOnBuildClick). A4 daima zorunludur, bu yüzden yeni bir belge
+        // kurulur ve sayfa taşıma dönüşümüne gerek yoktur.
+        if (pdfState.output.lossy) {
+            const bytes = await pdfRasterizeToOutput(entries, pdfState.output.quality);
+            return { bytes, originalSize, outputSize: bytes.length };
+        }
+
+        // Sıkıştırma modu 1: gömülü görselleri JPEG olarak yeniden kodlar,
+        // metin ve vektör içerik olduğu gibi kalır.
+        if (pdfState.output.compress) {
             // flush() nesneleri context'e kaydeder. Bu olmadan sayfa
             // kaynaklarındaki PDFRef'ler çözülemiyor ve sıkıştırma hiçbir
             // görseli bulamadan sessizce başarısız oluyor.
@@ -208,11 +217,58 @@ function pdfTriggerDownload(bytes, fileName) {
     }, 10000);
 }
 
+// --- Kayıp mod onayı --------------------------------------------------------
+
+// Modal bir Promise ile çözülür: onaylanırsa true, vazgeçilirse false.
+function pdfConfirmLossy() {
+    const modal = document.getElementById('pdf-lossy-modal');
+    if (!modal) return Promise.resolve(window.confirm('Metin seçilemez hale gelecek. Devam edilsin mi?'));
+
+    const cancel = document.getElementById('pdf-lossy-cancel');
+    const confirmBtn = document.getElementById('pdf-lossy-confirm');
+    modal.hidden = false;
+    confirmBtn?.focus();
+
+    return new Promise((resolve) => {
+        const finish = (answer) => {
+            modal.hidden = true;
+            cancel?.removeEventListener('click', onCancel);
+            confirmBtn?.removeEventListener('click', onConfirm);
+            document.removeEventListener('keydown', onKey);
+            resolve(answer);
+        };
+        const onCancel = () => finish(false);
+        const onConfirm = () => finish(true);
+        const onKey = (e) => {
+            if (e.key === 'Escape') finish(false);
+        };
+        cancel?.addEventListener('click', onCancel);
+        confirmBtn?.addEventListener('click', onConfirm);
+        document.addEventListener('keydown', onKey);
+    });
+}
+
 async function pdfOnBuildClick() {
     if (pdfState.pages.length === 0) {
         pdfShowResult(RESULT_TEXT.noPages, 'warning');
         return;
     }
+
+    // Kayıp modda her sayfa A4'e çizilir; A4 kapalıysa kullanıcıyı uyar.
+    if (pdfState.output.lossy && !pdfState.output.a4) {
+        pdfShowResult(
+            'Görsele çevirme her zaman A4 sayfası üretir. '
+            + 'Lütfen "Her sayfayı A4\'e sığdır" seçeneğini açın.',
+            'error'
+        );
+        return;
+    }
+
+    // Metin seçilemez hale geleceği için önce onay alınır.
+    if (pdfState.output.lossy && !(await pdfConfirmLossy())) {
+        return;
+    }
+
     try {
         const { bytes, originalSize, outputSize } = await pdfBuildOutput();
         pdfTriggerDownload(bytes, pdfOutputFileName());
@@ -226,6 +282,7 @@ async function pdfOnBuildClick() {
             const saved = Math.round((1 - outputSize / originalSize) * 100);
             pdfShowResult(
                 `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)} (%${saved} küçüldü)`
+                + (pdfState.output.lossy ? ' — Metin seçilemez.' : '')
             );
         }
     } catch (err) {
@@ -395,18 +452,25 @@ const RASTER_DPI = 150;
 /**
  * Sayfaları 150 DPI çözünürlükte görsele çevirip A4'e basar.
  * Sonuçta metin seçilemez — bu yüzden çağırmadan önce onay alınır.
+ *
+ * Her sayfa kendi pdf.js belgesinden render edilir; kaynak belgeler
+ * bellekte zaten açık olduğu için yeniden açılmaz.
  */
-async function pdfRasterize(bytes, rotations, quality) {
+async function pdfRasterizeToOutput(entries, quality) {
     await pdfEnsureWorker();
-    const source = await pdfjsLib.getDocument({ data: bytes }).promise;
     const out = await PDFLib.PDFDocument.create();
     const scale = RASTER_DPI / 72;
+    let done = 0;
 
-    for (let i = 1; i <= source.numPages; i++) {
-        const page = await source.getPage(i);
-        page.rotate = rotations[i - 1] || 0;
+    for (const entry of entries) {
+        const file = pdfState.files.find((f) => f.id === entry.fileId);
+        if (!file || !file.data) continue;
+
+        const source = await pdfGetDoc(file);
+        const page = await source.getPage(entry.srcIndex + 1);
+        if (entry.rotation) page.rotate = entry.rotation;
+
         const viewport = page.getViewport({ scale });
-
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
@@ -421,7 +485,8 @@ async function pdfRasterize(bytes, rotations, quality) {
         const jpeg = new Uint8Array(await blob.arrayBuffer());
         const embedded = await out.embedJpg(jpeg);
         const target = out.addPage([A4_WIDTH, A4_HEIGHT]);
-        // Döndürülmüş görsel yatay gelir; A4'e sığdırıp ortala.
+
+        // Döndürülmüş sayfa yatay gelir; A4'e tekdüze sığdırıp ortala.
         const ratio = Math.min(A4_WIDTH / embedded.width, A4_HEIGHT / embedded.height);
         const w = embedded.width * ratio;
         const h = embedded.height * ratio;
@@ -432,10 +497,16 @@ async function pdfRasterize(bytes, rotations, quality) {
             height: h
         });
 
-        pdfShowProgress(i, source.numPages, `Sayfa ${i} / ${source.numPages} görsele çevriliyor`);
-        if (i % 2 === 0) await new Promise((r) => setTimeout(r, 0));
+        done++;
+        pdfShowProgress(done, entries.length, `Sayfa ${done} / ${entries.length} görsele çevriliyor`);
+        // pdf.js canvas'ı bellekte tutar; bırakmak uzun belgelerde OOM önler.
+        canvas.width = 0;
+        canvas.height = 0;
+        if (done % 2 === 0) await new Promise((r) => setTimeout(r, 0));
     }
 
+    out.setTitle('PDF Araçları ile oluşturuldu (görsele çevrilmiş)');
+    out.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
     return out.save({ useObjectStreams: true });
 }
 
@@ -486,7 +557,7 @@ function pdfUpdateBuildButton() {
 
 window.pdfBuildOutput = pdfBuildOutput;
 window.pdfPlaceOnA4 = pdfPlaceOnA4;
-window.pdfRasterize = pdfRasterize;
+window.pdfRasterizeToOutput = pdfRasterizeToOutput;
 window.pdfCompressImages = pdfCompressImages;
 window.pdfTriggerDownload = pdfTriggerDownload;
 window.pdfSafeFileName = pdfSafeFileName;

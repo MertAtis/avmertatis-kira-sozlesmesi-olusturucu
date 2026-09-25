@@ -20,7 +20,7 @@ Hukuki belge üreten mevcut uygulamaya, tarayıcı üzerinde tamamen çalışan 
 | 4 | Sayfa döndürme (90° / 180° / 270°) |
 | 5 | Her sayfayı kırpma olmadan A4'e ölçekleyip ortalamak |
 | 6 | Gömülü görselleri yeniden kodlayarak boyut küçültme (metin seçilebilir kalır) |
-| 7 | Sayfayı görsele çevirerek agresif küçültme (metin seçilemez — açık uyarıyla) |
+| 7 | Sayfayı görsele çevirerek agresif küçültme (ölçülen %64; metin seçilemez — açık uyarıyla) |
 | 8 | Küçük resimli ızgara ile görsel önizleme |
 
 ### Yapılmayacaklar (kapsam dışı)
@@ -273,7 +273,7 @@ Beklenen kazanç: taranmış/sayfa görüntülü belgelerde %50–80. Metin ağ�
 2. Canvas `image/jpeg` (`quality` seviyesinde) olarak blob'a çevrilir
 3. pdf-lib'de tam sayfa A4 oluşturulur, görsel kenardan kenara çizilir
 
-Beklenen kazanç: %85–95. Sonuçta metin seçilemez, arama yapılamaz, kopyalama yapılamaz.
+Beklenen kazanç: ölçülen değer **%64** (9.81 MB sentetik gürültülü tarama → 3.53 MB, 150 DPI, kalite 0.7). Gerçek taranmış sözleşmelerde oran daha yüksek olur; gürültülü sentetik içerik en kötü durumdur. Sonuçta metin seçilemez, arama yapılamaz, kopyalama yapılamaz.
 
 Kullanıcı onayı: bu onay kutusu işaretlendiğinde, işlem başlamadan önce şu uyarı modalı gösterilir ve "Görsele Çevir ve İndir" onayı istenir:
 

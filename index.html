@@ -933,6 +933,10 @@
         [data-theme="dark"] .pdf-result.is-warning { border-color: #fbbf24; }
         [data-theme="dark"] .pdf-result.is-error { border-color: #f87171; }
 
+        /* `hidden` niteliği display:flex tarafindan ezilir; bu olmadan
+           görünmez modal tüm sayfayı tıklamalara kapatır. */
+        .pdf-modal-backdrop[hidden] { display: none; }
+
         .pdf-modal-backdrop {
             position: fixed;
             inset: 0;
@@ -1588,6 +1592,26 @@
                 </div>
             </div>
 
+        </div>
+
+        <!-- PDF ARAÇLARI: KAYIP MOD ONAY MODALI -->
+        <div id="pdf-lossy-modal" class="pdf-modal-backdrop no-print" role="dialog" aria-modal="true"
+             aria-labelledby="pdf-lossy-title" hidden>
+            <div class="pdf-modal">
+                <h3 id="pdf-lossy-title"><i class="fa-solid fa-triangle-exclamation"></i> Metin seçilemez olsun mu?</h3>
+                <p>
+                    Sayfalar görsele çevirilecek. <strong>Metin seçilemez, aranamaz ve
+                    kopyalanamaz hale gelecektir.</strong> Hukuki belge ve sözleşmelerde
+                    bu durum çoğu zaman kabul edilemez. Yalnızca e-posta ekine
+                    konulacak nihai kopyalar için önerilir.
+                </p>
+                <p>Metni korumak için bu kutuyu işaretlemeden <strong>Boyutu küçült</strong> seçeneğini kullanın —
+                    o zaman yalnızca görseller sıkıştırılır, metin bozulmaz.</p>
+                <div class="pdf-modal-actions">
+                    <button class="btn btn-shadcn-outline" id="pdf-lossy-cancel" type="button">Vazgeç</button>
+                    <button class="btn btn-shadcn-primary" id="pdf-lossy-confirm" type="button">Görsele Çevir ve İndir</button>
+                </div>
+            </div>
         </div>
 
         <!-- MINIMALIST A4 LIVE PREVIEW INSPECTOR -->

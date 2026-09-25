@@ -530,3 +530,78 @@ test.describe('sıkıştırma mod 1 — görsel yeniden kodlama', () => {
         expect(bytes.length).toBeGreaterThan(input * 0.9);
     });
 });
+
+test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
+    test('T11: kayıp mod onaylanmadan dosya üretilmez', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+
+        let downloaded = false;
+        page.on('download', () => { downloaded = true; });
+
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+
+        // Uyarı modali çıkmalı.
+        await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+        // Vazgeç'e basılınca indirme olmaz ve uygulama kilitlenmez.
+        await page.click('#pdf-lossy-cancel');
+        await expect(page.locator('#pdf-lossy-modal')).toBeHidden();
+        await page.waitForTimeout(500);
+        expect(downloaded).toBe(false);
+        expect(await page.evaluate(() => window.pdfState.busy)).toBe(false);
+    });
+
+    test('T12: onaylanınca metin kaybolur ve dosya büyük ölçüde küçülür', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+        await page.click('#pdf-lossy-confirm');
+
+        const download = await downloadPromise;
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+
+        // Ölçülen değer: 9.81 MB giriş -> 3.53 MB çıktı (%64 küçülme), 150 DPI.
+        // Fixture yüksek gürültülü sentetik bir görüntü; gerçek taranmış
+        // belgelerde oran daha yüksek. Garanti edilebilir alt sınır %50.
+        const input = statSync(fixturePath('scanned.pdf')).size;
+        expect(bytes.length).toBeLessThan(input * 0.5);
+        // Metin tamamen kaybolmuş olmalı.
+        expect((await extractAllText(bytes)).trim()).toBe('');
+        // Sayfa sayısı korunur.
+        expect(await readPageBoxes(bytes)).toHaveLength(5);
+    });
+
+    test('kayıp modda A4 zorunludur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['mixed-sizes.pdf']);
+        await page.locator('#pdf-opt-a4').setChecked(false);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        // Modal çıkmaz, doğrudan dürüst hata verilir.
+        await expect(page.locator('#pdf-lossy-modal')).toBeHidden();
+        await expect(page.locator('#pdf-result')).toContainText('A4');
+    });
+
+    test('kayıp mod uyarısı metni hukuki riski açıkça söyler', async ({ page }) => {
+        await openPdfTab(page);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await uploadFixtures(page, ['scanned.pdf']);
+        await page.click('#pdf-build-btn');
+        const modal = page.locator('#pdf-lossy-modal');
+        await expect(modal).toBeVisible();
+        await expect(modal).toContainText('Metin seçilemez, aranamaz ve kopyalanamaz hale gelecektir');
+        await expect(modal).toContainText('kabul edilemez');
+    });
+});

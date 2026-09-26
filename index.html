@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; connect-src 'self' https://countapi.mileshilliard.com; img-src 'self' data: https:; worker-src 'self' blob:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'none'; img-src 'self' data: https:; worker-src 'self' blob:;">
     <title>Hukuki Kira Sözleşmesi, Tahliye Taahhüdü & Alındı Makbuzu - Shadcn Edition</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Yazı tipi ve ikonlar DEPO İÇİNDEN gelir: sayfa hiçbir dış servise
+         istek yapmaz. Bkz. tests/sync-vendor.mjs -->
+    <link href="vendor/fonts/inter.css" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
     <style>
         :root {
             --background: #d1d8e0;
@@ -995,8 +995,8 @@
             <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Gece/Gündüz Modu Değiştir">
                 <i class="fa-solid fa-moon"></i> <span id="theme-toggle-text">Karanlık Mod</span>
             </button>
-            <div class="badge" id="contract-counter-badge" title="Tüm ziyaretçiler tarafından genel toplamda hazırlanan belge sayısı" style="background: var(--counter-bg); color: var(--counter-fg); border-color: var(--counter-border); transition: transform 0.2s ease; cursor: default;">
-                <i class="fa-solid fa-earth-americas"></i> Toplam <strong id="contract-count-text" style="margin: 0 2px;">15</strong> Belge Hazırlandı
+            <div class="badge" id="contract-counter-badge" title="Bu cihazda hazırlanan belge sayısı. Sayac yalnızca yerel tutulur; hiçbir veri gönderilmez." style="background: var(--counter-bg); color: var(--counter-fg); border-color: var(--counter-border); transition: transform 0.2s ease; cursor: default;">
+                <i class="fa-solid fa-shield-halved"></i> Bu Cihazda <strong id="contract-count-text" style="margin: 0 2px;">0</strong> Belge Hazırlandı
             </div>
             <div class="badge">
                 <i class="fa-solid fa-circle-check"></i> %100 Çevrimdışı (KVKK & Meslek Sırrı Uyumlu)
@@ -2546,45 +2546,24 @@
         renderPreview();
     }
 
-    const COUNTER_API_KEY = 'avmertatis-kira-sozlesmesi-pdf-counter';
-    const COUNTER_OFFSET = 14; // Start baseline from 15 (1 + 14 = 15)
+    // Belge sayaci YALNIZCA yereldir. Sayac sunucusu kaldirildi; boylece
+    // sayfa hicbir dis servise istek yapmaz ve CSP connect-src 'none' ile
+    // bunu uygulama seviyesinde de zorlar.
+    const COUNTER_STORAGE_KEY = 'kira_contract_local_count';
+    const COUNTER_START = 0;
 
-    async function fetchGlobalCount() {
-        try {
-            const res = await fetch(`https://countapi.mileshilliard.com/api/v1/get/${COUNTER_API_KEY}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data && typeof data.value === 'number') {
-                    const total = data.value + COUNTER_OFFSET;
-                    localStorage.setItem('kira_contract_global_count', total.toString());
-                    updateCounterDisplay(total, false);
-                    return;
-                }
-            }
-        } catch (e) {
-            console.log('Global counter offline:', e);
-        }
-        const cached = localStorage.getItem('kira_contract_global_count') || '15';
-        updateCounterDisplay(cached, false);
+    function fetchGlobalCount() {
+        // Cihazda daha önce hazırlanan belge sayısını gösterir.
+        const stored = parseInt(localStorage.getItem(COUNTER_STORAGE_KEY) ?? '', 10);
+        const value = Number.isFinite(stored) ? stored : COUNTER_START;
+        updateCounterDisplay(value, false);
     }
 
     function handlePrint() {
-        let localCount = parseInt(localStorage.getItem('kira_contract_global_count') || '15', 10) + 1;
-        localStorage.setItem('kira_contract_global_count', localCount.toString());
-        updateCounterDisplay(localCount, true);
-
-        try {
-            fetch(`https://countapi.mileshilliard.com/api/v1/hit/${COUNTER_API_KEY}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data && typeof data.value === 'number') {
-                        const total = data.value + COUNTER_OFFSET;
-                        localStorage.setItem('kira_contract_global_count', total.toString());
-                        updateCounterDisplay(total, true);
-                    }
-                }).catch(() => {});
-        } catch (e) {}
-
+        const stored = parseInt(localStorage.getItem(COUNTER_STORAGE_KEY) ?? '', 10);
+        const next = (Number.isFinite(stored) ? stored : COUNTER_START) + 1;
+        localStorage.setItem(COUNTER_STORAGE_KEY, next.toString());
+        updateCounterDisplay(next, true);
         window.print();
     }
 

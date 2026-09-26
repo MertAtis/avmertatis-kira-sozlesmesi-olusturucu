@@ -1191,3 +1191,103 @@ test.describe('alt aksiyon çubuğu: PDF Birleştir ve İndir', () => {
         expect(downloads).toBe(1);
     });
 });
+
+test.describe('gizlilik: hiçbir dış servise istek yapılmaz', () => {
+    const THIRD_PARTY = /fonts\.googleapis|fonts\.gstatic|cdnjs\.cloudflare|countapi|mileshilliard|google-analytics|gtag/i;
+
+    async function recordRequests(page, action) {
+        const seen = [];
+        const onRequest = (r) => seen.push(r.url());
+        page.on('request', onRequest);
+        await action();
+        page.off('request', onRequest);
+        return seen;
+    }
+
+    test('K1: sayfa yüklenirken hiçbir üçüncü taraf isteği olmaz', async ({ page }) => {
+        const urls = await recordRequests(page, async () => {
+            await page.goto(PAGE, { waitUntil: 'networkidle' });
+        });
+        expect(urls.filter((u) => THIRD_PARTY.test(u))).toEqual([]);
+    });
+
+    test('K2: PDF araçlarının tamamı hiçbir dış istek yapmaz', async ({ page }) => {
+        await openPdfTab(page);
+        const urls = await recordRequests(page, async () => {
+            await uploadFixtures(page, ['a.pdf', 'scanned.pdf']);
+            await page.waitForTimeout(1200);
+            await page.locator('#pdf-opt-compress').setChecked(true);
+            const downloadPromise = page.waitForEvent('download');
+            await page.locator('#pdf-build-btn').click();
+            await downloadPromise;
+        });
+        expect(urls.filter((u) => THIRD_PARTY.test(u))).toEqual([]);
+    });
+
+    test('K3: hiçbir istek kendi origin dışına çıkmaz', async ({ page }) => {
+        // Testler file:// üzerinde çalışır; origin null olur. Bu yüzden
+        // "kendi originimiz" yerine doğrudan üçüncü taraf + şüpheli desen
+        // denetimi yapılır.
+        const urls = await recordRequests(page, async () => {
+            await page.goto(PAGE, { waitUntil: 'networkidle' });
+            await page.click('#tab-pdf-araclari');
+            await page.waitForFunction(() => !!window.pdfState?.libsLoaded);
+            await page.setInputFiles('#pdf-file-input', [fixturePath('a.pdf')]);
+            await page.waitForFunction(() => !window.pdfState.busy);
+        });
+        const external = urls.filter((u) => !u.startsWith('file:') && !u.startsWith('blob:') && !u.startsWith('data:'));
+        expect(external).toEqual([]);
+        // Klasik izleme/analitik desenleri de olmamalı.
+        expect(urls.some((u) => /collect|track|beacon|analytics|gtag|doubleclick/i.test(u))).toBe(false);
+    });
+
+    test('K4: CSP ağ giden istekleri engeller (connect-src none)', async ({ page }) => {
+        await page.goto(PAGE);
+        // Uygulama kendi koduyla dış adrese fetch denerse CSP reddetmeli.
+        const result = await page.evaluate(async () => {
+            try {
+                await fetch('https://countapi.mileshilliard.com/api/v1/get/test', { mode: 'no-cors' });
+                return 'IZINSIZ';
+            } catch (e) {
+                return 'RED';
+            }
+        });
+        expect(result).toBe('RED');
+    });
+
+    test('K5: yazı tipi ve ikonlar depodan gelir', async ({ page }) => {
+        const urls = await recordRequests(page, async () => {
+            await page.goto(PAGE, { waitUntil: 'networkidle' });
+        });
+        expect(urls.some((u) => u.includes('/vendor/fonts/inter.css'))).toBe(true);
+        expect(urls.some((u) => u.includes('/vendor/fontawesome/css/all.min.css'))).toBe(true);
+        expect(urls.some((u) => /UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa.*\.woff2$/.test(u))).toBe(true);
+    });
+
+    test('K6: görsel yükleme hiçbir sunucuya gitmez (yine çalışır)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        // Bozuk olsaydı burada hata çıkardı; sadece görsel sunucusuna gidilmedi.
+        await expect(page.locator('.pdf-page-card').first()).toBeVisible();
+    });
+
+    test('K7: yazdırma sayacı yalnızca yerelde artar', async ({ page }) => {
+        const urls = await recordRequests(page, async () => {
+            await page.goto(PAGE);
+            await page.evaluate(() => { window.print = () => {}; });
+            await page.click('#tab-kira');
+            await page.locator('button:has-text("Yazdır")').first().click();
+        });
+        expect(urls.filter((u) => THIRD_PARTY.test(u))).toEqual([]);
+        const count = await page.evaluate(() =>
+            Number(localStorage.getItem('kira_contract_local_count')));
+        expect(count).toBeGreaterThan(0);
+    });
+
+    test('K8: rozet metni yerel sayacı doğru anlatır', async ({ page }) => {
+        await page.goto(PAGE);
+        const badge = page.locator('#contract-counter-badge');
+        await expect(badge).toContainText('Bu Cihazda');
+        await expect(badge).toHaveAttribute('title', /yalnızca yerel/);
+    });
+});

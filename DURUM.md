@@ -1,13 +1,32 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 27 Eylül 2026
-**Durum:** 🟢 **`npm test` 147/147 geçiyor, 0 kırmızı. Duman + gizlilik + dış bağımlılık testleri yeşil.**
-**Branch:** `main`, commit `586bd5c` (canlıya **push EDİLMEDİ**)
-**Canlı site:** hâlâ `d0f0045` (testleri geçen eski sürüm).
+**Son güncelleme:** 27 Eylül 2026 (avukat turu)
+**Durum:** 🟢 **`npm test` 175 geçti, 1 atlandı (canlı site testi), 0 kırmızı.**
+**Dal:** `main-g0uefy` — `main`'e (canlı) aktarım kullanıcı onayı bekliyor.
+**Canlı site:** `origin/main` = `1353bd9`. (Eski "push EDİLMEDİ" notu yanlıştı.)
 
-> ⚠️ Canlıya almadan önce: `git push origin main` → tarayıcıda elle duman testi.
-> Otomatik karşılığı `tests/smoke.spec.mjs` (6 sekme, uçtan uca, sıfır ağ isteği,
-> sıfır konsol hatası) — push'tan SONRA da çalıştır.
+> Canlıya aldıktan sonra: `npx playwright test tests/privacy-live.spec.mjs tests/smoke.spec.mjs`
+> Bulut oturumunda tarayıcı: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`. Test PDF'leri: `npm run fixtures`.
+
+## Avukat turu (plan: `docs/superpowers/plans/2026-09-27-avukat-pdf-mukemmellik.md`)
+
+Her bulgu için önce kırmızı test, sonra düzeltme.
+
+| # | Hata / özellik | Sonuç |
+|---|---|---|
+| 1.1 | Birleştirmede ortak font/logo her sayfaya kopyalanıyordu (~10× şişme) | Dosya başına tek kopya |
+| 1.2 | A4 modunda form alanları / damgalar kayboluyordu | Görünümleri sayfaya gömülür; görünümsüz alan için uyarı |
+| 1.3 | Üst düğümden miras `/Rotate` okunmuyordu | `getRotation()` |
+| 1.4 | CropBox yok sayılıyordu (gizli kenar görünüyordu) | Görünür kutu = CropBox ∩ MediaBox |
+| 1.5 | Kayıpsız tekilleştirme yalnız baytlara bakıyordu | Sözlük de eşit olmalı; her çıktıda çalışır |
+| 1.6 | 1-bit dönüşümü `/Decode` vb. özellikleri kaçırıyordu | Beyaz liste |
+| 1.7 | Yatay sayfa dikey A4'e sıkışıyordu | Yatay A4 (varsayılan açık seçenek) |
+| 1.8 | Temizlik; belge başlığı = çıktı dosya adı | ✓ |
+| 2 | Düzenlenebilir dosya adı; "Mahkemeye/UYAP" ve "E-posta için küçült" hızlı ayarları | ✓ (`tests/avukat-ux.spec.mjs`) |
+| 3 | CSP `img-src`'den `https:` kaldırıldı; kütüphane/vendor SHA-256 sabitleme (U6); GitHub Actions ile her push'ta test | ✓ |
+
+Ertelenen (sonraki tur): dosya sıralama, klavyeyle sayfa taşıma, büyük önizleme, EK/sayfa no etiketi.
+E-imza uyarısı kullanıcı isteğiyle yapılmadı.
 
 ---
 

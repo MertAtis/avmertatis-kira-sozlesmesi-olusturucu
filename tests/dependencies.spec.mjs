@@ -6,9 +6,36 @@ import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP_FILES = ['index.html', 'pdf-araclari.js', 'pdf-sayfalar.js', 'pdf-cikti.js'];
+
+const PINNED = {
+    'pdf-lib.min.js': '0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f',
+    'pdf.min.js': '5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946',
+    'pdf.worker.min.js': 'feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b',
+    'vendor/fontawesome/css/all.min.css': 'b8eb6937afd970383594d6955d32289d6fc751601226e03eb62a3ebab65db99a',
+    'vendor/fontawesome/webfonts/fa-brands-400.woff2': '748332090c4b8e20f95d0ff59f0be20fa9c889359d3b36d4b886d73376054207',
+    'vendor/fontawesome/webfonts/fa-regular-400.woff2': '8e7e5ea1b15f62ab14dbd41768e8fbcd21cc859a4ea5da812457ee714299fb35',
+    'vendor/fontawesome/webfonts/fa-solid-900.woff2': '7152a6933ee3d690ec2af3d09da9d701723d16aa3410a6d80f28ff8866f3b880',
+    'vendor/fontawesome/webfonts/fa-v4compatibility.woff2': '694a17c3d9d6c05f8aac63c544615552a4b220e9a4de863d87341a6bcfc1bc8d',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7W0Q5n-wU.woff2': 'aebf2ab4a4ce6810d73c1ac7be7cafb4e5ec4cee2d6db5fb3e09691747ec4bd6',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2': 'c940764593d0fe5d596be327ca7558855e018039fb78509aa21921fd3644c3e4',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1pL7W0Q5n-wU.woff2': '46dd4cdca58c26ae87cc6927657bf83b2e8abfc39ffd0ab176e301a8d28d22bf',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7W0Q5n-wU.woff2': 'a28eb6d3ccb534ae0c94ca999371df024aab60b08c3c8a5720ee9e32fa0faaa2',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7W0Q5n-wU.woff2': 'fccca918fea40089dacadc7045861314d1a6bc91f1f323cc1eeb22ebcdb321b5',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7W0Q5n-wU.woff2': 'a2e2c783ca6f9c20486e81e72a279203e86730bbf8f01ff6a5ee9dbd09e1c271',
+    'vendor/fonts/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7W0Q5n-wU.woff2': '8db00ff46c67b22cda8bed865acf7077651cac8d2841d5b40980556b48961931',
+    'vendor/fonts/inter.css': '1c761aefd4ba31eed5a67f9f37b956d7c20aaf1d2ae648acce27570f1101260b',
+};
+
+/** Sabitlenmesi gereken dosyalar: kök kütüphaneler + vendor/ altındaki her şey. */
+function listPinnable() {
+    const libs = ['pdf-lib.min.js', 'pdf.min.js', 'pdf.worker.min.js'];
+    const vendor = walk(join(REPO, 'vendor')).map((f) => f.slice(REPO.length + 1).split('\\').join('/'));
+    return [...libs, ...vendor];
+}
 
 function walk(dir, out = []) {
     for (const name of readdirSync(dir)) {
@@ -99,5 +126,22 @@ test.describe('dış bağımlılık yasağı', () => {
         expect(csp).toContain("connect-src 'none'");
         expect(csp).not.toContain('unsafe-eval');
         expect(csp).not.toContain('wasm-unsafe-eval');
+        // Görseller de yalnızca depodan/yerelden gelir: uzak görsel, açılan
+        // sayfanın dışarıya istek atmasının (izleme pikseli) kapısıdır.
+        const imgSrc = csp.match(/img-src([^;]*)/)?.[1] || '';
+        expect(imgSrc.trim().split(/\s+/).sort()).toEqual(["'self'", 'blob:', 'data:']);
+    });
+
+    test('U6: depodaki kütüphane ve vendor dosyaları değiştirilmemiş (SHA-256)', () => {
+        // Bir kütüphane dosyası sessizce değişirse (elle düzenleme, bozuk
+        // kopya, tedarik zinciri) test kırmızıya döner. Bilinçli güncellemede
+        // `npm run sync-libs` sonrası bu özetler de güncellenir.
+        const files = [...Object.keys(PINNED)];
+        const actual = listPinnable();
+        expect(actual.sort(), 'sabitlenmemiş yeni vendor dosyası').toEqual(files.sort());
+        for (const [rel, sha] of Object.entries(PINNED)) {
+            const hash = createHash('sha256').update(readFileSync(join(REPO, rel))).digest('hex');
+            expect(hash, `${rel} değişmiş`).toBe(sha);
+        }
     });
 });

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'none'; img-src 'self' data: https:; worker-src 'self' blob:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'none'; img-src 'self' data: blob:; worker-src 'self' blob:;">
     <title>Hukuki Kira Sözleşmesi, Tahliye Taahhüdü & Alındı Makbuzu - Shadcn Edition</title>
     <!-- Yazı tipi ve ikonlar DEPO İÇİNDEN gelir: sayfa hiçbir dış servise
          istek yapmaz. Bkz. tests/sync-vendor.mjs -->
@@ -771,6 +771,10 @@
             line-height: 1.4;
         }
         [data-theme="dark"] .pdf-file-error-msg { color: #f87171; }
+
+        .pdf-preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .pdf-name-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
+        .pdf-name-row input { flex: 1 1 auto; min-width: 0; padding: 6px 8px; border: 1px solid var(--border, #d4d4d8); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
 
         .pdf-page-toolbar {
             display: flex;
@@ -1558,6 +1562,21 @@
                     <!-- AŞAMA 3: ÇIKTI -->
                     <div class="pdf-stage" id="pdf-stage-output">
                         <div class="pdf-stage-head"><span class="pdf-stage-num">3</span> Çıktı</div>
+                        <!-- Hızlı ayar: yalnızca aşağıdaki kutuları işaretler; sonra elle değiştirilebilir. -->
+                        <div class="pdf-preset-row" role="group" aria-label="Hızlı ayar">
+                            <span>Hızlı ayar:</span>
+                            <button class="btn btn-shadcn-outline" type="button" id="pdf-preset-court">
+                                <i class="fa-solid fa-scale-balanced"></i> Mahkemeye / UYAP'a sunulacak
+                            </button>
+                            <button class="btn btn-shadcn-outline" type="button" id="pdf-preset-email">
+                                <i class="fa-solid fa-envelope"></i> E-posta için küçült
+                            </button>
+                        </div>
+                        <p class="pdf-mode-note" id="pdf-preset-note" aria-live="polite"></p>
+                        <label class="pdf-name-row" for="pdf-output-name">
+                            <span>Dosya adı:</span>
+                            <input type="text" id="pdf-output-name" maxlength="120" autocomplete="off" spellcheck="false">
+                        </label>
                         <label class="pdf-check">
                             <input type="checkbox" id="pdf-opt-a4" checked>
                             <span><i class="fa-solid fa-arrows-up-down-left-right"></i> Her sayfayı A4'e sığdır (baskıya uygun)</span>

@@ -670,10 +670,63 @@ function pdfSafeFileName(name) {
 }
 
 /** Tek dosya indiriliyorsa adi korunur, birden fazlasi birlestirilmis ad alir. */
-function pdfOutputFileName() {
+function pdfDefaultOutputFileName() {
     const names = pdfState.files.filter((f) => f.doc);
     if (names.length === 1) return pdfSafeFileName(names[0].name);
     return 'birlesmis-belge.pdf';
+}
+
+/**
+ * Kullanıcı "Dosya adı" kutusuna bir ad yazdıysa o kullanılır (güvenli hale
+ * getirilir, `.pdf` uzantısı garanti edilir); boşsa varsayılan ad.
+ */
+function pdfOutputFileName() {
+    const typed = document.getElementById('pdf-output-name')?.value?.trim();
+    if (!typed) return pdfDefaultOutputFileName();
+    // Esas numarası gibi '/' içeren adlar (2026/123) kırpılmasın: yol
+    // ayırıcısı '-' olur. pdfSafeFileName aksi halde yalnız son parçayı alır.
+    const flat = typed.replace(/[\\/]+/g, '-');
+    const withExt = /\.pdf$/i.test(flat) ? flat : `${flat}.pdf`;
+    const safe = pdfSafeFileName(withExt);
+    return /\.pdf$/i.test(safe) ? safe : `${safe}.pdf`;
+}
+
+/** Varsayılan ad, boş kutuda yer tutucu olarak görünür. */
+function pdfSyncOutputNamePlaceholder() {
+    const input = document.getElementById('pdf-output-name');
+    if (input) input.placeholder = pdfDefaultOutputFileName();
+}
+
+/**
+ * Hızlı ayarlar. Yalnızca mevcut kutuları işaretler; kullanıcı sonradan
+ * istediğini değiştirebilir.
+ *  - court: A4, kayıpsız sıkıştırma, görsele çevirme KAPALI (metin seçilebilir,
+ *    görünüm birebir aynı).
+ *  - email: A4, kaliteyi düşürerek küçült (orta), görsele çevirme KAPALI.
+ */
+function pdfApplyPreset(kind) {
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.checked = value; };
+    const radio = (name, value) => {
+        const el = document.querySelector(`input[name="${name}"][value="${value}"]`);
+        if (el) el.checked = true;
+    };
+    set('pdf-opt-a4', true);
+    set('pdf-opt-landscape', true);
+    set('pdf-opt-compress', true);
+    set('pdf-opt-lossy', false);
+    if (kind === 'email') {
+        radio('pdf-compress-mode', 'quality');
+        radio('pdf-quality', '0.7');
+    } else {
+        radio('pdf-compress-mode', 'lossless');
+    }
+    pdfReadOutputState();
+    const note = document.getElementById('pdf-preset-note');
+    if (note) {
+        note.textContent = kind === 'email'
+            ? 'E-posta ayarı: görseller orta kalitede küçültülür, metin seçilebilir kalır. Resmî sunum için kullanmayın.'
+            : 'Mahkeme/UYAP ayarı: A4, kayıpsız — görünüm birebir aynı, metin seçilebilir.';
+    }
 }
 
 function pdfTriggerDownload(bytes, fileName) {
@@ -1752,6 +1805,10 @@ function pdfUpdateBuildButton() {
     });
 
     document.getElementById('pdf-build-btn')?.addEventListener('click', pdfOnBuildClick);
+    document.getElementById('pdf-preset-court')?.addEventListener('click', () => pdfApplyPreset('court'));
+    document.getElementById('pdf-preset-email')?.addEventListener('click', () => pdfApplyPreset('email'));
+    pdfBus.on('files', pdfSyncOutputNamePlaceholder);
+    pdfSyncOutputNamePlaceholder();
     pdfBus.on('pages', pdfUpdateBuildButton);
     pdfBus.on('busy', pdfUpdateBuildButton);
     pdfReadOutputState();

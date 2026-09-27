@@ -73,6 +73,10 @@
 
 ## AŞAMA 2 — Avukat kullanımı (UX)
 
+> **Kullanıcı kararı (27.09.2026): KISALTILMIŞ kapsam.** Bu turda yalnız madde
+> **5 (çıktı adı) ve 7 (ön ayar)** yapılır. Madde 1 (e-imza uyarısı) kullanıcı
+> isteğiyle KALDIRILDI; madde 2, 3, 4, 6 sonraki tura ertelendi.
+
 1. **E-imza uyarısı:** yüklenen dosyada `/FT /Sig` alanı veya `/ByteRange` varsa dosya satırında ve çıktı öncesi belirgin uyarı: "Bu belge elektronik imzalı. Birleştirme/düzenleme imzayı geçersiz kılar; imzalı orijinali ayrıca sunun." Fixture: `signed-like.pdf` (sahte `/Sig` alanı + `/ByteRange`).
 2. **Dosya sıralama:** dosya satırında ↑/↓ düğmeleri; o dosyanın sayfaları blok olarak taşınır; geri alınabilir.
 3. **Klavyeyle sayfa taşıma:** her kartta "Sola taşı / Sağa taşı" düğmeleri (`aria-label`, Tab ile ulaşılır, ilk/son kartta devre dışı). Sürükle-bırak var ise korunur.

@@ -177,11 +177,19 @@ function pdfRenderFileList() {
 
     const rows = pdfState.files.map((file) => {
         if (file.error) {
+            // Kaldırma düğmesi YOKTU: reddedilen dosya satırı kalıcı olarak
+            // ekranda kalıyor ve kullanıcı onu temizleyemiyordu. Şimdi hem
+            // elle kapatılabiliyor hem de birkaç saniye sonra kendiliğinden
+            // kayboluyor (bkz. pdfDismissFileError).
             return `<div class="pdf-file-row is-error" data-file-id="${file.id}">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span class="pdf-file-name">${pdfEscapeHtml(file.name)}</span>
                 <span class="pdf-file-meta">Yüklenemedi</span>
                 <div class="pdf-file-error-msg">${file.error}</div>
+                <button class="pdf-page-btn" type="button" data-dismiss-error="${file.id}"
+                        title="Uyarıyı kapat" aria-label="Uyarıyı kapat">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>`;
         }
         return `<div class="pdf-file-row" data-file-id="${file.id}">
@@ -206,6 +214,25 @@ function pdfRenderFileList() {
     }
 
     list.innerHTML = rows.join('');
+}
+
+// Reddedilen dosya uyarısı 3 saniye sonra kendiliğinden kaybolur. Kaldırma
+// düğmesi olmayan bir hata satırı kalıcı kalırsa liste kapatılamayan uyarılarla
+// dolar ve kullanıcı temizleyemez. Elle kapatma düğmesi de var
+// (data-dismiss-error).
+const ERROR_DISMISS_MS = 3000;
+
+function pdfDismissFileError(fileId) {
+    const index = pdfState.files.findIndex((f) => f.id === fileId);
+    if (index === -1) return;
+    // Yalnızca HATA kaydı temizlenir; yüklenmiş belgeler kullanıcının emeğidir.
+    if (!pdfState.files[index].error) return;
+    pdfState.files.splice(index, 1);
+    pdfBus.emit('files');
+}
+
+function pdfScheduleErrorDismiss(fileId) {
+    setTimeout(() => pdfDismissFileError(fileId), ERROR_DISMISS_MS);
 }
 
 function pdfRemoveFile(fileId) {
@@ -264,6 +291,7 @@ async function addFiles(fileList) {
                 record.error = PDF_ERROR_MESSAGES.tooLarge;
                 pdfState.files.push(record);
                 pdfBus.emit('files');
+                pdfScheduleErrorDismiss(record.id);
                 continue;
             }
 
@@ -274,6 +302,7 @@ async function addFiles(fileList) {
                 record.error = PDF_ERROR_MESSAGES.totalTooLarge;
                 pdfState.files.push(record);
                 pdfBus.emit('files');
+                pdfScheduleErrorDismiss(record.id);
                 continue;
             }
 
@@ -315,6 +344,7 @@ async function addFiles(fileList) {
 
             pdfState.files.push(record);
             pdfBus.emit('files');
+            if (record.error) pdfScheduleErrorDismiss(record.id);
         }
 
         pdfBus.emit('pages');
@@ -371,7 +401,15 @@ function pdfShowError(fileName, message) {
     // Dosya listesindeki "kaldır" butonları (olay delegasyonu).
     document.getElementById('pdf-file-list')?.addEventListener('click', (e) => {
         const button = e.target.closest('[data-remove-file]');
-        if (button) pdfRemoveFile(Number(button.dataset.removeFile));
+        if (button) {
+            pdfRemoveFile(Number(button.dataset.removeFile));
+            return;
+        }
+        const dismiss = e.target.closest('[data-dismiss-error]');
+        if (dismiss) {
+            pdfDismissFileError(Number(dismiss.dataset.dismissError));
+            return;
+        }
     });
 
     pdfBus.on('files', pdfRenderFileList);
@@ -391,6 +429,7 @@ window.pdfFormatBytes = pdfFormatBytes;
 window.pdfSetBusy = pdfSetBusy;
 window.pdfShowError = pdfShowError;
 window.pdfRemoveFile = pdfRemoveFile;
+window.pdfDismissFileError = pdfDismissFileError;
 window.pdfShowError = pdfShowError;   // test edilebilirlik: kalıcılık sözleşmesi
 window.pdfRetryLibs = pdfRetryLibs;
 window.pdfLibsErrorHtml = pdfLibsErrorHtml;

@@ -145,6 +145,29 @@ test.describe('dosya yükleme ve hata yönetimi', () => {
         await expect(page.locator('#pdf-file-list .pdf-file-name')).toHaveCount(2);
     });
 
+    test('ED1: reddedilen dosya uyarısı kendiliğinden KAYBOLUR', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['not-a-pdf.pdf']);
+        await expect(page.locator('#pdf-file-list')).toContainText('geçerli bir PDF değil');
+
+        // Uyarı kalıcı bir engel olmamalı: birkaç saniye sonra kendiliğinden
+        // kaybolur (kaldırma düğmesi olmayan bir satırda takılı kalıyordu).
+        await expect(page.locator('#pdf-file-list .is-error')).toHaveCount(0, { timeout: 8000 });
+
+        // Sessizce de kaybolmamalı: durumdan da düşmüş olmalı.
+        expect(await page.evaluate(() => pdfState.files.length)).toBe(0);
+    });
+
+    test('ED2: reddedilen dosya uyarısı elle de kapatılabilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['not-a-pdf.pdf']);
+        const row = page.locator('#pdf-file-list .pdf-file-row.is-error');
+        await expect(row).toHaveCount(1);
+        await row.locator('[data-dismiss-error]').click();
+        await expect(row).toHaveCount(0);
+        expect(await page.evaluate(() => pdfState.files.length)).toBe(0);
+    });
+
     test('T14b: PDF olmayan dosya reddedilir', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['not-a-pdf.pdf']);

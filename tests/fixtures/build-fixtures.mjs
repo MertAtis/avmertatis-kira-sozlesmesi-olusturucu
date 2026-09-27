@@ -13,6 +13,7 @@ import { PDFDocument, PDFName, PDFRawStream, PDFArray, PDFDict, StandardFonts, r
 const OUT = join(dirname(fileURLToPath(import.meta.url)));
 
 const A4 = [595.28, 841.89];
+const A4_LANDSCAPE = [841.89, 595.28];
 const A5 = [419.53, 595.28];
 const LETTER = [612, 792];
 
@@ -687,6 +688,137 @@ function buildPatternPdf(W, H) {
 }
 
 // ---------------------------------------------------------------------------
+// R1 fixture'ı: /Contents dizisinde AYRAÇSIZ birleşme (pdfBakeAnnotationsForA4)
+// ---------------------------------------------------------------------------
+
+// R1: pdfBakeAnnotationsForA4 orijinal içeriği annotation çizimleriyle
+// birleştirirken parçalar arasına ayraç KOYMAZSA komşu tokenlar birleşip
+// geçersiz operatöre dönüşür (ör. "ET" + "BT" -> "ETBT"). Bu sayfa A5'tir
+// (A4 modunda yeniden ölçeklenir, embedPage yolu tetiklenir) ve /Contents'i
+// TAM "ET" ile biten bir akış + "BT" ile başlayan ikinci bir akıştan oluşan
+// bir DİZİDİR (aralarında baştan/sondan boşluk YOK). Bir annotation (AP'li)
+// eklenir ki baking gerçekten çalışsın.
+async function buildContentSeamFixture() {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage(A5);
+
+    // Gömme gerekmeyen standart Type1 fontu (Helvetica).
+    const fontRef = doc.context.register(doc.context.obj({
+        Type: 'Font', Subtype: 'Type1', BaseFont: 'Helvetica'
+    }));
+    page.node.set(PDFName.of('Resources'), doc.context.obj({ Font: { F1: fontRef } }));
+
+    const part1 = 'BT /F1 14 Tf 30 500 Td (PARCA BIR) Tj ET';
+    const part2 = 'BT /F1 14 Tf 30 450 Td (PARCA IKI) Tj ET';
+    const ref1 = doc.context.register(
+        PDFRawStream.of(doc.context.obj({}), Buffer.from(part1, 'latin1')));
+    const ref2 = doc.context.register(
+        PDFRawStream.of(doc.context.obj({}), Buffer.from(part2, 'latin1')));
+    page.node.set(PDFName.of('Contents'), mixedArray(doc, [ref1, ref2]));
+
+    // Baking'i TETİKLEMEK için AP'li bir annotation (asıl konu bu değil,
+    // yalnızca embedPage öncesi gömme yolunun çalışmasını sağlar).
+    const apRef = doc.context.register(doc.context.flateStream(
+        '0 0 1 rg 0 0 20 20 re f',
+        { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 20, 20] }
+    ));
+    const annotRef = doc.context.register(doc.context.obj({
+        Type: 'Annot', Subtype: 'Widget', Rect: [10, 10, 30, 30], F: 4, AP: { N: apRef }
+    }));
+    page.node.set(PDFName.of('Annots'), mixedArray(doc, [annotRef]));
+
+    made.push(write('content-seam.pdf', await doc.save()));
+}
+
+// ---------------------------------------------------------------------------
+// R3 fixture'ı: /Contents OLMAYAN sayfada annotation (bkz. pdfPlaceOnA4)
+// ---------------------------------------------------------------------------
+
+// R3: /Contents'i hiç olmayan (tamamen boş) bir sayfada annotation varsa,
+// bake erken çıkıp pdfPlaceOnA4 de boş A4 döndürüyordu — annotation SESSİZCE
+// kayboluyordu. Bu fixture'da sayfanın /Contents'i YOK ama bir annotation'ın
+// AP'si "DAMGA" metnini çiziyor; A4 çıktısında bu metin çıkarılabilir olmalı.
+async function buildNoContentsAnnotFixture() {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage(A5);
+    // pdf-lib addPage() varsayılan olarak boş bir /Contents akışı ekler;
+    // gerçek "Contents yok" durumunu ölçmek için o anahtar SİLİNİR.
+    page.node.delete(PDFName.of('Contents'));
+
+    const fontRef = doc.context.register(doc.context.obj({
+        Type: 'Font', Subtype: 'Type1', BaseFont: 'Helvetica'
+    }));
+    const apRef = doc.context.register(doc.context.flateStream(
+        'BT /F1 28 Tf 20 30 Td (DAMGA) Tj ET',
+        { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 120, 60],
+          Resources: { Font: { F1: fontRef } } }
+    ));
+    const annotRef = doc.context.register(doc.context.obj({
+        Type: 'Annot', Subtype: 'Widget', Rect: [40, 40, 160, 100], F: 4,
+        AP: { N: apRef }
+    }));
+    page.node.set(PDFName.of('Annots'), mixedArray(doc, [annotRef]));
+
+    made.push(write('no-contents-annot.pdf', await doc.save()));
+}
+
+// ---------------------------------------------------------------------------
+// 1.5 fixture'ı: aynı bayt, farklı /Decode taşıyan iki görsel
+// ---------------------------------------------------------------------------
+
+// 1.5: eski tekilleştirme yalnızca BAYTLARI karşılaştırıyordu; aynı bayt +
+// farklı /Decode taşıyan iki görsel yanlışlıkla BİRLEŞTİRİLİYORDU (biri
+// bozuluyordu). Bu iki sayfa AYNI ham piksel baytlarını kullanır, ama
+// yalnızca ikincisinde /Decode [1 0] vardır.
+async function buildSameBytesDiffDecodeFixture() {
+    const W = 300, H = 300;
+    const doc = await PDFDocument.create();
+    const px = Buffer.alloc(W * H);
+    for (let i = 0; i < px.length; i++) px[i] = (i * 37) % 256;
+
+    await pageWithRawImage(doc, {
+        width: W, height: H, colorSpace: () => PDFName.of('DeviceGray'), pixels: px
+    });
+    await pageWithRawImage(doc, {
+        width: W, height: H, colorSpace: () => PDFName.of('DeviceGray'), pixels: px, decode: [1, 0]
+    });
+    made.push(write('same-bytes-diff-decode.pdf', await doc.save()));
+}
+
+// ---------------------------------------------------------------------------
+// 1.6 fixture'ı: saf siyah-beyaz görsel + /Decode (beyaz liste dışı anahtar)
+// ---------------------------------------------------------------------------
+
+// 1.6: 1-bit dönüşümü sözlük özelliklerini (özellikle /Decode) yok sayıyordu.
+// Bu görselin RAW baytları saf 0/255'tir (dönüşüm "temiz" sanır) ama
+// /Decode [1 0] taşır: dönüşüm bunu yok sayıp yeni 1-bit görselde /Decode'u
+// KAYBEDERSE görünüm TERS ÇEVRİLMİŞ olur — bu yüzden ATLANMALIDIR.
+async function buildPureBwDecodeFixture() {
+    const W = 300, H = 300;
+    const px = Buffer.alloc(W * H, 255);
+    for (let y = 100; y < 200; y++) {
+        for (let x = 50; x < 250; x++) px[y * W + x] = 0;
+    }
+    const doc = await PDFDocument.create();
+    await pageWithRawImage(doc, {
+        width: W, height: H, colorSpace: () => PDFName.of('DeviceGray'), pixels: px, decode: [1, 0]
+    });
+    made.push(write('pure-bw-decode.pdf', await doc.save()));
+}
+
+// ---------------------------------------------------------------------------
+// 1.7 fixture'ı: tam YATAY A4 sayfa (döndürülmemiş) — doğrudan eklenmeli
+// ---------------------------------------------------------------------------
+
+async function buildLandscapeA4Fixture() {
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    const page = doc.addPage(A4_LANDSCAPE);
+    page.drawText('TAM YATAY A4', { x: 40, y: 500, size: 22, font });
+    made.push(write('landscape-a4.pdf', await doc.save()));
+}
+
+// ---------------------------------------------------------------------------
 // A1.2 fixture'ları: form alanı (Widget) görünümü, gizli annotation, AP'siz widget
 // ---------------------------------------------------------------------------
 
@@ -943,11 +1075,21 @@ async function build() {
     // kalmalı.
     await buildFormFieldFixtures();
 
+    // PART A inceleme düzeltmeleri: içerik akışı ayracı (R1) ve /Contents
+    // olmayan sayfada annotation (R3).
+    await buildContentSeamFixture();
+    await buildNoContentsAnnotFixture();
+
+    // 1.7: tam yatay A4 sayfa (döndürülmemiş) doğrudan eklenmelidir.
+    await buildLandscapeA4Fixture();
+
     // --- Sıkıştırma kör noktalarını kapatan fixture'lar -----------------
     // Bunlar pdf-lib ile doğrudan YAPILAMAZ; sözlük girdileri elle kurulur.
     await buildColorSpaceFixtures();
     await buildStructureFixtures();
     await buildLosslessFixtures();
+    await buildSameBytesDiffDecodeFixture();
+    await buildPureBwDecodeFixture();
 
     made.push(write('encrypted.pdf', buildEncryptedPdf()));
     made.push(write('corrupt.pdf', buildCorruptPdf()));

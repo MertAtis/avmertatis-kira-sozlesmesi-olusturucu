@@ -91,12 +91,25 @@ function pdfVisibleBox(page) {
  *
  * Dönüşüm matematiği `tests/verify-a4-rotation.mjs` ile sayısal olarak
  * doğrulanmıştır: dört dönüşme açısında da üç köşe işareti doğru köşeye düşer.
+ *
+ * 1.7: `landscape` açıksa VE döndürme sonrası GÖRÜNÜR kutu yataysa (genişlik
+ * > yükseklik), hedef A4 de YATAY alınır (841.89x595.28) — dikey A4'e
+ * sığdırıp sayfanın çoğunu boş bırakmak yerine, yatay içerik yatay kağıda
+ * ölçek ~%41 daha büyük basılır. Kapalıyken ya da içerik zaten dikeyken
+ * davranış DEĞİŞMEZ (her zaman dikey A4).
  */
-async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
+async function pdfPlaceOnA4(targetDoc, srcPage, rotation, landscape = false) {
     const box = pdfVisibleBox(srcPage);
     const w = box.right - box.left;
     const h = box.top - box.bottom;
-    const target = targetDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+
+    const quarterTurn = rotation === 90 || rotation === 270;
+    const boxW = quarterTurn ? h : w;
+    const boxH = quarterTurn ? w : h;
+    const useLandscape = landscape && boxW > boxH;
+    const targetW = useLandscape ? A4_HEIGHT : A4_WIDTH;
+    const targetH = useLandscape ? A4_WIDTH : A4_HEIGHT;
+    const target = targetDoc.addPage([targetW, targetH]);
 
     // Bozuk PDF'lerde MediaBox sıfır ya da geçersiz olabilir; ölçek NaN olur
     // ve bozuk çıktı yazılır. Böyle sayfalar boş A4 olarak bırakılır.
@@ -104,13 +117,10 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
         return target;
     }
 
-    const quarterTurn = rotation === 90 || rotation === 270;
-    const boxW = quarterTurn ? h : w;
-    const boxH = quarterTurn ? w : h;
-    const scale = Math.min(A4_WIDTH / boxW, A4_HEIGHT / boxH);
+    const scale = Math.min(targetW / boxW, targetH / boxH);
 
-    const dx = (A4_WIDTH - boxW * scale) / 2;
-    const dy = (A4_HEIGHT - boxH * scale) / 2;
+    const dx = (targetW - boxW * scale) / 2;
+    const dy = (targetH - boxH * scale) / 2;
 
     // Döndürülmüş içeriğin kapsayıcı kutusunun sol-alt köşesi (ölçekli birimler).
     // Dönen içeriğin YÜKSEKLİĞİ kaynak GENİŞLİĞİNDEN gelir.
@@ -263,6 +273,24 @@ function pdfConcatBytes(parts) {
 }
 
 /**
+ * R1: /Contents dizisindeki BİRDEN FAZLA akış parçasını, aralarına ayraç
+ * KOYARAK birleştirir. PDF içerik akışı bir TOKEN dizisidir; parçaların
+ * baştaki/sondaki boşluğu garanti değildir. Ayraç konulmazsa komşu tokenlar
+ * birleşip geçersiz bir operatöre dönüşebilir (ör. "...ET" + "BT..." ->
+ * "...ETBT..."), bu da o sınırdaki içeriğin bozulmasına yol açar.
+ */
+function pdfJoinContentParts(parts) {
+    if (parts.length <= 1) return pdfConcatBytes(parts);
+    const nl = new TextEncoder().encode('\n');
+    const withSeparators = [];
+    parts.forEach((p, i) => {
+        if (i > 0) withSeparators.push(nl);
+        withSeparators.push(p);
+    });
+    return pdfConcatBytes(withSeparators);
+}
+
+/**
  * A4 modunda embedPage yalnızca sayfanın içerik akışını Form XObject'e
  * çevirir; /Annots (form alanı görünümü, damga, not) SONUÇTA KAYBOLUR
  * (ölçüm: form alanı 1 -> 0). Bu yüzden embedPage ÇAĞRILMADAN ÖNCE her
@@ -277,14 +305,19 @@ function pdfConcatBytes(parts) {
  * Yalnızca YENİDEN ÖLÇEKLENEN sayfalarda (embedPage'e giren) çağrılır; tam
  * A4 sayfa /Annots'unu olduğu gibi korur (bkz. pdfBuildOutput).
  *
+ * R3: sayfanın /Contents'i HİÇ YOKSA (tamamen boş sayfa) eskiden burada
+ * erken çıkılıyordu; embedPage de içeriksiz sayfayı boş A4 bırakıyordu ve
+ * annotation'lar SESSİZCE kayboluyordu. Artık /Contents yokluğu erken
+ * çıkış NEDENİ değildir — annotation'lar varsa yalnızca ONLARIN çizimiyle
+ * yeni bir içerik akışı KURULUR (aşağıda `streams` boş dizi olur).
+ *
  * Dönüş: görünümü olmayan (/AP'siz) widget sayısı.
  */
 function pdfBakeAnnotationsForA4(doc, page) {
     const { PDFName, PDFDict, PDFArray } = PDFLib;
     const node = page.node;
-    if (!node.Contents()) return 0;                  // içerik yok: gömülecek bir şey yok
     const annots = node.Annots();
-    if (!annots || annots.size() === 0) return 0;
+    if (!annots || annots.size() === 0) return 0;     // annotation yok: gömülecek bir şey yok
 
     let noAppearance = 0;
     const drawOps = [];
@@ -336,12 +369,19 @@ function pdfBakeAnnotationsForA4(doc, page) {
     if (drawOps.length === 0) return noAppearance;
 
     // Orijinal içeriği q...Q ile sar (grafik durumu annotation çizimine
-    // SIZMASIN), annotation çizimlerini SONA ekle.
+    // SIZMASIN), annotation çizimlerini SONA ekle. R3: /Contents YOKSA
+    // (`contents` undefined) orijinal parça listesi BOŞ kalır — yalnızca
+    // annotation çizimlerinden oluşan bir sayfa kurulur.
     const contents = node.Contents();
-    const streams = contents instanceof PDFArray
-        ? Array.from({ length: contents.size() }, (_, i) => doc.context.lookup(contents.get(i)))
-        : [contents];
-    const originalBytes = pdfConcatBytes(streams.filter(Boolean).map(pdfDecodeStreamBytes));
+    const streams = !contents
+        ? []
+        : (contents instanceof PDFArray
+            ? Array.from({ length: contents.size() }, (_, i) => doc.context.lookup(contents.get(i)))
+            : [contents]);
+    // R1: parçalar arasına AYRAÇ konulmadan birleştirilirse komşu tokenlar
+    // birleşip geçersiz bir operatöre dönüşebilir (ör. "ET" + "BT" ->
+    // "ETBT"); bu yüzden pdfConcatBytes YERİNE pdfJoinContentParts kullanılır.
+    const originalBytes = pdfJoinContentParts(streams.filter(Boolean).map(pdfDecodeStreamBytes));
     const enc = new TextEncoder();
     const combined = pdfConcatBytes([
         enc.encode('q\n'),
@@ -358,10 +398,6 @@ function pdfBakeAnnotationsForA4(doc, page) {
 // --- Çıktı kurulumu ---------------------------------------------------------
 
 /**
- * pdfState.pages sırasına göre yeni bir belge kurar.
- * Dönüş: {bytes, originalSize, outputSize}
- */
-/**
  * Kaynak sayfanın kendi /Rotate değeri ile kullanıcının eklediği döndürmeyi
  * toplar. İkisi ÜSTÜNE yazılmaz, toplanır: /Rotate 90 olan bir sayfaya bir kez
  * daha basıldığında sonuç 180 olmalıdır, 90 değil.
@@ -377,6 +413,10 @@ function pdfEffectiveRotation(entry, file) {
     return (source + (entry.rotation || 0)) % 360;
 }
 
+/**
+ * pdfState.pages sırasına göre yeni bir belge kurar.
+ * Dönüş: {bytes, originalSize, outputSize}
+ */
 async function pdfBuildOutput() {
     const entries = pdfState.pages;
     if (entries.length === 0) throw new Error(RESULT_TEXT.noPages);
@@ -407,7 +447,7 @@ async function pdfBuildOutput() {
         // okur, vektör kopyasına gerek yoktur. Aksi halde 300 sayfalık belgede
         // hem vektör kopya hem JPEG'ler hem ikinci belge bellekte tutulur.
         if (pdfState.output.lossy) {
-            const { bytes, rasterFailures } = await pdfRasterizeToOutput(entries, pdfState.output.quality);
+            const { bytes, rasterFailures } = await pdfRasterizeToOutput(entries, pdfState.output.quality, pdfState.output.landscape);
             return { bytes, originalSize, outputSize: bytes.length, rasterFailures };
         }
 
@@ -420,6 +460,12 @@ async function pdfBuildOutput() {
         // A1.2: A4 modunda yeniden ölçeklenen sayfalarda görünümü OLMAYAN
         // (/AP'siz) form alanı widget'larının toplam sayısı.
         let annotWarnings = 0;
+        // R2: annotation gömme (pdfBakeAnnotationsForA4) bir sayfada hata
+        // verirse (ör. desteklenmeyen bir filtreyle kodlanmış içerik akışı)
+        // eskiden hata dış try/catch'e sızıp TÜM SAYFA atlanıyordu. Artık
+        // yalnızca gömme atlanır, sayfanın kendisi (annotation'sız) yine de
+        // eklenir; bu sayaç kullanıcıya dürüstçe bildirmek için tutulur.
+        let bakeFailures = 0;
 
         // A1.1: sayfa başına AYRI copyPages([i]) çağrısı her seferinde yeni
         // bir PDFObjectCopier açar; ortak font/logo her sayfada YENİDEN
@@ -491,18 +537,38 @@ async function pdfBuildOutput() {
                     && Math.abs(visibleH - A4_HEIGHT) < 1
                     && Math.abs(media.width - visibleW) < 1
                     && Math.abs(media.height - visibleH) < 1;
-                if (isExactA4) {
-                    // Zaten tam A4 ve döndürülmemiş: gereksiz yeniden ölçekleme yapma.
+                // 1.7: `landscape` açıkken tam YATAY A4 (841.89x595.28,
+                // döndürülmemiş) sayfa da doğrudan eklenir — dikey A4'e
+                // sığdırılıp gereksiz yere küçültülmemeli.
+                const isExactLandscapeA4 = pdfState.output.landscape && !rotation
+                    && Math.abs(visibleW - A4_HEIGHT) < 1
+                    && Math.abs(visibleH - A4_WIDTH) < 1
+                    && Math.abs(media.width - visibleW) < 1
+                    && Math.abs(media.height - visibleH) < 1;
+                if (isExactA4 || isExactLandscapeA4) {
+                    // Zaten tam (dikey ya da yatay) A4 ve döndürülmemiş:
+                    // gereksiz yeniden ölçekleme yapma.
                     doc.addPage(copied);
                 } else {
                     // A1.2: embedPage YALNIZCA içerik akışını Form XObject
                     // yapar; /Annots düşer. embedPage ÇAĞRILMADAN ÖNCE
                     // annotation görünümleri içeriğe gömülür. Tam A4 (yukarıdaki
                     // dal) buna gerek duymaz: /Annots olduğu gibi kalır.
-                    annotWarnings += pdfBakeAnnotationsForA4(doc, copied);
+                    //
+                    // R2: bu çağrı AYRICA sarmalanır — gömme başarısız
+                    // olursa (ör. desteklenmeyen filtre) sayfanın TAMAMI
+                    // atlanmamalı; yalnızca annotation'sız, İÇERİĞİ KORUNMUŞ
+                    // olarak yerleştirilir (aşağıdaki pdfPlaceOnA4 çağrısı
+                    // yine de çalışır).
+                    try {
+                        annotWarnings += pdfBakeAnnotationsForA4(doc, copied);
+                    } catch (bakeErr) {
+                        console.warn('Not/damga gömülemedi, sayfa içerik korunarak eklendi:', bakeErr);
+                        bakeFailures++;
+                    }
                     // A4 modunda döndürme dönüşüme gömülür; /Rotate yazılmaz.
                     // Yazılsaydı içerik iki kez dönerdi.
-                    await pdfPlaceOnA4(doc, copied, rotation);
+                    await pdfPlaceOnA4(doc, copied, rotation, pdfState.output.landscape);
                 }
             } else {
                 // Dönüşüm uygulanmadığında /Rotate yazılır (kaynak + kullanıcı).
@@ -524,26 +590,45 @@ async function pdfBuildOutput() {
 
         if (count === 0) throw new Error(RESULT_TEXT.noPages);
 
-        doc.setTitle('PDF Araçları ile oluşturuldu');
+        // 1.8: belge başlığı, indirilen dosya adıyla (uzantısız) eşleşir —
+        // sabit bir metin yerine kullanıcının gördüğü gerçek dosya adı.
+        doc.setTitle(pdfOutputFileName().replace(/\.pdf$/i, ''));
         doc.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
+
+        // flush() nesneleri context'e kaydeder. Bu olmadan sayfa
+        // kaynaklarındaki PDFRef'ler çözülemiyor ve aşağıdaki adımlar
+        // hiçbir görseli bulamadan sessizce başarısız oluyor.
+        await doc.flush();
+
+        // 1.5: tekilleştirme + budama HER ÇIKTIDA çalışır (sıkıştırma
+        // açık/kapalı fark etmez) — piksellere dokunmaz, yalnızca aynı
+        // içeriği (bayt + sözlük) paylaşan nesneleri tek referansa indirir.
+        const dedupe = pdfDedupeStreams(doc);
 
         // Sıkıştırma modu 1: gömülü görselleri JPEG olarak yeniden kodlar,
         // metin ve vektör içerik olduğu gibi kalır.
         if (pdfState.output.compress && pdfState.output.compressMode === 'lossless') {
-            // KAYIPSIZ: piksellere dokunulmaz. Yalnızca yinelenen görseller
-            // tekilleştirilir ve üst veri atılır.
-            await doc.flush();
-            const lossless = await pdfLosslessOptimize(doc);
-            losslessReport = lossless;
+            // KAYIPSIZ: piksellere dokunulmaz. Üst veri silme ve 1-bit
+            // dönüşümü YALNIZCA burada (kullanıcı kayıpsızı AÇIKÇA seçtiyse)
+            // çalışır; rapor metni de yalnızca bu dalda gösterilir.
+            const metadataStripped = pdfStripMetadata(doc);
+            const oneBit = await pdfConvertExactOneBit(doc);
+            const pruned = pdfPruneUnusedObjects(doc);
+            losslessReport = {
+                deduped: dedupe.deduped, dedupedBytes: dedupe.dedupedBytes,
+                metadataStripped, oneBit, pruned
+            };
         } else if (pdfState.output.compress) {
-            // flush() nesneleri context'e kaydeder. Bu olmadan sayfa
-            // kaynaklarındaki PDFRef'ler çözülemiyor ve sıkıştırma hiçbir
-            // görseli bulamadan sessizce başarısız oluyor.
-            await doc.flush();
+            pdfPruneUnusedObjects(doc);
             const { replaced, skipped } = await pdfCompressImages(doc, pdfState.output.quality);
             pdfShowProgress(entries.length, entries.length,
                 `${replaced} görsel yeniden kodlandı`);
             compressReport = { replaced, skipped };
+        } else {
+            // Sıkıştırma kapalı: yalnızca dedupe'un açtığı öksüz nesneler
+            // budanır; rapor GÖSTERİLMEZ (kullanıcı "sıkıştırma yapıldı"
+            // sanmasın).
+            pdfPruneUnusedObjects(doc);
         }
 
         const bytes = await doc.save({ useObjectStreams: true });
@@ -556,7 +641,8 @@ async function pdfBuildOutput() {
             copyFailures: copyFailures.length
                 ? { count: copyFailures.length, pages: copyFailures.slice(0, 10), more: copyFailures.length > 10 }
                 : null,
-            annotWarnings
+            annotWarnings,
+            bakeFailures
         };
     } catch (err) {
         console.error('Çıktı üretilemedi', err);
@@ -569,7 +655,6 @@ async function pdfBuildOutput() {
 
 // --- İndirme ---------------------------------------------------------------
 
-/** Tarayıcı indirme adında '/' ve yol ayırıcıları geçersizdir. */
 /** Tarayici indirme adinda yol ayiraclari ve kontrol karakterleri gecersizdir. */
 function pdfSafeFileName(name) {
     const base = String(name || '').split(/[\\/]/).pop();
@@ -724,7 +809,7 @@ async function pdfOnBuildClick() {
     }
 
     try {
-        const { bytes, originalSize, outputSize, compressReport, losslessReport, rasterFailures, copyFailures, annotWarnings } = await pdfBuildOutput();
+        const { bytes, originalSize, outputSize, compressReport, losslessReport, rasterFailures, copyFailures, annotWarnings, bakeFailures } = await pdfBuildOutput();
         pdfTriggerDownload(bytes, pdfOutputFileName());
 
         // A1.2: görünümü olmayan (/AP'siz) form alanı widget'ları vardı;
@@ -735,7 +820,16 @@ async function pdfOnBuildClick() {
             ? ` ${annotWarnings} form alanının görünümü yok; A4'e sığdırmada bu alanlar `
                 + `çıktıda görünmeyebilir. A4 seçeneğini kapatarak deneyin.`
             : '';
-        const showResult = (msg, kind) => pdfShowResult(msg + annotNote, kind || (annotNote ? 'warning' : undefined));
+        // R2: baking başarısız olduysa (desteklenmeyen içerik biçimi) sayfa
+        // korunur ama annotation'ları gömülemez — kullanıcı dürüstçe uyarılır.
+        const bakeNote = bakeFailures
+            ? ` ${bakeFailures} sayfada not/imza görünümü gömülemedi (desteklenmeyen `
+                + `içerik biçimi); sayfa içeriği KORUNARAK eklendi.`
+            : '';
+        const showResult = (msg, kind) => pdfShowResult(
+            msg + annotNote + bakeNote,
+            kind || ((annotNote || bakeNote) ? 'warning' : undefined)
+        );
 
         const head = `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}`;
         // Sıkıştırma kapalıyken küçülme de olsa bu ipucu gösterilir: A4'e
@@ -775,7 +869,9 @@ async function pdfOnBuildClick() {
                     + `(${pdfFormatBytes(losslessReport.dedupedBytes)} tasarruf edildi)`);
             }
             if (losslessReport.oneBit > 0) {
-                parts.push(`${losslessReport.oneBit} saf siyah-beyaz sayfa 1-bit'e çevrildi`);
+                // 1.8: "sayfa" yanıltıcıydı — sayaç SAYFA değil GÖRSEL sayar
+                // (bir sayfada birden fazla saf siyah-beyaz görsel olabilir).
+                parts.push(`${losslessReport.oneBit} görsel 1-bit'e çevrildi`);
             }
             if (losslessReport.metadataStripped > 0) {
                 parts.push(`${losslessReport.metadataStripped} gereksiz belge bilgisi atıldı`);
@@ -845,6 +941,18 @@ const MIN_RECODE_BYTES = 20 * 1024;
 // 1-bit dönüşümü için üst sınır: 40 MP üzeri görsel bellekte pahalıdır.
 const MAX_ONEBIT_PIXELS = 40 * 1000 * 1000;
 
+// 1.6: 1-bit dönüşümü öncesi görsel sözlüğü BU beyaz listedeki anahtarlarla
+// SINIRLI olmalıdır. Başka bir anahtar varsa (özellikle /Decode, /Mask,
+// /DecodeParms, /SMask, dizi filtre, /Intent…) dönüşüm YENİ sözlükte o
+// anahtarı KAYBEDER — ör. /Decode [1 0] taşıyan saf siyah-beyaz bir görsel
+// ters çevrilerek 1-bit'e paketlenirse, yeni görselde /Decode olmadığı için
+// görünüm TERS ÇEVRİLMİŞ olur. Bu yüzden beyaz liste dışı anahtar taşıyan
+// görsel ATLANIR (dönüştürülmez).
+const ONEBIT_ALLOWED_KEYS = new Set([
+    'Type', 'Subtype', 'Width', 'Height', 'BitsPerComponent',
+    'ColorSpace', 'Filter', 'Length', 'Interpolate'
+]);
+
 // --- Kayıpsız sıkıştırma (varsayılan yöntem) -------------------------------
 
 /**
@@ -862,40 +970,47 @@ function pdfHashBytes(bytes) {
 }
 
 /**
- * Aynı İÇERİĞE sahip yinelenen görsel nesnelerini tekilleştirir ve
- * kullanılmayan üst veriyi atar. HİÇBİR piksel değişmez.
+ * 1.5: aynı İÇERİĞE sahip yinelenen akışları (görseller, yazı tipi
+ * dosyaları, ICC profilleri, Form XObject'ler vb.) tekilleştirir. HİÇBİR
+ * piksel değişmez.
  *
- * Kurgusal belge (imza, dilekçe) için "görünüm aynı kalsın" şartı: bu yüzden
- * burada yalnızca bayt bayt kayıpsız işlemler yapılır.
+ * Eşitlik = içerik BAYTLARI birebir aynı VE sözlüğün (`dict.toString()`)
+ * BİREBİR aynı olması. Yalnızca baytlar karşılaştırılırsa, aynı bayt + farklı
+ * /Decode ya da /ColorSpace taşıyan iki görsel yanlışlıkla BİRLEŞTİRİLİR ve
+ * biri BOZULUR (bkz. 1.5 fixture'ı `same-bytes-diff-decode.pdf`).
  *
- * Dönüş: {deduped, dedupedBytes, metadataStripped}
+ * Katalog ve sayfa düğümleri zaten AKIŞ değildir (yalnızca sözlüktür), o
+ * yüzden bu taramaya hiç girmezler; /Metadata AÇIKÇA hariç tutulur.
+ *
+ * HER ÇIKTIDA (sıkıştırma açık/kapalı fark etmez) çağrılır — piksellere
+ * dokunulmaz, yalnızca aynı içeriği paylaşan nesneler tek referansa iner.
+ *
+ * Dönüş: {deduped, dedupedBytes}
  */
-async function pdfLosslessOptimize(doc) {
+function pdfDedupeStreams(doc) {
     const { PDFName, PDFDict, PDFArray } = PDFLib;
     let deduped = 0;
     let dedupedBytes = 0;
-    let metadataStripped = 0;
 
-    // 1) Görsel nesneleri içerik hash'iyle eşle.
-    //    Önce kayıt, sonra referansları değiştirme: hash çakışmaları ve eksik
-    //    nesneler yanlışlıkla birleştirilmesin diye baytlar da karşılaştırılır.
+    // 1) Akışları içerik hash'iyle eşle. Önce kayıt, sonra referansları
+    //    değiştirme: hash çakışmaları ve eksik nesneler yanlışlıkla
+    //    birleştirilmesin diye baytlar VE sözlük de karşılaştırılır.
     const objects = doc.context.enumerateIndirectObjects();
     const byHash = new Map();
     const keeperByRef = new Map();   // yinelenen PDFRef -> tutan PDFRef
     // enumerateIndirectObjects() [PDFRef, nesne] ÇİFTLERİ verir.
-    for (const [ref, resolved] of objects) {
-        const obj = resolved;
-        if (!obj || !obj.contents || !obj.dict) continue;
-        const subtype = obj.dict.lookup(PDFName.of('Subtype'));
-        const isImage = subtype && subtype.asString
-            ? `/${subtype.decodeText()}` === '/Image'
-            : String(subtype) === '/Image';
-        if (!isImage) continue;
+    for (const [ref, obj] of objects) {
+        if (!obj || !obj.contents || !obj.dict) continue;   // yalnızca AKIŞLAR
+        const type = String(obj.dict.lookup(PDFName.of('Type')) ?? '');
+        if (type === '/Metadata') continue;                 // /Metadata hariç
+
         const hash = pdfHashBytes(obj.contents);
+        const dictKey = obj.dict.toString();
         const bucket = byHash.get(hash);
         if (bucket) {
             const same = bucket.find((k) => {
-                const other = doc.context.lookup(k);
+                if (k.dictKey !== dictKey) return false;     // A1.5: sözlük de eşleşmeli
+                const other = doc.context.lookup(k.ref);
                 const a = other.contents;
                 const b = obj.contents;
                 if (a.length !== b.length) return false;
@@ -903,14 +1018,14 @@ async function pdfLosslessOptimize(doc) {
                 return true;
             });
             if (same) {
-                keeperByRef.set(ref.toString(), same);
+                keeperByRef.set(ref.toString(), same.ref);
                 deduped++;
                 dedupedBytes += obj.contents.length;
                 continue;
             }
-            bucket.push(ref);
+            bucket.push({ ref, dictKey });
         } else {
-            byHash.set(hash, [ref]);
+            byHash.set(hash, [{ ref, dictKey }]);
         }
     }
 
@@ -950,8 +1065,19 @@ async function pdfLosslessOptimize(doc) {
         }
     }
 
-    // 3) Üst veri temizliği: görünüme etkisi olmayan, boyuta katkısı olan
-    //    girdiler atılır (XMP Metadata, sayfa PieceInfo, belge Thumb).
+    return { deduped, dedupedBytes };
+}
+
+/**
+ * Görünüme etkisi olmayan, yalnızca boyuta katkısı olan üst veri girdilerini
+ * atar (XMP Metadata, sayfa PieceInfo, belge Thumb). Yalnızca KULLANICI
+ * kayıpsız sıkıştırmayı AÇIKÇA seçtiğinde çağrılır (bkz. pdfBuildOutput) —
+ * sıkıştırma kapalıyken belge üst verisine dokunulmaz.
+ * Dönüş: silinen anahtar sayısı.
+ */
+function pdfStripMetadata(doc) {
+    const { PDFName } = PDFLib;
+    let metadataStripped = 0;
     const catalog = doc.catalog;
     for (const key of ['Metadata', 'PieceInfo', 'Requirements']) {
         if (catalog.has(PDFName.of(key))) {
@@ -967,21 +1093,35 @@ async function pdfLosslessOptimize(doc) {
             }
         }
     }
+    return metadataStripped;
+}
 
-    // 4) 1-bit dönüşümü — YALNIZCA birebir kayıpsızsa.
-    //    Görsel çözülür; pikselin TAMAMI 0 ya da 255 ise (ara ton sıfır) 1-bit
-    //    olarak paketlenir. Fotoğraf veya kenar yumuşatma içeren tarama bu testi
-    //    geçmez; geçse bile birebir aynı görünür.
+/**
+ * Kayıpsız yöntemin TAMAMI: tekilleştirme + üst veri temizliği + 1-bit
+ * dönüşümü + kullanılmayan nesne budaması. HİÇBİR piksel değişmez.
+ *
+ * Kurgusal belge (imza, dilekçe) için "görünüm aynı kalsın" şartı: bu yüzden
+ * burada yalnızca bayt bayt kayıpsız işlemler yapılır.
+ *
+ * Dönüş: {deduped, dedupedBytes, metadataStripped, oneBit, pruned}
+ */
+async function pdfLosslessOptimize(doc) {
+    const dedupe = pdfDedupeStreams(doc);
+    const metadataStripped = pdfStripMetadata(doc);
+
+    // 1-bit dönüşümü — YALNIZCA birebir kayıpsızsa. Görsel çözülür; pikselin
+    // TAMAMI 0 ya da 255 ise (ara ton sıfır) 1-bit olarak paketlenir.
+    // Fotoğraf veya kenar yumuşatma içeren tarama bu testi geçmez; geçse
+    // bile birebir aynı görünür.
     const oneBit = await pdfConvertExactOneBit(doc);
-    metadataStripped += 0;
 
-    // 5) Kullanılmayan nesneleri at. pdf-lib `save()` context'teki TÜM
-    //    dolaylı nesneleri serileştirir; tekilleştirilen ya da 1-bit'e
-    //    çevrilen görsellerin ESKİ kopyaları dosyada kalır ve tasarruf
-    //    tamamen boşa gider. Katalogdan ulaşılabilir olanlar tutulur.
+    // Kullanılmayan nesneleri at. pdf-lib `save()` context'teki TÜM dolaylı
+    // nesneleri serileştirir; tekilleştirilen ya da 1-bit'e çevrilen
+    // görsellerin ESKİ kopyaları dosyada kalır ve tasarruf tamamen boşa
+    // gider. Katalogdan ulaşılabilir olanlar tutulur.
     const pruned = pdfPruneUnusedObjects(doc);
 
-    return { deduped, dedupedBytes, metadataStripped, oneBit, pruned };
+    return { deduped: dedupe.deduped, dedupedBytes: dedupe.dedupedBytes, metadataStripped, oneBit, pruned };
 }
 
 
@@ -1076,6 +1216,20 @@ async function pdfConvertExactOneBit(doc) {
         const h = Number(dict.lookup(PDFName.of('Height')));
         if (!w || !h || w * h > MAX_ONEBIT_PIXELS) continue;
         if (dict.has(PDFName.of('SMask'))) continue;
+
+        // 1.6: sözlük BEYAZ LİSTE dışı bir anahtar taşıyorsa atla — yeni
+        // 1-bit görsel yalnızca beyaz listedeki anahtarlarla yazılır, başka
+        // bir anahtar (ör. /Decode) sessizce KAYBOLUR ve görünüm bozulabilir.
+        let hasForeignKey = false;
+        for (const [key] of dict.entries()) {
+            const keyText = key.asString ? key.decodeText() : String(key).replace(/^\//, '');
+            if (!ONEBIT_ALLOWED_KEYS.has(keyText)) { hasForeignKey = true; break; }
+        }
+        if (hasForeignKey) continue;
+        // Filtre yalnızca TEKİL /FlateDecode olmalı (dizi filtre ya da
+        // DCTDecode/CCITTFaxDecode gibi başka bir kodlama desteklenmez).
+        const filterVal = dict.lookup(PDFName.of('Filter'));
+        if (filterVal !== undefined && String(filterVal) !== '/FlateDecode') continue;
 
         let rgba = null;
         try {
@@ -1451,8 +1605,11 @@ const RASTER_DPI = 150;
  *
  * Her sayfa kendi pdf.js belgesinden render edilir; kaynak belgeler
  * bellekte zaten açık olduğu için yeniden açılmaz.
+ *
+ * 1.7: `landscape` açıkken YATAY render edilen (genişlik > yükseklik) sayfa
+ * da YATAY A4'e basılır — pdfPlaceOnA4 ile AYNI kural (bkz. orada).
  */
-async function pdfRasterizeToOutput(entries, quality) {
+async function pdfRasterizeToOutput(entries, quality, landscape = false) {
     await pdfEnsureWorker();
     const out = await PDFLib.PDFDocument.create();
     const scale = RASTER_DPI / 72;
@@ -1490,15 +1647,20 @@ async function pdfRasterizeToOutput(entries, quality) {
 
             const jpeg = new Uint8Array(await blob.arrayBuffer());
             const embedded = await out.embedJpg(jpeg);
-            const target = out.addPage([A4_WIDTH, A4_HEIGHT]);
+            // 1.7: render edilmiş görsel YATAYSA (genişlik > yükseklik) ve
+            // seçenek açıksa, hedef de YATAY A4 alınır.
+            const useLandscape = landscape && embedded.width > embedded.height;
+            const targetW = useLandscape ? A4_HEIGHT : A4_WIDTH;
+            const targetH = useLandscape ? A4_WIDTH : A4_HEIGHT;
+            const target = out.addPage([targetW, targetH]);
 
-            // Döndürülmüş sayfa yatay gelir; A4'e tekdüze sığdırıp ortala.
-            const ratio = Math.min(A4_WIDTH / embedded.width, A4_HEIGHT / embedded.height);
+            // Döndürülmüş sayfa yatay gelir; hedefe tekdüze sığdırıp ortala.
+            const ratio = Math.min(targetW / embedded.width, targetH / embedded.height);
             const w = embedded.width * ratio;
             const h = embedded.height * ratio;
             target.drawImage(embedded, {
-                x: (A4_WIDTH - w) / 2,
-                y: (A4_HEIGHT - h) / 2,
+                x: (targetW - w) / 2,
+                y: (targetH - h) / 2,
                 width: w,
                 height: h
             });
@@ -1523,7 +1685,8 @@ async function pdfRasterizeToOutput(entries, quality) {
     // BURADA gösterilmez: pdfOnBuildClick hemen ardından boyut özetini
     // yazar ve mesaj ezilirdi (kullanıcı 4 sayfalık dosyayı "zaten optimize"
     // diye sanıyordu). Bunun yerine çağırana verilir.
-    out.setTitle('PDF Araçları ile oluşturuldu (görsele çevrilmiş)');
+    // 1.8: belge başlığı, indirilen dosya adıyla (uzantısız) eşleşir.
+    out.setTitle(pdfOutputFileName().replace(/\.pdf$/i, ''));
     out.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
     return {
         bytes: await out.save({ useObjectStreams: true }),
@@ -1550,6 +1713,8 @@ function pdfReadOutputState() {
     const quality = document.querySelector('input[name="pdf-quality"]:checked');
     pdfState.output = {
         a4: document.getElementById('pdf-opt-a4')?.checked ?? true,
+        // 1.7: varsayılan AÇIK (sayfadaki checkbox'ın varsayılanıyla aynı).
+        landscape: document.getElementById('pdf-opt-landscape')?.checked ?? true,
         compress: document.getElementById('pdf-opt-compress')?.checked ?? false,
         // Varsayılan KAYIPSIZ: piksellere dokunulmaz.
         compressMode: document.querySelector('input[name="pdf-compress-mode"]:checked')?.value || 'lossless',
@@ -1573,7 +1738,7 @@ function pdfUpdateBuildButton() {
         pdfReadOutputState();
         pdfSyncOutputState();
     });
-    for (const id of ['#pdf-opt-a4', '#pdf-opt-lossy']) {
+    for (const id of ['#pdf-opt-a4', '#pdf-opt-landscape', '#pdf-opt-lossy']) {
         document.querySelector(id)?.addEventListener('change', pdfReadOutputState);
     }
     document.querySelectorAll('input[name="pdf-compress-mode"]').forEach((el) => {
@@ -1600,3 +1765,6 @@ window.pdfCompressImages = pdfCompressImages;
 window.pdfTriggerDownload = pdfTriggerDownload;
 window.pdfSafeFileName = pdfSafeFileName;
 window.pdfShowResult = pdfShowResult;
+// R2 testinde gömme hatasını simüle etmek için (monkeypatch) dışa açılır.
+window.pdfBakeAnnotationsForA4 = pdfBakeAnnotationsForA4;
+window.pdfLosslessOptimize = pdfLosslessOptimize;

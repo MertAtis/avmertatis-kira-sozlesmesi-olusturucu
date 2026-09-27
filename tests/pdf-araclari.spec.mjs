@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync, statSync } from 'node:fs';
 import { extractAllText, readPageBoxes, readImageCount, textPositions, collectImages, readRawImageSamples, decodeJpegPixelsInPage, meanAbsError } from './helpers/inspect.mjs';
-import { PDFDocument, PDFName, PDFDict } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict, decodePDFRawStream } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'file://' + join(REPO, 'index.html');
@@ -365,8 +365,10 @@ async function dragCard(page, fromIndex, toIndex) {
 }
 
 /** Çıktıyı indirir ve bayt dizisini Node tarafında döndürür. */
-export async function buildOutput(page, { a4 = true, compress = false, quality = null, lossy = false, mode = null } = {}) {
+export async function buildOutput(page, { a4 = true, compress = false, quality = null, lossy = false, mode = null, landscape = true } = {}) {
     await page.locator('#pdf-opt-a4').setChecked(a4);
+    // 1.7: sayfadaki varsayılan da AÇIKTIR; testlerdeki varsayılan bunu yansıtır.
+    await page.locator('#pdf-opt-landscape').setChecked(landscape);
     await page.locator('#pdf-opt-compress').setChecked(compress);
     if (compress) {
         // Varsayılan KAYIPSIZ. Kayıplı yöntemi (görsel yeniden kodlama) veya
@@ -472,7 +474,11 @@ test.describe('çıktı üretimi ve A4 normalizasyonu', () => {
         await expectCardCount(page, 3);
         // 2. sayfa A5 (419.53 x 595.28). 90 derece döndürülünce yatay olur.
         await page.locator('.pdf-page-card').nth(1).locator('[data-action="rotate"]').click();
-        const { bytes } = await buildOutput(page, { a4: true });
+        // 1.7: bu test DÖNDÜRME MATRİSİNİN doğruluğunu (DİKEY A4'e sığdırma)
+        // ölçer, yatay-A4 hedefleme özelliğini DEĞİL; bu yüzden bilinçli
+        // olarak landscape:false ile eski davranış korunur. Yatay hedefleme
+        // "1.7:" testlerinde ayrıca doğrulanır.
+        const { bytes } = await buildOutput(page, { a4: true, landscape: false });
         const boxes = await readPageBoxes(bytes);
         expect(boxes[1].width).toBeCloseTo(595.28, 0);
         expect(boxes[1].height).toBeCloseTo(841.89, 0);
@@ -862,7 +868,9 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
     test('F1: kaynak PDF in /Rotate değeri A4 çıktısında da uygulanır', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['source-rotated.pdf']);
-        const { bytes } = await buildOutput(page, { a4: true });
+        // 1.7: bu test DİKEY A4'e sığdırma dönüşümünü doğrular; yatay hedef
+        // seçme özelliği ayrı "1.7:" testlerinde ölçülür (bkz. RF5 yorumu).
+        const { bytes } = await buildOutput(page, { a4: true, landscape: false });
 
         // Metin çıkarılamıyorsa sayfa gerçekten görsele dönmüş demektir;
         // burada asıl önemli: dönüşüm YATAY kutuyu A4'e sığdırmış olmalı.
@@ -2005,7 +2013,8 @@ test.describe('AŞAMA 1: doğrulanmış çıktı hataları', () => {
     test('A1.3b: kök /Pages düğümünden MİRAS gelen /Rotate A4 modunda da uygulanır', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['inherited-rotate.pdf']);
-        const { bytes } = await buildOutput(page, { a4: true });
+        // 1.7: DİKEY A4'e sığdırma dönüşümünü doğrular (bkz. F1/RF5 yorumu).
+        const { bytes } = await buildOutput(page, { a4: true, landscape: false });
         const positions = await textPositions(bytes);
         expect(positions.length).toBeGreaterThan(0);
         // Kaynakta sol üstte (x=40,y=700); 90° saat yönünde döndürülünce
@@ -2105,5 +2114,267 @@ test.describe('AŞAMA 1: doğrulanmış çıktı hataları', () => {
         await buildOutput(page, { a4: true });
         const text = await page.locator('#pdf-result').textContent();
         expect(text).toContain('form alanının görünümü yok');
+    });
+});
+
+// --- PART A: pdfBakeAnnotationsForA4 inceleme düzeltmeleri (R1-R3) --------
+
+test.describe('PART A: pdfBakeAnnotationsForA4 inceleme düzeltmeleri', () => {
+    test('R1: içerik akışı parçaları arasına ayraç konur (ET+BT birleşmesi önlenir)', async ({ page }) => {
+        // NOT: pdf.js'in içerik akışı yorumlayıcısı bu özel "ET"+"BT"
+        // birleşmesine karşı sürpriz derecede toleranslıdır (metin yine
+        // doğru konumda çıkarılabiliyor) — bu yüzden metin çıkarımı YERİNE
+        // ÇIKTI baytları doğrudan denetlenir: ayraç konulmazsa "ETBT" (geçersiz,
+        // birleşmiş operatör) baytları birebir bulunur.
+        await openPdfTab(page);
+        await uploadFixtures(page, ['content-seam.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const doc = await PDFDocument.load(bytes);
+        // A4 modunda kaynak sayfa embedPage ile bir Form XObject'e dönüşür;
+        // baked (birleştirilmiş) orijinal içerik ORADA bulunur, üst A4
+        // sayfasının kendi /Contents'inde DEĞİL (o yalnızca "Do" çağırır).
+        const outPage = doc.getPage(0);
+        const xo = outPage.node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict);
+        expect(xo).toBeTruthy();
+        let formStream = null;
+        for (const [key] of xo.entries()) {
+            const obj = xo.lookup(key);
+            if (String(obj?.dict?.lookup(PDFName.of('Subtype'))) === '/Form') { formStream = obj; break; }
+        }
+        expect(formStream, 'gömülü Form XObject bulunamadı').toBeTruthy();
+        const combined = Buffer.from(decodePDFRawStream(formStream).decode()).toString('latin1');
+        expect(combined).not.toContain('ETBT');
+        expect(combined).toContain('PARCA BIR');
+        expect(combined).toContain('PARCA IKI');
+    });
+
+    test('R2: annotation gömme başarısız olursa sayfa yine de eklenir, uyarı gösterilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['form-field.pdf']);
+        // R2: gömme çağrısında (ör. desteklenmeyen filtreli içerik akışı)
+        // hata olursa TÜM sayfa atlanmamalı; hook üzerinden bu hatayı
+        // simüle ediyoruz (bkz. window.pdfBakeAnnotationsForA4).
+        await page.evaluate(() => {
+            window.pdfBakeAnnotationsForA4 = () => { throw new Error('test: desteklenmeyen filtre'); };
+        });
+        await page.locator('#pdf-opt-a4').setChecked(true);
+        // Düzeltmeden ÖNCE bu sayfa TAMAMEN atlanır ve hiçbir dosya üretilmez
+        // (tek sayfalık fixture'da count === 0 olur); bu yüzden indirmeyi
+        // sınırlı bir sürede beklemek gerekir, aksi halde test 120 sn boyunca
+        // asılı kalır.
+        const downloadPromise = page.waitForEvent('download', { timeout: 8000 }).catch(() => null);
+        await page.click('#pdf-build-btn');
+        const download = await downloadPromise;
+        expect(download, 'sayfa tamamen atlandı, hiçbir dosya üretilmedi').toBeTruthy();
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+        const boxes = await readPageBoxes(bytes);
+        // Sayfa atlanmadı: form-field.pdf tek sayfalıktır, çıktıda da 1 var.
+        expect(boxes).toHaveLength(1);
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toMatch(/gömülemedi|görünümü yok/);
+    });
+
+    test('R3: /Contents olmayan sayfada annotation kaybolmaz (DAMGA çıkarılabilir)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['no-contents-annot.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const text = await extractAllText(bytes);
+        expect(text).toContain('DAMGA');
+    });
+});
+
+// --- PART B: plan 1.5-1.8 ---------------------------------------------------
+
+test.describe('1.5: tekilleştirme tüm akışlara genişler, her çıktıda çalışır', () => {
+    test('1.5a: tekilleştirme + budama sıkıştırma KAPALIYKEN de çalışır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['duplicate-images.pdf']);
+        const { bytes } = await buildOutput(page, { compress: false });
+        const after = await collectImages(bytes);
+        // duplicate-images.pdf: 3 sayfa, HER birinde AYRI (paylaşılmayan)
+        // ama BAYT BAKIMINDAN AYNI bir görsel nesnesi vardır. Eskiden
+        // tekilleştirme yalnızca sıkıştırma AÇIK + kayıpsız modda çalışıyordu;
+        // artık HER çıktıda (sıkıştırma kapalıyken de) çalışmalı.
+        expect(after).toHaveLength(1);
+    });
+
+    test('1.5b: aynı bayt, farklı /Decode taşıyan iki görsel BİRLEŞTİRİLMEZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['same-bytes-diff-decode.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+        // Eşitlik yalnızca BAYT karşılaştırıyordu; dict (ör. /Decode) farkı
+        // görmezden gelinip iki görsel yanlışlıkla birleştiriliyordu.
+        expect(after).toHaveLength(2);
+        const decodes = after.map((i) => i.decode);
+        expect(decodes.some((d) => d && d.includes('1'))).toBe(true);
+        expect(decodes.some((d) => !d)).toBe(true);
+    });
+
+    test('1.5c: tekilleştirme /Image DIŞINDAKİ akışlara da (Form XObject) uygulanır', async ({ page }) => {
+        await openPdfTab(page);
+        const result = await page.evaluate(async () => {
+            const { PDFDocument, PDFName, PDFRawStream } = window.PDFLib;
+            const doc = await PDFDocument.create();
+            const p1 = doc.addPage([200, 200]);
+            const p2 = doc.addPage([200, 200]);
+            const content = new TextEncoder().encode('0 0 1 rg 0 0 10 10 re f');
+            const ref1 = doc.context.register(PDFRawStream.of(
+                doc.context.obj({ Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 10, 10] }), content));
+            const ref2 = doc.context.register(PDFRawStream.of(
+                doc.context.obj({ Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 10, 10] }), content.slice()));
+            p1.node.setXObject(PDFName.of('Fm'), ref1);
+            p2.node.setXObject(PDFName.of('Fm'), ref2);
+            await doc.flush();
+            await window.pdfLosslessOptimize(doc);
+            const bytes = await doc.save();
+            const reloaded = await PDFDocument.load(bytes);
+            let formCount = 0;
+            for (const [, obj] of reloaded.context.enumerateIndirectObjects()) {
+                // DİKKAT: yalnızca AKIŞLARDA (`.contents` vardır) `.dict` gerçek
+                // bir PDFDict'tir; sıradan PDFDict nesnelerinde `.dict` içteki
+                // Map'tir ve `.lookup` yoktur.
+                if (obj && obj.contents !== undefined && obj.dict
+                    && String(obj.dict.lookup(PDFName.of('Subtype'))) === '/Form') formCount++;
+            }
+            return { formCount };
+        });
+        expect(result.formCount).toBe(1);
+    });
+});
+
+test.describe('1.6: 1-bit dönüşümü beyaz liste dışı sözlük anahtarında atlanır', () => {
+    test('1.6: /Decode taşıyan saf siyah-beyaz görsel 1-bit\'e ÇEVRİLMEZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['pure-bw-decode.pdf']);
+        const before = await collectImages(fixtureBytes('pure-bw-decode.pdf'));
+        expect(before[0].depth).toBe(8);
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+        // /Decode beyaz listede değildir: dönüşüm ATLANMALI, aksi halde yeni
+        // 1-bit görsel /Decode'u kaybedip görünümü TERS ÇEVİRİR.
+        expect(after[0].depth).toBe(8);
+        expect(after[0].bytes).toBe(before[0].bytes);
+    });
+});
+
+test.describe('1.7: yatay sayfa yatay A4\'e yerleştirilir', () => {
+    test('1.7a: yatay içerik varsayılan olarak yatay A4\'e (841.89x595.28) yerleştirilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        // buildOutput varsayılanı landscape:true — sayfadaki varsayılanla aynı.
+        const { bytes } = await buildOutput(page, { a4: true });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(2);
+        for (const box of boxes) {
+            expect(box.width).toBeCloseTo(841.89, 0);
+            expect(box.height).toBeCloseTo(595.28, 0);
+        }
+        // Metin hâlâ okunabilir olmalı.
+        expect(await extractAllText(bytes)).toContain('KAYNAK DONDURULMUS');
+    });
+
+    test('1.7b: seçenek KAPALIYKEN eski (dikey A4) davranış korunur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true, landscape: false });
+        const boxes = await readPageBoxes(bytes);
+        for (const box of boxes) {
+            expect(box.width).toBeCloseTo(595.28, 0);
+            expect(box.height).toBeCloseTo(841.89, 0);
+        }
+    });
+
+    test('1.7c: yatay hedefleme ölçeği dikeye göre en az %40 büyük', async ({ page }) => {
+        const { createRequire } = await import('node:module');
+        const require = createRequire(import.meta.url + '/');
+        const pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
+        pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.js');
+        const standardFontDataUrl = require.resolve('pdfjs-dist/package.json').replace(/package\.json$/, 'standard_fonts/');
+
+        async function textWidth(bytes) {
+            const loaded = await pdfjs.getDocument({ data: bytes, standardFontDataUrl }).promise;
+            const p = await loaded.getPage(1);
+            const content = await p.getTextContent();
+            const item = content.items.find((i) => i.str.trim().length > 0);
+            return item.width;
+        }
+
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        const portrait = await buildOutput(page, { a4: true, landscape: false });
+        const landscape = await buildOutput(page, { a4: true, landscape: true });
+        const wPortrait = await textWidth(portrait.bytes);
+        const wLandscape = await textWidth(landscape.bytes);
+        // Dikeyde ölçek ~0.7071, yatayda ~1.0 -> oran ~1.4142 (en az %40 büyük).
+        expect(wLandscape / wPortrait).toBeGreaterThanOrEqual(1.4);
+    });
+
+    test('1.7d: tam yatay A4 sayfa doğrudan eklenir (yeniden ölçeklenmez)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['landscape-a4.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(1);
+        expect(boxes[0].width).toBeCloseTo(841.89, 0);
+        expect(boxes[0].height).toBeCloseTo(595.28, 0);
+        expect(await extractAllText(bytes)).toContain('TAM YATAY A4');
+    });
+
+    test('1.7e: kayıp modda (görsele çevirme) da yatay sayfa yatay A4\'e basılır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['source-rotated.pdf']);
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#pdf-opt-a4').setChecked(true);
+        await page.locator('#pdf-opt-landscape').setChecked(true);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+        await page.click('#pdf-lossy-confirm');
+        const download = await downloadPromise;
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+        const boxes = await readPageBoxes(bytes);
+        for (const box of boxes) {
+            expect(box.width).toBeCloseTo(841.89, 0);
+            expect(box.height).toBeCloseTo(595.28, 0);
+        }
+    });
+});
+
+test.describe('1.8: temizlik — belge başlığı çıktı dosya adıyla eşleşir', () => {
+    test('1.8a: vektör çıktıda Title = indirilen dosya adı (uzantısız)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        const { bytes, name } = await buildOutput(page);
+        const doc = await PDFDocument.load(bytes);
+        expect(doc.getTitle()).toBe(name.replace(/\.pdf$/i, ''));
+    });
+
+    test('1.8b: kayıp modda (görsele çevirme) da Title = indirilen dosya adı (uzantısız)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#pdf-opt-a4').setChecked(true);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+        await page.click('#pdf-lossy-confirm');
+        const download = await downloadPromise;
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+        const doc = await PDFDocument.load(bytes);
+        expect(doc.getTitle()).toBe(download.suggestedFilename().replace(/\.pdf$/i, ''));
     });
 });

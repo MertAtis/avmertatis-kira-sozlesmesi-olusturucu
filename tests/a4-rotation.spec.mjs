@@ -7,6 +7,13 @@
 // Bu dosya aynı zamanda `tests/verify-a4-rotation.mjs` düzeneğinin kaynağıdır;
 // ikisi birlikte `pdfPlaceOnA4` ile `pdf-cikti.js` içindeki eşdeğer dönüşüm
 // matematiğini paylaşır.
+//
+// 1.7 notu: buradaki `placeOnA4`, uygulamadaki gerçek `pdfPlaceOnA4`'ün
+// KENDİ KOPYASIDIR ve hedef sayfayı HER ZAMAN dikey A4 (595.28x841.89) alır
+// — yatay A4 hedefleme (1.7) mantığını İÇERMEZ, BİLİNÇLİ olarak. Bu dosyanın
+// amacı yalnızca ÇEKİRDEK döndürme/ölçekleme matrisinin doğruluğunu ölçmektir;
+// yatay hedefleme davranışı tests/pdf-araclari.spec.mjs içindeki "1.7:" ile
+// başlayan testlerde ayrıca doğrulanır.
 
 import { test, expect } from '@playwright/test';
 import { PDFDocument, StandardFonts, radians } from 'pdf-lib';

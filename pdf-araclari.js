@@ -29,16 +29,22 @@ function loadScript(src) {
 }
 
 // Kütüphane yüklenemediğinde "Tekrar Dene" çalışır (spec §6).
+// Hata ekranı index.html içinde de üretiliyordu; iki kopya birbirinden
+// ayrışıyordu. Tek bir üretici kullanılır (A13).
+function pdfLibsErrorHtml() {
+    return '<i class="fa-solid fa-triangle-exclamation"></i> '
+        + 'PDF araçları bileşenleri yüklenemedi. '
+        + '<button class="btn btn-shadcn-outline" id="pdf-retry-libs-btn" '
+        + 'type="button" onclick="pdfRetryLibs()">Tekrar Dene</button>';
+}
+
 async function pdfRetryLibs() {
     const status = document.getElementById('pdf-libs-status');
     const showError = () => {
         if (!status) return;
         status.classList.add('is-error');
         status.classList.remove('is-ready');
-        status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> '
-            + 'PDF araçları bileşenleri yüklenemedi. '
-            + '<button class="btn btn-shadcn-outline" id="pdf-retry-libs-btn" '
-            + 'type="button" onclick="pdfRetryLibs()">Tekrar Dene</button>';
+        status.innerHTML = pdfLibsErrorHtml();
     };
 
     if (status) {
@@ -196,9 +202,18 @@ function pdfRemoveFile(fileId) {
     if (index === -1) return;
     pdfState.files.splice(index, 1);
     pdfState.pages = pdfState.pages.filter((p) => p.fileId !== fileId);
-    // Geri alma yığını temizlenmeli: eski kayıtlar kaldırılmış dosyanın
-    // sayfalarını geri getirir ve "Bilinmeyen dosya" kartları doğar.
-    pdfState.undoStack = [];
+    // Geri alma yığını TÜMÜYLE silinmemeli: kullanıcının diğer dosyalardaki
+    // düzenlemeleri geri alınabilir kalmalı. Yalnızca kaldırılan dosyanın
+    // sayfalarını içeren kayıtlar düşürülür; aksi halde geri alınca
+    // "Bilinmeyen dosya" kartları doğar.
+    pdfState.undoStack = pdfState.undoStack.filter(
+        (entry) => !entry.pages.some((p) => p.fileId === fileId)
+    );
+
+    // pdf.js belgesi yok edilir; yoksa worker belleği tekrarlanan
+    // yükle/kaldır döngüsünde sürekli büyür.
+    window.pdfDocCacheForRelease?.(fileId);
+
     pdfBus.emit('files');
     pdfBus.emit('pages');
     pdfBus.emit('undo');
@@ -273,7 +288,9 @@ async function addFiles(fileList) {
                     }
                 }
             } catch (err) {
-                console.error('PDF yüklenemedi:', file.name, err);
+                // Dosya adı yazılmaz: kişisel veri (evrak/sözleşme adı)
+                // konsola sızmasın. Dosyanın KENDİSİ zaten hata satırında görünür.
+                console.error('Bir PDF yüklenemedi (' + pdfFormatBytes(record.size) + '):', err);
                 record.error = /encrypt/i.test(String(err?.message || ''))
                     ? PDF_ERROR_MESSAGES.encrypted
                     : pdfIsMemoryError(err?.message)
@@ -362,4 +379,5 @@ window.pdfSetBusy = pdfSetBusy;
 window.pdfShowError = pdfShowError;
 window.pdfRemoveFile = pdfRemoveFile;
 window.pdfRetryLibs = pdfRetryLibs;
+window.pdfLibsErrorHtml = pdfLibsErrorHtml;
 window.addFiles = addFiles;

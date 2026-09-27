@@ -8,7 +8,7 @@ import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync, existsSync, statSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PDFDocument, PDFName, PDFRawStream, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFRawStream, PDFArray, PDFDict, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from 'pdf-lib';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)));
 
@@ -226,13 +226,305 @@ function buildHugePdf(targetMb = 60) {
     return Buffer.concat(parts);
 }
 
+
+// ---------------------------------------------------------------------------
+// Renk uzayı fixture'ları: ICCBased, Indexed, DeviceCMYK, SMask, ters Decode
+// ---------------------------------------------------------------------------
+
+/**
+ * PDFArray içine karışık girdi koyar: metin -> /Name, sayı -> PDFNumber,
+ * Uint8Array -> PDFHexString, PDFRef doğrudan.
+ * (PDFArray.push yalnızca PDFObject kabul eder; ham sayı geçirilemez.)
+ */
+function mixedArray(doc, entries) {
+    const array = PDFArray.withContext(doc.context);
+    for (const entry of entries) {
+        if (typeof entry === 'string') {
+            array.push(PDFName.of(entry));
+        } else if (typeof entry === 'number') {
+            array.push(doc.context.obj(entry));
+        } else {
+            array.push(entry);
+        }
+    }
+    return array;
+}
+
+/** Bir sayfaya tek bir ham görsel yerleştirir. */
+async function pageWithRawImage(doc, spec) {
+    const page = doc.addPage(spec.size || A4);
+    const dict = doc.context.obj({
+        Type: 'XObject',
+        Subtype: 'Image',
+        Width: spec.width,
+        Height: spec.height,
+        BitsPerComponent: spec.bits ?? 8
+    });
+
+    if (spec.colorSpace) dict.set(PDFName.of('ColorSpace'), spec.colorSpace(doc));
+    // Varsayılan: FlateDecode. `filter: false` ham (sıkıştırılmamış) akış demektir.
+    if (spec.filter !== false) dict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'));
+    if (spec.decode) dict.set(PDFName.of('Decode'), doc.context.obj(spec.decode));
+    if (spec.smask) dict.set(PDFName.of('SMask'), spec.smask);
+
+    const payload = spec.filter === false ? spec.pixels : deflateSync(spec.pixels);
+    const ref = doc.context.register(PDFRawStream.of(dict, payload));
+    const key = page.node.newXObject('Im0', ref);
+    page.pushOperators(
+        pushGraphicsState(),
+        concatTransformationMatrix(spec.width, 0, 0, spec.height, 0, 0),
+        drawObject(key),
+        popGraphicsState()
+    );
+    return page;
+}
+
+/**
+ * Sıkıştırılamaz gürültü. LCG çok yapısal çıktı verir ve deflate onu küçültür;
+ * bu yüzden xorshift32 kullanılır. Amaç: JPEG yeniden kodlaması gerçekten
+ * kazanç göstersin ve fixture 20 KB eşiğinin belirgin üstünde olsun.
+ */
+function rgbPixels(width, height, seed) {
+    const px = Buffer.alloc(width * height * 3);
+    let s = (seed >>> 0) || 1;
+    for (let i = 0; i < px.length; i++) {
+        s ^= s << 13; s >>>= 0;
+        s ^= s >>> 17;
+        s ^= s << 5; s >>>= 0;
+        px[i] = s & 0xff;
+    }
+    return px;
+}
+
+async function buildColorSpaceFixtures() {
+    const W = 700, H = 900;
+
+    // 1) ICCBased renk uzayı (tarayıcı/görüntü yazılımlarından gelen PDF'lerde yaygın)
+    {
+        const doc = await PDFDocument.create();
+        // Geçerli görünen ama sahte bir ICC akışı (3 kanal).
+        const icc = doc.context.register(PDFRawStream.of(
+            doc.context.obj({ N: 3 }),
+            Buffer.alloc(128, 0)
+        ));
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: (d) => mixedArray(d, ['/ICCBased', icc]),
+            pixels: rgbPixels(W, H, 11)
+        });
+        made.push(write('iccbased.pdf', await doc.save()));
+    }
+
+    // 2) Indexed (paletli) renk uzayı
+    {
+        const doc = await PDFDocument.create();
+        const palette = doc.context.obj(Uint8Array.from(
+            Array.from({ length: 768 }, (_, i) => (i * 7) % 256)
+        ));
+        const indices = Buffer.alloc(W * H);
+        let is = 0x2545F491;
+        for (let i = 0; i < indices.length; i++) {
+            is ^= is << 13; is >>>= 0; is ^= is >>> 17; is ^= is << 5; is >>>= 0;
+            indices[i] = is & 0xff;
+        }
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: (d) => mixedArray(d, ['/Indexed', '/DeviceRGB', 255, palette]),
+            pixels: indices
+        });
+        made.push(write('indexed.pdf', await doc.save()));
+    }
+
+    // 3) DeviceCMYK (4 kanal)
+    {
+        const doc = await PDFDocument.create();
+        const cmyk = Buffer.alloc(W * H * 4);
+        let cs = 0x9e3779b9;
+        for (let i = 0; i < cmyk.length; i++) {
+            cs ^= cs << 13; cs >>>= 0; cs ^= cs >>> 17; cs ^= cs << 5; cs >>>= 0;
+            cmyk[i] = cs & 0xff;
+        }
+        const px = cmyk;
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: (d) => PDFName.of('DeviceCMYK'),
+            pixels: px
+        });
+        made.push(write('cmyk.pdf', await doc.save()));
+    }
+
+    // 4) Şeffaflık maskesi (SMask) olan RGB görsel
+    {
+        const doc = await PDFDocument.create();
+        const mask = doc.context.register(PDFRawStream.of(
+            doc.context.obj({
+                Type: 'XObject', Subtype: 'Image',
+                Width: W, Height: H, BitsPerComponent: 8,
+                ColorSpace: '/DeviceGray', Filter: '/FlateDecode'
+            }),
+            deflateSync(Buffer.alloc(W * H, 128))
+        ));
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: () => PDFName.of('DeviceRGB'),
+            pixels: rgbPixels(W, H, 22),
+            smask: mask
+        });
+        made.push(write('smask.pdf', await doc.save()));
+    }
+
+    // 5) Ters gri tonlu (/Decode [1 0]) — yeniden kodlama sonrası TERS ÇEVRİLMEMELİ
+    {
+        const doc = await PDFDocument.create();
+        // Gradyan + gurultu: /Decode [1 0] ile ters cevrildiginde
+        // ciktida da ayni gorunmeli (piksel dogrulugu testi bunu olcer).
+        const px = Buffer.alloc(W * H);
+        let gs = 0x1234567;
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                gs ^= gs << 13; gs >>>= 0; gs ^= gs >>> 17; gs ^= gs << 5; gs >>>= 0;
+                px[y * W + x] = Math.min(255, Math.max(0,
+                    Math.round((x / W) * 200) + ((gs & 0x1f) - 16)));
+            }
+        }
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: () => PDFName.of('DeviceGray'),
+            pixels: px,
+            decode: [1, 0]
+        });
+        made.push(write('inverted-gray.pdf', await doc.save()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Yapısal fixture'lar: Annots/AP (damga) ve tiling Pattern
+// ---------------------------------------------------------------------------
+
+async function buildStructureFixtures() {
+    const W = 620, H = 820;
+
+    // 1) Widget annotation içinde onay damgası görseli
+    {
+        const doc = await PDFDocument.create();
+        const page = doc.addPage(A4);
+
+        const imgDict = doc.context.obj({
+            Type: 'XObject', Subtype: 'Image',
+            Width: W, Height: H, BitsPerComponent: 8,
+            ColorSpace: '/DeviceRGB', Filter: '/FlateDecode'
+        });
+        const imgRef = doc.context.register(
+            PDFRawStream.of(imgDict, deflateSync(rgbPixels(W, H, 33))));
+
+        // Damga görselini gösteren normal görünüm akışı
+        const normal = doc.context.flateStream(
+            `q ${W} 0 0 ${H} 0 0 cm /Stamp Do Q`.replace('/Stamp', ''),
+            { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, W, H],
+              Resources: { XObject: { Stamp: imgRef } } }
+        );
+        // Operatörleri elle koy
+        const content = `q ${W} 0 0 ${H} 40 500 cm /Stamp Do Q`;
+        const normalRef = doc.context.register(doc.context.flateStream(
+            content,
+            { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, W, H],
+              Resources: { XObject: { Stamp: imgRef } } }
+        ));
+
+        const annotDict = doc.context.obj({
+            Type: 'Annot', Subtype: 'Widget', Rect: [40, 500, 40 + W, 500 + H],
+            F: 4, AP: { N: normalRef }
+        });
+        const annotRef = doc.context.register(annotDict);
+        page.node.set(PDFName.of('Annots'), mixedArray(doc, [annotRef]));
+        made.push(write('stamped.pdf', await doc.save()));
+    }
+
+    // 2) Tiling pattern içinde görsel.
+    //    pdf-lib bu yapıyı (Pattern -> akış painter -> /Resources) kaybettiği
+    //    için PDF elle, ham bayt olarak yazılıyor.
+    made.push(write('pattern.pdf', buildPatternPdf(W, H)));
+}
+
+/** Tiling pattern içinde tek görsel bulunan elle yazılmış PDF. */
+function buildPatternPdf(W, H) {
+    // Ham RGB piksel (gürültü → sıkıştırılamaz)
+    const px = Buffer.alloc(W * H * 3);
+    let st = 0x7F4A7C15;
+    for (let i = 0; i < px.length; i++) {
+        st ^= st << 13; st >>>= 0; st ^= st >>> 17; st ^= st << 5; st >>>= 0;
+        px[i] = st & 0xff;
+    }
+    const imageStream = deflateSync(px);
+
+    const patternContent = Buffer.from(`q ${W} 0 0 ${H} 0 0 cm /PatIm Do Q`, 'latin1');
+
+    const objects = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        // /Resources içinde /Pattern -> 6 0 R
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] ' +
+            '/Resources << /Pattern << /Pat 6 0 R >> >> /Contents 5 0 R >>',
+        '<< /Length 0 >>', // 4 0 R: kullanılmıyor (numaralandırma aralığı için)
+        null, // 5 0 R: içerik akışı aşağıda doldurulacak
+        null, // 6 0 R: pattern, aşağıda doldurulacak
+        null, // 7 0 R: görsel
+        null  // 8 0 R: painter akışı
+    ];
+
+    const content = Buffer.from('q 200 0 0 200 100 300 cm /Pat scn Q', 'latin1');
+    objects[4] = `<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`;
+    objects[5] = '<< /Type /Pattern /PatternType /1 /PaintType /1 /TilingType /1 ' +
+        `/BBox [0 0 ${W} ${H}] /XStep ${W} /YStep ${H} /Resources << /XObject << /PatIm 7 0 R >> >> >>`;
+    objects[6] = `<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} ` +
+        '/BitsPerComponent 8 /ColorSpace /DeviceRGB /Filter /FlateDecode ' +
+        `/Length ${imageStream.length} >>\nstream\n`;
+    objects[7] = `<< /Type /XObject /Subtype /Form /BBox [0 0 ${W} ${H}] ` +
+        `/Resources << /XObject << /PatIm 6 0 R >> >> /Length ${patternContent.length} >>\nstream\n` +
+        `${patternContent.toString('latin1')}\nendstream`;
+
+    // 6 0 R görselin gövdesi, 7 0 R painter gövdesi olarak birleştiriliyor
+    // Basit ve doğru sıralama:
+    //  1 catalog, 2 pages, 3 page, 4 content, 5 pattern, 6 image, 7 painter
+    const parts = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] ' +
+            '/Resources << /Pattern << /Pat 5 0 R >> >> /Contents 4 0 R >>',
+        `<< /Length ${content.length} >>\nstream\n${content.toString('latin1')}\nendstream`,
+        '<< /Type /Pattern /PatternType /1 /PaintType /1 /TilingType /1 ' +
+            `/BBox [0 0 ${W} ${H}] /XStep ${W} /YStep ${H} /Resources << /XObject << /PatIm 6 0 R >> >> >>`,
+        `<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} ` +
+            '/BitsPerComponent 8 /ColorSpace /DeviceRGB /Filter /FlateDecode ' +
+            `/Length ${imageStream.length} >>\nstream\n${imageStream.toString('binary')}\nendstream`,
+        `<< /Type /XObject /Subtype /Form /BBox [0 0 ${W} ${H}] ` +
+            `/Resources << /XObject << /PatIm 7 0 R >> >> /Length ${patternContent.length} >>\nstream\n` +
+            `${patternContent.toString('latin1')}\nendstream`
+    ];
+
+    let out = '%PDF-1.4\n';
+    const offsets = [0];
+    for (let i = 0; i < parts.length; i++) {
+        offsets.push(out.length);
+        out += `${i + 1} 0 obj\n${parts[i]}\nendobj\n`;
+    }
+    const xref = out.length;
+    out += `xref\n0 ${parts.length + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= parts.length; i++) {
+        out += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+    }
+    out += `trailer\n<< /Size ${parts.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return Buffer.from(out, 'binary');
+}
+
 // ---------------------------------------------------------------------------
 // Üretim
 // ---------------------------------------------------------------------------
 
+const made = [];
+
 async function build() {
     if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
-    const made = [];
 
     made.push(await textPdf([
         { name: 'text-only.pdf', size: A4, title: 'KIRA SOZLESMESI', body: 'Bu belge yalnizca metin icerir. Hicbir gomulu gorsel bulunmaz.' },
@@ -357,6 +649,22 @@ async function build() {
         }
         made.push(write('source-rotated.pdf', await doc.save()));
     }
+
+    // CropBox MediaBox'tan küçük: A4'e alırken içerik kaymamalı/kırpılmamalı
+    {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        const page = doc.addPage(A4);
+        page.setCropBox(100, 150, 500, 700);
+        page.drawText('KIRPMA TESTI', { x: 130, y: 620, size: 18, font });
+        page.drawText('BU SATIR ALT KOSEDE', { x: 130, y: 190, size: 10, font });
+        made.push(write('cropbox.pdf', await doc.save()));
+    }
+
+    // --- Sıkıştırma kör noktalarını kapatan fixture'lar -----------------
+    // Bunlar pdf-lib ile doğrudan YAPILAMAZ; sözlük girdileri elle kurulur.
+    await buildColorSpaceFixtures();
+    await buildStructureFixtures();
 
     made.push(write('encrypted.pdf', buildEncryptedPdf()));
     made.push(write('corrupt.pdf', buildCorruptPdf()));

@@ -54,8 +54,10 @@ async function vendorInter() {
 
 async function vendorFontAwesome() {
     const dir = join(REPO, 'vendor', 'fontawesome');
+    const cssDir = join(dir, 'css');
     const webfonts = join(dir, 'webfonts');
     mkdirSync(webfonts, { recursive: true });
+    mkdirSync(cssDir, { recursive: true });
 
     const url = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
     let css = await get(url, true);
@@ -68,9 +70,11 @@ async function vendorFontAwesome() {
                 `https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/${name}`, false));
         }
     }
-    // CSS ../webfonts/ yolunu kullanıyor; dosya vendor/fontawesome/ altında
-    // olduğu için yol yerinde doğru.
-    writeFileSync(join(dir, 'all.min.css'), css);
+    // CSS '../webfonts/' yolunu kullanır. CSS vendor/fontawesome/css/
+    // altında olduğu için yol vendor/fontawesome/webfonts/ olarak doğru
+    // çözülür. (Önceden CSS bir dizin seviyesi yukarıda yazılıyordu ve
+    // yol yanlış çözülüyordu.)
+    writeFileSync(join(cssDir, 'all.min.css'), css);
     console.log(`Font Awesome: ${assets.length} webfont + all.min.css`);
 }
 

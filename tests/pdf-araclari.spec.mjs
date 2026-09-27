@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync, statSync } from 'node:fs';
-import { extractAllText, readPageBoxes, readImageCount, textPositions } from './helpers/inspect.mjs';
+import { extractAllText, readPageBoxes, readImageCount, textPositions, collectImages } from './helpers/inspect.mjs';
 import { PDFDocument } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,6 +15,8 @@ export function fixturePath(name) {
 export function fixtureBytes(name) {
     return new Uint8Array(readFileSync(fixturePath(name)));
 }
+
+const readBytes = (p) => new Uint8Array(readFileSync(p));
 
 export async function openPdfTab(page) {
     await page.goto(PAGE);
@@ -1289,5 +1291,255 @@ test.describe('gizlilik: hiçbir dış servise istek yapılmaz', () => {
         const badge = page.locator('#contract-counter-badge');
         await expect(badge).toContainText('Bu Cihazda');
         await expect(badge).toHaveAttribute('title', /yalnızca yerel/);
+    });
+});
+
+// --- Son kalite denetimi düzeltmelerini kilitleyen testler ---------------
+
+test.describe('denetim düzeltmeleri', () => {
+    test('A1: sayfa silindiğinde küçülme yüzdesi silinen sayfaları saymaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        await expectCardCount(page, 5);
+
+        // 4 sayfayı sil -> tek sayfa kalsın
+        for (let i = 0; i < 4; i++) {
+            await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        }
+        await expectCardCount(page, 1);
+
+        // Sıkıştırma KAPALI: küçülme iddiası edilmemeli.
+        await buildOutput(page, { compress: false });
+        const text = await page.locator('#pdf-result').textContent();
+        // Orijinal boyut artık tek sayfanın dosyasından hesaplanır; sıkıştırma
+        // kapalıyken "küçüldü" dönen bir yüzde görünmemeli.
+        expect(text).toContain('Sıkıştırma seçeneği kapalıydı');
+        expect(/%\d+ küçüldü/.test(text)).toBe(false);
+    });
+
+    test('A2: onay damgası (Annots/AP) içindeki görsel bulunur ve küçülür', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['stamped.pdf']);
+        const input = statSync(fixturePath('stamped.pdf')).size;
+
+        const before = await collectImages(readBytes(fixturePath('stamped.pdf')));
+        expect(before).toHaveLength(1);
+        expect(before[0].path).toContain('annot');
+        expect(before[0].filter).toBe('/FlateDecode');
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const after = await collectImages(bytes);
+        expect(after).toHaveLength(1);
+        // Yeniden kodlanmış olmalı
+        expect(after[0].filter).toBe('/DCTDecode');
+        expect(bytes.length).toBeLessThan(input * 0.6);
+    });
+
+    test('A2b: tiling pattern içindeki görsel bulunur ve küçülür', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['pattern.pdf']);
+        const input = statSync(fixturePath('pattern.pdf')).size;
+
+        const before = await collectImages(readBytes(fixturePath('pattern.pdf')));
+        expect(before).toHaveLength(1);
+        expect(before[0].path).toContain('pattern');
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const after = await collectImages(bytes);
+        expect(after[0].filter).toBe('/DCTDecode');
+        expect(bytes.length).toBeLessThan(input * 0.6);
+    });
+
+    test('A3: ICCBased renk uzaylı görsel yeniden kodlanır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['iccbased.pdf']);
+        const input = statSync(fixturePath('iccbased.pdf')).size;
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const after = await collectImages(bytes);
+        expect(after).toHaveLength(1);
+        expect(after[0].filter).toBe('/DCTDecode');
+        expect(bytes.length).toBeLessThan(input * 0.6);
+    });
+
+    test('A3b: Indexed (paletli) görsel yeniden kodlanır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['indexed.pdf']);
+        const input = statSync(fixturePath('indexed.pdf')).size;
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const after = await collectImages(bytes);
+        expect(after[0].filter).toBe('/DCTDecode');
+        expect(bytes.length).toBeLessThan(input * 0.6);
+    });
+
+    test('A3c: renk uzayı desteklenmiyorsa DURUŞT mesajı verilir', async ({ page }) => {
+        await openPdfTab(page);
+        // DeviceCMYK bu araçta desteklenmiyor
+        await uploadFixtures(page, ['cmyk.pdf']);
+        await buildOutput(page, { compress: true, quality: '0.7' });
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('küçültülemedi');
+        expect(text).toContain('renk uzayı');
+        // "zaten optimize" gibi yanlış bilgi verilmemeli
+        expect(text).not.toContain('zaten optimize');
+    });
+
+    test('A2c: SMask olan görsel atlanır ve bu durum bildirilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['smask.pdf']);
+        await buildOutput(page, { compress: true, quality: '0.7' });
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('küçültülemedi');
+        expect(text).toContain('şeffaflık');
+    });
+
+    test('A4: localStorage erişilemezse belge yine de üretilir', async ({ page }) => {
+        // localStorage'ı tamamen engelle
+        await page.addInitScript(() => {
+            Object.defineProperty(window, 'localStorage', {
+                configurable: true,
+                get() { throw new DOMException('Access denied', 'SecurityError'); }
+            });
+        });
+        const errors = [];
+        page.on('pageerror', (e) => errors.push(String(e).slice(0, 120)));
+
+        await page.goto(PAGE);
+        // Uygulama hâlâ açılmalı ve önizleme üretmeli
+        await page.click('#tab-kira');
+        await page.locator('#kira-landlord-name').fill('DEPOLAMA YOK');
+        await page.waitForTimeout(300);
+        const preview = await page.locator('#printable-area').textContent();
+        expect(preview).toContain('DEPOLAMA YOK');
+
+        // Yazdırma da çalışmalı
+        await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
+        await page.locator('button:has-text("Yazdır")').first().click();
+        expect(await page.evaluate(() => !!window.__printed)).toBe(true);
+
+        // PDF araçları da çalışmalı
+        await page.click('#tab-pdf-araclari');
+        await page.waitForFunction(() => !!window.pdfState?.libsLoaded);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        expect(errors).toEqual([]);
+    });
+
+    test('A5: kayıp modda 5 eşzamanlı tıklama TEK indirme yapar', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        let downloads = 0;
+        page.on('download', () => { downloads++; });
+
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.evaluate(async () => {
+            for (let i = 0; i < 5; i++) pdfOnBuildClick();
+        });
+        // Tek onay tıklaması TÜM bekleyen istekleri çözmeli ama tek indirme olmalı
+        await page.click('#pdf-lossy-confirm');
+        await page.waitForTimeout(2500);
+        expect(downloads).toBe(1);
+    });
+
+    test('A6: modal açıkken arka plan odaklanamaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+
+        // Tab tuzağı: 6 kez Tab sonrası odak hâlâ modal içinde olmalı
+        for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
+        const focusInModal = await page.evaluate(() =>
+            !!document.querySelector('#pdf-lossy-modal')?.contains(document.activeElement));
+        expect(focusInModal).toBe(true);
+
+        await page.click('#pdf-lossy-cancel');
+    });
+
+    test('A7: dosya kaldırılınca diğer düzenlemeler geri alınabilir kalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf', 'b.pdf']);
+        await expectCardCount(page, 7);
+
+        // b.pdf'de sayfa döndür (geri alma yığınına girer)
+        await page.locator('.pdf-page-card').nth(5).locator('[data-action="rotate"]').click();
+        await expect(page.locator('.pdf-page-badge')).toHaveCount(1);
+
+        // a.pdf'yi kaldır
+        await page.locator('.pdf-file-row [data-remove-file]').first().click();
+        await expectCardCount(page, 3);
+
+        // Geri al HÂLÂ çalışmalı (eski davranışta kalıcı olarak devre dışıydı)
+        await expect(page.locator('#pdf-undo-btn')).toBeEnabled();
+        await page.click('#pdf-undo-btn');
+        await page.waitForTimeout(200);
+        const state = await page.evaluate(() => ({
+            orphans: pdfState.pages.filter((p) => !pdfState.files.some((f) => f.id === p.fileId)).length,
+            cards: document.querySelectorAll('#pdf-page-card, .pdf-page-card').length,
+            pages: pdfState.pages.length
+        }));
+        expect(state.orphans).toBe(0);
+        expect(state.cards).toBe(state.pages);
+    });
+
+    test('A9: geri al düğmesi ne yapılacağını yazar', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        await expect(page.locator('#pdf-undo-label')).toHaveText(/Silme/);
+    });
+
+    test('A10: tüm sayfalar silinince doğru mesaj görünür', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+        for (let i = 0; i < 4; i++) {
+            await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        }
+        await expect(page.locator('#pdf-page-grid')).toContainText('Tüm sayfalar silindi');
+    });
+
+    test('A11: konsola dosya adı yazılmaz', async ({ page }) => {
+        const logs = [];
+        page.on('console', (m) => logs.push(m.text()));
+        await openPdfTab(page);
+        await uploadFixtures(page, ['encrypted.pdf']);
+        // Dosya adı "encrypted.pdf" idi; konsolda geçmemeli
+        expect(logs.some((l) => l.includes('encrypted.pdf'))).toBe(false);
+    });
+
+    test('karanlık modda küçük resim etiketi okunabilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await page.click('#theme-toggle-btn');
+        await page.waitForTimeout(200);
+        const label = page.locator('.pdf-page-label').first();
+        const style = await label.evaluate((el) => {
+            const cs = getComputedStyle(el);
+            return { color: cs.color, bg: cs.backgroundColor };
+        });
+        const lum = (c) => {
+            const m = c.match(/[\d.]+/g).map(Number);
+            return (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255;
+        };
+        const labelLum = lum(style.color);
+        // Etiket kart üstünde okunur olmalı (koyu temada açık metin)
+        expect(labelLum).toBeGreaterThan(0.35);
+    });
+
+    test('CropBox MediaBox tan küçükse içerik kaymaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['cropbox.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(1);
+        expect(boxes[0].width).toBeCloseTo(595.28, 0);
+        expect(boxes[0].height).toBeCloseTo(841.89, 0);
+        // Metin korunmuş olmalı
+        expect(await extractAllText(bytes)).toContain('KIRPMA TESTI');
     });
 });

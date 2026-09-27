@@ -94,7 +94,11 @@ async function pdfRenderThumb(entry) {
 
 const UNDO_LIMIT = 20;
 
-// Yalnızca sayfa dizisi geri alınır; thumbUrl referansları kopyalanmaz.
+/**
+ * Yalnızca sayfa dizisi geri alınır; thumbUrl referansları kopyalanmaz.
+ * Kaldırılan dosya adlarının kaydı tutulur: pdfRemoveFile yalnızca o
+ * kayıtları düşürür, kullanıcının diğer düzenlemeleri geri alınabilir kalır.
+ */
 function pdfRecordUndo(label) {
     pdfState.undoStack.push({
         label,
@@ -114,7 +118,12 @@ function pdfUndo() {
 
 function pdfUpdateUndoButton() {
     const button = document.getElementById('pdf-undo-btn');
-    if (button) button.disabled = pdfState.undoStack.length === 0;
+    if (!button) return;
+    const last = pdfState.undoStack[pdfState.undoStack.length - 1];
+    button.disabled = !last;
+    // Kullanıcı neyi geri alacağını görsün.
+    const label = document.getElementById('pdf-undo-label');
+    if (label) label.textContent = last ? last.label : '';
 }
 
 // --- Düzenleme işlemleri ----------------------------------------------------
@@ -172,7 +181,13 @@ function pdfRenderGrid() {
     if (!grid) return;
 
     if (pdfState.pages.length === 0) {
-        grid.innerHTML = '<p class="pdf-page-label">Henüz dosya eklenmedi.</p>';
+        // Dosyalar yüklü ama tüm sayfalar silinmiş olabilir; iki durum
+        // farklı mesaj ister.
+        grid.innerHTML = pdfState.files.some((f) => f.doc)
+            ? '<p class="pdf-page-label">Tüm sayfalar silindi. '
+              + 'Yeni bir çıktı üretmek için "Geri Al" düğmesini kullanabilir '
+              + 'veya yeni dosya ekleyebilirsiniz.</p>'
+            : '<p class="pdf-page-label">Henüz dosya eklenmedi.</p>';
         return;
     }
 
@@ -341,4 +356,11 @@ window.pdfDeletePage = pdfDeletePage;
 window.pdfResetEdits = pdfResetEdits;
 window.pdfUndo = pdfUndo;
 window.pdfMovePage = pdfMovePage;
+// pdf-araclari.js, girdi silindiğinde önbellekteki pdf.js belgesini yok eder.
+window.pdfDocCacheForRelease = (fileId) => {
+    const doc = pdfDocCache.get(fileId);
+    pdfDocCache.delete(fileId);
+    return doc;
+};
+
 window.pdfRenderThumb = pdfRenderThumb;

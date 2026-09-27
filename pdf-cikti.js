@@ -139,7 +139,14 @@ async function pdfBuildOutput() {
     pdfHideResult();
 
     try {
-        const originalSize = pdfState.files.reduce((sum, f) => sum + (f.size || 0), 0);
+        // A1: 'Orijinal' boyutu SADECE çıktıya giren sayfaların dosyalarından
+        // hesaplanır. Silinen sayfaların dosyası hâlâ listede duruyorsa o
+        // dosyanın tamamı sayılırsa kullanıcı 'sıkıştırma yaptım' sanar.
+        const usedFileIds = new Set(entries.map((e) => e.fileId));
+        const originalSize = pdfState.files
+            .filter((f) => usedFileIds.has(f.id))
+            .reduce((sum, f) => sum + (f.size || 0), 0);
+        let compressReport = null;
 
         // Kayıp mod ÖNCE kontrol edilir: rasterizasyon kaynak PDF'leri doğrudan
         // okur, vektör kopyasına gerek yoktur. Aksi halde 300 sayfalık belgede
@@ -197,13 +204,14 @@ async function pdfBuildOutput() {
             // kaynaklarındaki PDFRef'ler çözülemiyor ve sıkıştırma hiçbir
             // görseli bulamadan sessizce başarısız oluyor.
             await doc.flush();
-            const replaced = await pdfCompressImages(doc, pdfState.output.quality);
+            const { replaced, skipped } = await pdfCompressImages(doc, pdfState.output.quality);
             pdfShowProgress(entries.length, entries.length,
                 `${replaced} görsel yeniden kodlandı`);
+            compressReport = { replaced, skipped };
         }
 
         const bytes = await doc.save({ useObjectStreams: true });
-        return { bytes, originalSize, outputSize: bytes.length };
+        return { bytes, originalSize, outputSize: bytes.length, compressReport };
     } catch (err) {
         console.error('Çıktı üretilemedi', err);
         throw err;
@@ -253,35 +261,74 @@ function pdfTriggerDownload(bytes, fileName) {
     }, 10000);
 }
 
+/**
+ * Atlanan görsel varsa kısa ve dürüst bir not. Kullanıcı hangi biçimin
+ * desteklenmediğini görebilmeli (destek eklenebilsin diye).
+ */
+function pdfSkipNote(report) {
+    if (!report || report.skipped.length === 0) return '';
+    const reasons = [...new Set(report.skipped.map((s) => s.reason))];
+    return ` Not: ${report.skipped.length} görsel küçültülemedi (${reasons.join(', ')}).`;
+}
+
 // --- Kayıp mod onayı --------------------------------------------------------
 
 // Modal bir Promise ile çözülür: onaylanırsa true, vazgeçilirse false.
+// Modal açıkken ikinci bir çağrı YENİ soru üretmemeli: mevcut Promise
+// döndürülür. Aksi halde tek onay tıklaması birden çok çıktı üretir.
+let pdfLossyPrompt = null;
+
 function pdfConfirmLossy() {
+    if (pdfLossyPrompt) return pdfLossyPrompt;
+
     const modal = document.getElementById('pdf-lossy-modal');
     if (!modal) return Promise.resolve(window.confirm('Metin seçilemez hale gelecek. Devam edilsin mi?'));
 
     const cancel = document.getElementById('pdf-lossy-cancel');
     const confirmBtn = document.getElementById('pdf-lossy-confirm');
+    const previouslyFocused = document.activeElement;
+    const appGrid = document.querySelector('.app-grid');
+
     modal.hidden = false;
+    // A6: arka plan odaklanabilir kalmasın.
+    appGrid?.setAttribute('inert', '');
+    appGrid?.setAttribute('aria-hidden', 'true');
     confirmBtn?.focus();
 
-    return new Promise((resolve) => {
+    pdfLossyPrompt = new Promise((resolve) => {
         const finish = (answer) => {
             modal.hidden = true;
+            appGrid?.removeAttribute('inert');
+            appGrid?.removeAttribute('aria-hidden');
             cancel?.removeEventListener('click', onCancel);
             confirmBtn?.removeEventListener('click', onConfirm);
             document.removeEventListener('keydown', onKey);
+            pdfLossyPrompt = null;
+            if (previouslyFocused?.focus) previouslyFocused.focus();
             resolve(answer);
         };
         const onCancel = () => finish(false);
         const onConfirm = () => finish(true);
         const onKey = (e) => {
-            if (e.key === 'Escape') finish(false);
+            if (e.key === 'Escape') { finish(false); return; }
+            // A6: odak tuzağı — Tab yalnızca iki buton arasında döner.
+            if (e.key === 'Tab') {
+                const first = cancel;
+                const last = confirmBtn;
+                if (!first || !last) return;
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault(); last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault(); first.focus();
+                }
+            }
         };
         cancel?.addEventListener('click', onCancel);
         confirmBtn?.addEventListener('click', onConfirm);
         document.addEventListener('keydown', onKey);
     });
+
+    return pdfLossyPrompt;
 }
 
 async function pdfOnBuildClick() {
@@ -308,29 +355,40 @@ async function pdfOnBuildClick() {
     }
 
     try {
-        const { bytes, originalSize, outputSize } = await pdfBuildOutput();
+        const { bytes, originalSize, outputSize, compressReport } = await pdfBuildOutput();
         pdfTriggerDownload(bytes, pdfOutputFileName());
 
-        if (outputSize >= originalSize) {
-            // Kullanıcı sıkıştırmayı hiç açmadıysa "görsel bulunamadı" demek
-            // yanlış olur: o zaman asıl neden sıkıştırmanın kapalı olmasıdır.
-            if (!pdfState.output.compress) {
-                pdfShowResult(
-                    `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}. `
-                    + 'Sıkıştırma seçeneği kapalıydı; küçültmek için "Boyutu küçült" kutusunu işaretleyin.',
-                    'warning'
-                );
-            } else {
-                pdfShowResult(
-                    'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
-                    'warning'
-                );
-            }
-        } else {
+        const head = `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}`;
+
+        if (outputSize < originalSize) {
             const saved = Math.round((1 - outputSize / originalSize) * 100);
             pdfShowResult(
-                `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)} (%${saved} küçüldü)`
+                `${head} (%${saved} küçüldü)`
                 + (pdfState.output.lossy ? ' — Metin seçilemez.' : '')
+                + pdfSkipNote(compressReport)
+            );
+            return;
+        }
+
+        // Küçülme olmadı. NEDENİ dürüstçe söylemek zorundayız; "zaten optimize"
+        // demek, görsellerin atlanmış olduğu durumlarda yanlış bilgidir.
+        if (!pdfState.output.compress) {
+            pdfShowResult(
+                `${head}. Sıkıştırma seçeneği kapalıydı; küçültmek için `
+                + '"Boyutu küçült" kutusunu işaretleyin.',
+                'warning'
+            );
+        } else if (compressReport && compressReport.skipped.length > 0) {
+            pdfShowResult(
+                `${head}. ${compressReport.replaced} görsel yeniden kodlandı, `
+                + `ancak ${compressReport.skipped.length} görsel küçültülemedi `
+                + '(desteklenmeyen biçim).',
+                'warning'
+            );
+        } else {
+            pdfShowResult(
+                'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
+                'warning'
             );
         }
     } catch (err) {
@@ -365,114 +423,210 @@ const MIN_RECODE_BYTES = 20 * 1024;
  *  - `PDFRawStream.of` imzası `(dict, contents)` sırasındadır (burada gerekmiyor)
  */
 async function pdfCompressImages(doc, quality) {
-    const { PDFName, PDFDict } = PDFLib;
+    const { PDFName, PDFDict, PDFArray } = PDFLib;
     let replaced = 0;
+    const skipped = [];
 
     // PDFDict.get() bir PDFRef döndürür. Bellekteki bir referansı
-    // PDFDict.lookup() çözemeyebilir (save() çağrıldıktan sonra çalışır);
-    // bu yüzden daima context.lookup() kullanılır.
+    // PDFDict.lookup() çözemeyebilir (flush() sonrası çalışır); bu yüzden
+    // daima context.lookup() kullanılır.
     const resolve = (value) => (value && value.tag ? doc.context.lookup(value) : value);
+
+    // DİKKAT: PDFDict'in `.dict` ÖZELLİĞİ içteki Map'tir, sözlük değildir.
+    // Yalnızca AKIŞ nesnelerinde (contents'ı vardır) .dict sözlüktür.
+    const asDict = (obj) => (obj && obj.contents ? obj.dict : obj);
 
     // Form XObject'ler birbirine gömülü olabilir; döngüsel referansları
     // önlemek için işlenmiş nesneler bir Set ile izlenir.
     const visited = new Set();
 
-    const visitResources = async (resources) => {
-        const resDict = resolve(resources);
-        if (!resDict || typeof resDict.lookupMaybe !== 'function') return;
-        const xoDict = resDict.lookupMaybe(PDFName.of('XObject'), PDFDict);
-        if (!xoDict) return;
+    const visitResources = async (resources, path, host) => {
+        const res = asDict(resolve(resources));
+        if (!res || typeof res.lookupMaybe !== 'function') return;
 
-        for (const key of xoDict.keys()) {
-            const xobj = resolve(xoDict.get(key));
-            if (!xobj || !xobj.dict) continue;
-            if (visited.has(xobj)) continue;
-            visited.add(xobj);
+        // 1) Doğrudan /XObject ve Form XObject'lerin içi
+        // DİKKAT: asDict() bir AKIŞı sözlüğüne çevirir. Çevirdikten sonra
+        // `.dict` almak içteki Map'i verir ve `lookup` çalışmaz — bu hata
+        // tüm sıkıştırmayı sessizce bozuyordu.
+        const xoDict = res.lookupMaybe(PDFName.of('XObject'), PDFDict);
+        if (xoDict) {
+            for (const key of xoDict.keys()) {
+                const stream = resolve(xoDict.get(key));
+                if (!stream || !stream.contents) continue;
+                if (visited.has(stream)) continue;
+                visited.add(stream);
+                const dict = stream.dict;
 
-            const subtype = String(xobj.dict.lookup(PDFName.of('Subtype')) ?? '');
-            if (subtype === '/Form') {
-                await visitResources(resolve(xobj.dict.lookup(PDFName.of('Resources'))));
-                continue;
+                const subtype = String(dict.lookup(PDFName.of('Subtype')) ?? '');
+                if (subtype === '/Form') {
+                    await visitResources(dict.lookup(PDFName.of('Resources')), `${path}/${key}`, null);
+                } else if (subtype === '/Image') {
+                    const outcome = await pdfRecodeImage(stream, quality);
+                    if (outcome === 'ok') replaced++;
+                    else skipped.push({ path: `${path}/${key}`, reason: outcome });
+                }
             }
-            if (subtype !== '/Image') continue;
+        }
 
-            if (await pdfRecodeImage(xobj, quality)) replaced++;
+        // 2) /Annots -> /AP -> /N  (onay damgası, kaşe, imza görselleri)
+        // /Annots SAYFA sözlüğünde durur; bu yüzden çağıran, sayfa sözlüğünü
+        // `host` olarak verir.
+        const hostDict = asDict(resolve(host));
+        const annots = hostDict ? hostDict.lookupMaybe(PDFName.of('Annots'), PDFArray) : null;
+        if (annots) {
+            for (let i = 0; i < annots.size(); i++) {
+                const annotDict = asDict(resolve(annots.lookup(i)));
+                if (!annotDict || typeof annotDict.lookup !== 'function') continue;
+                const ap = asDict(resolve(annotDict.lookup(PDFName.of('AP'))));
+                if (!ap || typeof ap.lookup !== 'function') continue;
+                // /AP /N bir AKIŞTIR; /Resources onun sözlüğündedir.
+                const normal = asDict(resolve(ap.lookup(PDFName.of('N'))));
+                if (normal && typeof normal.lookup === 'function') {
+                    await visitResources(normal.lookup(PDFName.of('Resources')), `${path}/annot${i}/AP/N`, null);
+                }
+            }
+        }
+
+        // 3) /Pattern -> painter -> /Resources (kaplama desenleri)
+        const patterns = res.lookupMaybe(PDFName.of('Pattern'), PDFDict);
+        if (patterns) {
+            for (const key of patterns.keys()) {
+                const patDict = asDict(resolve(patterns.get(key)));
+                if (!patDict || typeof patDict.lookup !== 'function') continue;
+                const patternType = String(patDict.lookup(PDFName.of('PatternType')) ?? '').replace(/^\//, '');
+                if (patternType === '1') {
+                    await visitResources(patDict.lookup(PDFName.of('Resources')), `${path}/pattern${key}`, null);
+                }
+            }
         }
     };
 
-    for (const page of doc.getPages()) {
-        await visitResources(resolve(page.node.Resources()));
+    const pages = doc.getPages();
+    for (let i = 0; i < pages.length; i++) {
+        await visitResources(pages[i].node.Resources(), `p${i + 1}`, pages[i].node);
     }
 
-    return replaced;
+    return { replaced, skipped };
 }
 
-/** Tek bir görseli yeniden kodlar. Uygun değilse false döner. */
+/**
+ * Tek bir görseli yeniden kodlar.
+ * Dönüş: 'ok' | <atlanma nedeni>. Neden, dürüst kullanıcı mesajı için saklanır.
+ */
 async function pdfRecodeImage(xobj, quality) {
-    const { PDFName } = PDFLib;
+    const { PDFName, PDFArray } = PDFLib;
     const dict = xobj.dict;
 
     const bits = Number(dict.lookup(PDFName.of('BitsPerComponent')));
-    const colorSpace = String(dict.lookup(PDFName.of('ColorSpace')) ?? '');
     const filter = dict.lookup(PDFName.of('Filter'));
     const width = Number(dict.lookup(PDFName.of('Width')));
     const height = Number(dict.lookup(PDFName.of('Height')));
 
-    // spec §5.1: bu beş koşulun hepsi sağlanmalı.
-    if (bits !== 8) return false;
-    if (colorSpace !== '/DeviceRGB' && colorSpace !== '/DeviceGray') return false;
-    if (dict.has(PDFName.of('SMask'))) return false;
-    if (filter && String(filter) === '/DCTDecode') return false;
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return false;
+    if (bits !== 8) return 'bit derinliği desteklenmiyor';
+    if (filter && String(filter) === '/DCTDecode') return 'zaten JPEG';
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return 'geçersiz ölçü';
+    }
+    // Şeffaflık maskesi olan görseller atlanır: alfa kanalı yeniden kodlamayla
+    // bozulabilir. Bu bilinçli bir sınırdır, kullanıcıya bildirilir.
+    if (dict.has(PDFName.of('SMask'))) return 'şeffaflık maskesi olan görsel';
 
     const raw = xobj.contents;
-    if (!raw || raw.length < MIN_RECODE_BYTES) return false;
+    if (!raw || raw.length < MIN_RECODE_BYTES) return 'çok küçük';
 
     try {
-        const jpeg = await pdfRecodeToJpeg(raw, width, height, colorSpace === '/DeviceGray', quality);
+        const { pixels, channels } = await pdfDecodePixels(xobj, bits, width, height);
+        if (!pixels) return 'renk uzayı desteklenmiyor';
+
+        // /Decode [1 0] ters çevirme belirtir. Yeniden kodlanan görsel de aynı
+        // /Decode ile yazıldığı için görünüm korunur; pikselleri ters çevirmiyoruz.
+        const jpeg = await pdfEncodeJpeg(pixels, width, height, quality);
         xobj.contents = jpeg;
         dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
         dict.delete(PDFName.of('DecodeParms'));
-        dict.delete(PDFName.of('SMask'));
-        return true;
+        return 'ok';
     } catch (err) {
-        // Tek bir görselin çözülememesi işlemi durdurmaz.
         console.warn('Görsel yeniden kodlanamadı, atlandı:', err);
-        return false;
+        return 'çözülemedi';
     }
 }
 
-/** FlateDecode ham pikselleri çözüp JPEG olarak yeniden kodlar. */
-async function pdfRecodeToJpeg(compressed, width, height, grayscale, quality) {
-    const channels = grayscale ? 1 : 3;
-    const raw = await pdfInflate(compressed, width * height * channels);
+/**
+ * Gömülü pikselleri RGBA'ya çözer.
+ * Desteklenen renk uzayları: DeviceRGB, DeviceGray, ICCBased(3/1 kanal),
+ * Indexed, DeviceCMYK. Desteklenmeyen durumda null döner.
+ */
+async function pdfDecodePixels(xobj, bits, width, height) {
+    const { PDFName } = PDFLib;
+    const dict = xobj.dict;
+    const cs = dict.lookup(PDFName.of('ColorSpace'));
 
+    let palette = null;
+    let base = null;
+    let channels = 3;
+
+    const name = (value) => (value && value.asString
+        ? '/' + value.decodeText().replace(/^\//, '')
+        : String(value ?? ''));
+
+    if (cs && typeof cs.lookupMaybe === 'function') {
+        // Dizi biçimli: [/ICCBased N 0 R], [/Indexed base hival palette]
+        const head = name(cs.lookup(0));
+        if (head === '/ICCBased') {
+            const profile = xobj.doc?.context?.lookup(cs.lookup(1));
+            const n = profile?.dict ? Number(profile.dict.lookup(PDFName.of('N'))) : 3;
+            if (n !== 3 && n !== 1) return { pixels: null };
+            channels = n;
+        } else if (head === '/Indexed') {
+            base = name(cs.lookup(1));
+            channels = base === '/DeviceGray' ? 1 : 3;
+            const hival = Number(cs.lookup(2));
+            const look = cs.lookup(3);
+            const bytes = look && typeof look.asBytes === 'function' ? look.asBytes() : null;
+            if (!bytes) return { pixels: null };
+            palette = { bytes, hival, channels };
+        } else if (head === '/Separation' || head === '/DeviceN') {
+            return { pixels: null };
+        }
+    } else {
+        const simple = name(cs);
+        if (simple === '/DeviceGray') channels = 1;
+        else if (simple === '/DeviceRGB' || simple === '/ICCBased') channels = 3;
+        else if (simple === '/DeviceCMYK') return { pixels: null };
+        else return { pixels: null };
+    }
+
+    const expected = width * height * channels;
+    const raw = await pdfInflate(xobj.contents, expected);
+    if (!raw || raw.length < expected) return { pixels: null };
+
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0, j = 0; i < width * height; i++) {
+        let r, g, b;
+        if (palette) {
+            const index = raw[i];
+            if (index > palette.hival) return { pixels: null };
+            const base0 = index * palette.channels;
+            if (palette.channels === 1) { r = g = b = palette.bytes[base0]; }
+            else { r = palette.bytes[base0]; g = palette.bytes[base0 + 1]; b = palette.bytes[base0 + 2]; }
+        } else if (channels === 1) {
+            r = g = b = raw[i];
+        } else {
+            r = raw[i * 3]; g = raw[i * 3 + 1]; b = raw[i * 3 + 2];
+        }
+        rgba[j++] = r; rgba[j++] = g; rgba[j++] = b; rgba[j++] = 255;
+    }
+    return { pixels: rgba, channels };
+}
+
+/** RGBA pikselleri JPEG olarak kodlar. */
+async function pdfEncodeJpeg(rgba, width, height, quality) {
     const canvas = window.OffscreenCanvas
         ? new OffscreenCanvas(width, height)
         : Object.assign(document.createElement('canvas'), { width, height });
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas bağlamı alınamadı');
-
-    if (grayscale) {
-        // Canvas'a yazarken gri pikselleri üç kanala açıyoruz; renk uzayı
-        // DeviceGray olarak kalır, sıkıştırma sonrası doğru görünür.
-        const rgba = new Uint8ClampedArray(width * height * 4);
-        for (let i = 0, j = 0; i < width * height; i++) {
-            const v = raw[i];
-            rgba[j++] = v; rgba[j++] = v; rgba[j++] = v; rgba[j++] = 255;
-        }
-        context.putImageData(new ImageData(rgba, width, height), 0, 0);
-    } else {
-        const rgba = new Uint8ClampedArray(width * height * 4);
-        for (let i = 0, j = 0; i < width * height; i++) {
-            rgba[j++] = raw[i * 3];
-            rgba[j++] = raw[i * 3 + 1];
-            rgba[j++] = raw[i * 3 + 2];
-            rgba[j++] = 255;
-        }
-        context.putImageData(new ImageData(rgba, width, height), 0, 0);
-    }
-
+    context.putImageData(new ImageData(rgba, width, height), 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
     return new Uint8Array(await blob.arrayBuffer());
 }
@@ -510,49 +664,74 @@ async function pdfRasterizeToOutput(entries, quality) {
     const scale = RASTER_DPI / 72;
     let done = 0;
 
+    let failed = 0;
+    const failures = [];
+
     for (const entry of entries) {
         const file = pdfState.files.find((f) => f.id === entry.fileId);
         if (!file || !file.data) continue;
 
-        const source = await pdfGetDoc(file);
-        const page = await source.getPage(entry.srcIndex + 1);
-        // Kaynak /Rotate + kullanıcı döndürmesi birlikte uygulanır.
-        // pdf.js 3.x'te `page.rotate` salt okunurdur; döndürme viewport ve
-        // render seçenekleriyle verilir.
-        const rotation = pdfEffectiveRotation(entry, file);
-        const viewport = page.getViewport({ scale, rotation });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.floor(viewport.width));
-        canvas.height = Math.max(1, Math.floor(viewport.height));
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: context, viewport, rotation }).promise;
+        // A8: tek sayfanın hatası TÜM işi çöpe atmamalı. Kullanıcı 300
+        // sayfalık belgede 250. sayfada hata alıp 10 dakikalık emeğini
+        // kaybetmemeli.
+        let canvas = null;
+        try {
+            const source = await pdfGetDoc(file);
+            const page = await source.getPage(entry.srcIndex + 1);
+            // pdf.js 3.x'te `page.rotate` salt okunurdur; döndürme viewport
+            // ve render seçenekleriyle verilir.
+            const rotation = pdfEffectiveRotation(entry, file);
+            const viewport = page.getViewport({ scale, rotation });
 
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-        if (!blob) throw new Error('Görsele çevirme başarısız.');
+            canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.floor(viewport.width));
+            canvas.height = Math.max(1, Math.floor(viewport.height));
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            await page.render({ canvasContext: context, viewport, rotation }).promise;
 
-        const jpeg = new Uint8Array(await blob.arrayBuffer());
-        const embedded = await out.embedJpg(jpeg);
-        const target = out.addPage([A4_WIDTH, A4_HEIGHT]);
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+            if (!blob) throw new Error('Görsele çevirilemedi');
 
-        // Döndürülmüş sayfa yatay gelir; A4'e tekdüze sığdırıp ortala.
-        const ratio = Math.min(A4_WIDTH / embedded.width, A4_HEIGHT / embedded.height);
-        const w = embedded.width * ratio;
-        const h = embedded.height * ratio;
-        target.drawImage(embedded, {
-            x: (A4_WIDTH - w) / 2,
-            y: (A4_HEIGHT - h) / 2,
-            width: w,
-            height: h
-        });
+            const jpeg = new Uint8Array(await blob.arrayBuffer());
+            const embedded = await out.embedJpg(jpeg);
+            const target = out.addPage([A4_WIDTH, A4_HEIGHT]);
 
-        done++;
-        pdfShowProgress(done, entries.length, `Sayfa ${done} / ${entries.length} görsele çevriliyor`);
-        // pdf.js canvas'ı bellekte tutar; bırakmak uzun belgelerde OOM önler.
-        canvas.width = 0;
-        canvas.height = 0;
-        if (done % 2 === 0) await new Promise((r) => setTimeout(r, 0));
+            // Döndürülmüş sayfa yatay gelir; A4'e tekdüze sığdırıp ortala.
+            const ratio = Math.min(A4_WIDTH / embedded.width, A4_HEIGHT / embedded.height);
+            const w = embedded.width * ratio;
+            const h = embedded.height * ratio;
+            target.drawImage(embedded, {
+                x: (A4_WIDTH - w) / 2,
+                y: (A4_HEIGHT - h) / 2,
+                width: w,
+                height: h
+            });
+
+            done++;
+            pdfShowProgress(done, entries.length, `Sayfa ${done} / ${entries.length} görsele çevriliyor`);
+        } catch (err) {
+            // Sayfa atlanır, işlem sürer.
+            failed++;
+            failures.push(entry.srcIndex + 1);
+            console.warn('Sayfa görsele çevrilemedi (atlandı):', err);
+        } finally {
+            // Canvas belleği serbest bırakılır; hata olsa da.
+            if (canvas) { canvas.width = 0; canvas.height = 0; }
+            if (done % 2 === 0) await new Promise((r) => setTimeout(r, 0));
+        }
+    }
+
+    if (done === 0) throw new Error('Hiçbir sayfa görsele çevrilemedi.');
+
+    if (failed > 0) {
+        pdfShowResult(
+            `${failed} sayfa görsele çevrilemedi ve atlandı `
+            + `(sayfa ${failures.slice(0, 10).join(', ')}${failures.length > 10 ? '…' : ''}). `
+            + 'Dosya yine de oluşturuldu.',
+            'warning'
+        );
     }
 
     out.setTitle('PDF Araçları ile oluşturuldu (görsele çevrilmiş)');

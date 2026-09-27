@@ -113,3 +113,110 @@ export async function textPositions(bytes) {
     }
     return out;
 }
+
+/**
+ * Belgedeki TÜM görselleri bulur — sayfa, Form XObject, Annots/AP ve Pattern
+ * içine kadar özyinelemeli. Denetimde "testler sayı sayıyor, içerik
+ * doğrulamıyor" bulgusu bu yüzden çıkmıştı; sıkıştırma regresyon testleri
+ * gerçekten görsel sayısını ve filtrelerini ölçebilmeli.
+ *
+ * Dönüş: [{width, height, filter, colorSpace, depth, bytes, path}]
+ */
+export async function collectImages(bytes) {
+    const { PDFName, PDFDict } = require('pdf-lib');
+    const doc = await PDFDocument.load(bytes);
+    // pdf-lib, iç içe referansları ancak flush() sonrasında
+    // context.lookup ile çözebiliyor (uygulamadaki pdfCompressImages ile
+    // aynı gereklilik).
+    await doc.flush();
+    const resolve = (v) => (v && v.tag ? doc.context.lookup(v) : v);
+    const out = [];
+    const visited = new Set();
+
+    const visitResources = (resources, path, host) => {
+        const res = resolve(resources);
+        if (!res || typeof res.lookupMaybe !== 'function') return;
+        const xo = res.lookupMaybe(PDFName.of('XObject'), PDFDict);
+        if (xo) {
+            for (const key of xo.keys()) {
+                const obj = resolve(xo.get(key));
+                if (!obj || !obj.dict || visited.has(obj)) continue;
+                visited.add(obj);
+                const subtype = String(obj.dict.lookup(PDFName.of('Subtype')) ?? '');
+                if (subtype === '/Form') {
+                    visitResources(resolve(obj.dict.lookup(PDFName.of('Resources'))), `${path}/${String(key)}`);
+                } else if (subtype === '/Image') {
+                    out.push(describe(obj, `${path}/${String(key)}`));
+                }
+            }
+        }
+        // Annots -> /AP -> /N  (widget annotation görselleri: onay damgası, imza)
+        // DİKKAT: /Annots SAYFA sözlüğünde durur, /Resources içinde değil.
+        const hostDict = host && typeof host.lookupMaybe === 'function' ? host : null;
+        const annots = hostDict ? hostDict.lookupMaybe(PDFName.of('Annots'), require('pdf-lib').PDFArray) : null;
+        if (annots) {
+            for (let i = 0; i < annots.size(); i++) {
+                const annot = resolve(annots.lookup(i));
+                // annot bir PDFDict'tir; akış nesnesi (PDFRawStream) değil.
+                const annotDict = annot && annot.contents ? annot.dict : annot;
+                if (!annotDict || typeof annotDict.lookup !== 'function') continue;
+                const ap = resolve(annotDict.lookup(PDFName.of('AP')));
+                if (!ap || typeof ap.lookup !== 'function') continue;
+                // /AP /N bir AKIŞTIR (görünüm formu); /Resources onun
+                // sözlüğündedir. PDFDict olmadığı için lookupMaybe PATLAR.
+                const normal = resolve(ap.lookup(PDFName.of('N')));
+                const normalDict = normal && normal.contents ? normal.dict : normal;
+                if (normalDict && typeof normalDict.lookup === 'function') {
+                    visitResources(resolve(normalDict.lookup(PDFName.of('Resources'))), `${path}/annot${i}/AP/N`);
+                }
+            }
+        }
+        // Pattern -> painter -> /Resources
+        const patterns = res.lookupMaybe(PDFName.of('Pattern'), PDFDict);
+        if (patterns) {
+            for (const key of patterns.keys()) {
+                const pat = resolve(patterns.get(key));
+                // DİKKAT: PDFDict'in `.dict` ÖZELLİĞİ içteki Map'tir (sözlük
+                // DEĞİL). Yalnızca AKIŞLarda (contents'ı vardır) .dict sözlüktür.
+                const patDict = pat && pat.contents ? pat.dict : pat;
+                if (!patDict || typeof patDict.lookup !== 'function') continue;
+                // pdf-lib adı '/1' ve '1' olarak raporlayabilir; ikisini de kabul et.
+                const patternType = String(patDict.lookup(PDFName.of('PatternType')) ?? '').replace(/^\//, '');
+                if (patternType === '1') {
+                    visitResources(resolve(patDict.lookup(PDFName.of('Resources'))), `${path}/pattern${String(key)}`);
+                }
+            }
+        }
+    };
+
+    const describe = (obj, path) => {
+        const d = obj.dict;
+        return {
+            path,
+            width: Number(d.lookup(PDFName.of('Width')) ?? 0),
+            height: Number(d.lookup(PDFName.of('Height')) ?? 0),
+            filter: String(d.lookup(PDFName.of('Filter')) ?? 'null'),
+            colorSpace: describeColorSpace(d.lookup(PDFName.of('ColorSpace'))),
+            depth: Number(d.lookup(PDFName.of('BitsPerComponent')) ?? 0),
+            hasSmask: d.has(PDFName.of('SMask')),
+            decode: d.has(PDFName.of('Decode')) ? String(d.lookup(PDFName.of('Decode'))) : null,
+            bytes: obj.contents ? obj.contents.length : 0
+        };
+    };
+
+    doc.getPages().forEach((page, i) => visitResources(page.node.Resources(), `p${i + 1}`, page.node));
+    return out;
+}
+
+function describeColorSpace(cs) {
+    if (cs === undefined || cs === null) return null;
+    const name = cs.constructor ? cs.constructor.name : typeof cs;
+    if (name === 'PDFArray') {
+        const head = cs.lookup(0);
+        // PDFName.toString() kaçışlı biçim verir ('/Indexed' -> '#2FIndexed')
+        const first = head && head.asString ? '/' + head.decodeText().replace(/^\//, '') : String(head ?? '');
+        const n = cs.size();
+        return n === 1 ? first : first + (n === 4 ? ' CMYK' : `[${n}]`);
+    }
+    return String(cs);
+}

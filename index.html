@@ -1683,10 +1683,11 @@
                 const status = document.getElementById('pdf-libs-status');
                 if (status) {
                     status.classList.add('is-error');
-                    status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' +
-                        'PDF araçları bileşenleri yüklenemedi. ' +
-                        '<button class="btn btn-shadcn-outline" id="pdf-retry-libs-btn" ' +
-                        'type="button" onclick="pdfRetryLibs()">Tekrar Dene</button>';
+                    // Hata ekranı pdf-araclari.js içindeki tek üreticiden
+                    // gelir (A13: iki kopya ayrışıyordu).
+                    status.innerHTML = window.pdfLibsErrorHtml
+                        ? window.pdfLibsErrorHtml()
+                        : '<i class="fa-solid fa-triangle-exclamation"></i> PDF araçları bileşenleri yüklenemedi.';
                 }
             });
             return;
@@ -2549,21 +2550,47 @@
     // Belge sayaci YALNIZCA yereldir. Sayac sunucusu kaldirildi; boylece
     // sayfa hicbir dis servise istek yapmaz ve CSP connect-src 'none' ile
     // bunu uygulama seviyesinde de zorlar.
+    //
+    // ONEMLI: localStorage KISITLI profillerde (Firefox dom.storage.enabled=false,
+    // kurumsal tarayici, bazi gizli pencereler) erisilemez ve erisim HATA
+    // FIRLATIR. Bu durumda belge uretimi calismaya devam etmeli; yalnizca
+    // sayac/tema hafizasi kullanilamaz.
     const COUNTER_STORAGE_KEY = 'kira_contract_local_count';
     const COUNTER_START = 0;
+    const COUNTER_UNAVAILABLE = { get: () => null, set: () => {} };
+
+    function pdfSafeStorage() {
+        try {
+            const probe = '__pdf_probe__';
+            localStorage.setItem(probe, '1');
+            localStorage.removeItem(probe);
+            return localStorage;
+        } catch (e) {
+            console.warn('Yerel depolama kullanilamiyor; sayac ve tema hafifada tutulmayacak.');
+            return COUNTER_UNAVAILABLE;
+        }
+    }
+
+    const pdfStore = pdfSafeStorage();
 
     function fetchGlobalCount() {
         // Cihazda daha önce hazırlanan belge sayısını gösterir.
-        const stored = parseInt(localStorage.getItem(COUNTER_STORAGE_KEY) ?? '', 10);
-        const value = Number.isFinite(stored) ? stored : COUNTER_START;
+        let stored = null;
+        try { stored = pdfStore.getItem(COUNTER_STORAGE_KEY); } catch (e) { stored = null; }
+        const value = Number.isFinite(parseInt(stored ?? '', 10)) ? parseInt(stored, 10) : COUNTER_START;
         updateCounterDisplay(value, false);
     }
 
     function handlePrint() {
-        const stored = parseInt(localStorage.getItem(COUNTER_STORAGE_KEY) ?? '', 10);
-        const next = (Number.isFinite(stored) ? stored : COUNTER_START) + 1;
-        localStorage.setItem(COUNTER_STORAGE_KEY, next.toString());
-        updateCounterDisplay(next, true);
+        // Sayac hatasi ASLA yazdirmayi engellememeli.
+        try {
+            const stored = pdfStore.getItem(COUNTER_STORAGE_KEY);
+            const next = (Number.isFinite(parseInt(stored ?? '', 10)) ? parseInt(stored, 10) : COUNTER_START) + 1;
+            pdfStore.setItem(COUNTER_STORAGE_KEY, next.toString());
+            updateCounterDisplay(next, true);
+        } catch (e) {
+            console.warn('Belge sayaci guncellenemedi.');
+        }
         window.print();
     }
 
@@ -2582,9 +2609,12 @@
     }
 
     function initTheme() {
-        const savedTheme = localStorage.getItem('app_theme');
-        const theme = savedTheme || 'light';
-        setTheme(theme);
+        // Depolama kapatıksa tema varsayılana döner; initTheme ASLA
+        // istisna fırlatmamalı, yoksa renderPreview() hiç çalışmaz ve
+        // hiçbir belge üretilemez.
+        let savedTheme = null;
+        try { savedTheme = pdfStore.getItem('app_theme'); } catch (e) { savedTheme = null; }
+        setTheme(savedTheme || 'light');
     }
 
     function toggleTheme() {
@@ -2595,7 +2625,7 @@
 
     function setTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('app_theme', theme);
+        try { pdfStore.setItem('app_theme', theme); } catch (e) { /* gizli kalir */ }
         const icon = document.querySelector('#theme-toggle-btn i');
         const text = document.getElementById('theme-toggle-text');
         if (theme === 'dark') {

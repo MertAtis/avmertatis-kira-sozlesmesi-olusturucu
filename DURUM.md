@@ -1,36 +1,61 @@
-# Durum — PDF Araçları (son kalite denetimi düzeltmeleri)
+# Durum — PDF Araçları (denetim + bağımsız inceleme)
 
 **Son güncelleme:** 27 Eylül 2026
-**Durum:** 🟢 **Tamamlandı — `npm test` 123/123 geçiyor, 0 kırmızı.**
-**Branch:** `main`, commit `a2b31c7` (canlıya **push EDİLMEDİ**)
-**Canlı site:** https://mertatis.github.io/avmertatis-kira-sozlesmesi-olusturucu/ → şu an
-**`d0f0045`** sürümünü gösteriyor (testleri geçen son sağlam sürüm).
+**Durum:** 🟢 **`npm test` 132/132 geçiyor, 0 kırmızı. Duman testi yeşil.**
+**Branch:** `main`, commit `586bd5c` (canlıya **push EDİLMEDİ**)
+**Canlı site:** hâlâ `d0f0045` (testleri geçen eski sürüm).
 
-> ⚠️ **Önemli:** Canlıdaki sürüm hâlâ eski. Push öncesi aşağıdaki smoke testi yapılmalı.
+> ⚠️ Canlıya almadan önce: `git push origin main` → tarayıcıda elle duman testi.
+> Otomatik karşılığı `tests/smoke.spec.mjs` (6 sekme, uçtan uca, sıfır ağ isteği,
+> sıfır konsol hatası) — push'tan SONRA da çalıştır.
 
 ---
 
-## Kapanan 12 kırmızı test (27 Eylül 2026)
+## Bu turda bulunan ve düzeltilen hatalar (bağımsız inceleme)
 
-| Test | Kök neden | Düzeltme |
+Daha önce "düzeltildi" yazan 4 kayıt **gerçekte çalışmıyordu**. Hepsi için önce
+kırmızı test yazıldı, sonra düzeltildi.
+
+### Sessizce bozuk çıktı üreten 3 hata
+
+| Bulgu | Gerçek durum | Düzeltme |
 |---|---|---|
-| `T11` `T12` `F3` `A6` | Modal `.app-grid` İÇİNDE olduğu için `inert` modalı da kilitliyordu → hiçbir buton tıklanamıyor, odak tuzağı çalışmıyordu | `inert`/`aria-hidden` artık modalin **dışındaki** kardeşlere + sekme çubuğuna uygulanıyor (`pdf-cikti.js`) |
-| `A5` | `pdfState.busy` yalnızca build sırasında doğru; onay beklerken 5 eşzamanlı çağrı hepsi kilitten geçip **5 indirme** üretiyordu | `pdfBuildLock` onay penceresini de kapsıyor → tek onay, tek indirme |
-| `A2` | `PDFName.toString()` kaçışlı: `/FlateDecode` → `#2FFlateDecode` | `inspect.mjs`'e `pdfName()` (`decodeText`) yardımcısı |
-| `A2c` `A3c` | Kullanıcıya sabit "(desteklenmeyen biçim)" yazılıyordu; gerçek neden (`şeffaflık maskesi`, `renk uzayı desteklenmiyor`) kayboluyordu | Atlanma nedenleri tek tek mesaja yazılıyor |
-| `A3b` | **Üç ayrı hata:** (a) fixture paleti geçersiz `PDFDict` olarak yazılıyordu (spec gereği akış), (b) ham veri uzunluğu `channels` ile hesaplanıyordu — Indexed'da piksel başına **1 bayt**, (c) palet `look.asBytes()` ile okunuyordu, pdf-lib'de bu metot **yok** (`asUint8Array()`) | Üçü de düzeltildi; fixture `npm run fixtures` ile yeniden üretildi |
-| `A9` | `#pdf-undo-label` span'i `index.html`'de hiç yoktu | Span eklendi |
-| `A7` | Geri alma yığınındaki kayıt **tüm sayfaların** anlık görüntüsü olduğu için "o dosyaya ait kayıt" ayrımı imkânsızdı; kayıt düşürülünce diğer dosyaların düzenlemeleri de kayboluyordu | Kayıt **kırpılıyor**: kaldırılan dosyanın sayfaları düşer, kalanlar korunur |
-| `A1` | `originalSize` dosyanın **tamamını** sayıyordu: 5 sayfadan 1'i çıktıya girerken "9,8 MB → 2,0 MB (%80 küçüldü)" yazıyordu. Yani **sayfa silmek küçülme gibi gösteriliyordu** | Dosya başına oranlama (kullanılan sayfa / toplam sayfa) + sıkıştırma kapalıyken küçülme olsa bile ipucu gösteriliyor |
-| `F2` | "Dosya kaldırılınca geri al **devre dışı** olmalı" beklentisi, `A7`'nin düzelttiği hatanın kendisiydi — iki test çelişiyordu | Test, asıl iddiaya (hayalet kart üretmemeye) göre yeniden yazıldı |
+| **ICCBased 4 kanal** | `xobj.doc` pdf-lib'de **yok**; profilin `N` değeri hiç okunmuyordu, hep 3 varsayılıyordu. CMYK görseller RGB sanılıp bozuluyor, "başarılı" sayılıyordu | `dict.context.lookup(...)`; `N` 4 veya okunamıyorsa **atlanır** (`PX3`) |
+| **PNG predictor** | `/DecodeParms` hiç okunmuyordu; delta kodlu satırlar inflate edilip piksel sanılıyordu → gürültü | `Predictor ≠ 1` ise **atlanır** (`PX4`) |
+| **Indexed palet** | Palet yetersizse `undefined` → siyaha dönüşüyordu; taban renk uzayı CMYK olabiliyordu | Palet uzunluğu + `hival` + taban doğrulanır |
 
-### Rulings (kararlar)
+> Ders: `filter === '/DCTDecode'` olması "başarılı" demek değil. Artık
+> **piksel doğruluğu ölçülüyor** (`PX1`, `PX2`): kaynak örnekler Node'da
+> bağımsız okunup (zlib) çıktıdaki JPEG ile karşılaştırılıyor.
 
-- **A1 ölçümü:** `originalSize` tahmini bir pay olarak gösterilir (çok sayfalı dosyanın
-  tek sayfası kullanılıyorsa). Sayfa silmenin küçülme gibi görünmemesi daha önemli.
-- **A5:** Eşzamanlı 5 çağrıdan 4'ü düşürülür (tek onay, tek indirme). "Hepsini birleştir"
-  alternatifi aynı çıktıyı verir, daha karmaşıktır.
-- **F2:** Geri alma düğmesi kaldırma sonrası daha sık aktif; bu istenen davranış.
+### Sessiz veri kaybı
+
+- **Geri al, ikinci yüklenen dosyayı çıktıdan siliyordu.** `a.pdf` → döndür →
+  `b.pdf` yükle → "Geri Al" = `b.pdf` çıktıdan gitti, dosya satırı hâlâ
+  "3 sayfa" diyordu. Artık **dosya ekleme geri alınabilir** bir iş ve geri al
+  dosyayı hem listeden hem çıktıdan kaldırıyor (`UD1`).
+- **Kayıp modda atlanan sayfaların haberi kullanıcıya ulaşmıyordu.** Mesaj
+  hemen eziliyor, 5 sayfalık belgeden 4 sayfa üretilip "dosya zaten optimize"
+  deniyordu. Artık hangi sayfaların atlandığı yazılıyor (`A8`).
+
+### Kaynak ve davranış
+
+- `pdf.js` belgeleri `destroy()` **çağrılmıyordu** (yorum "yok eder" diyordu).
+- Geri alma kaydı `thumbnailPending` taşıyordu → kart kalıcı "Yükleniyor".
+- **60 sayfada tek silme 59 küçük resim** yeniden kodluyordu → 0.
+- Vektör yolda tek sayfa hatası tüm işi çöpe atıyordu → sayfa başına koruma.
+- `replaced>0` iken "büyük görsel bulunamadı" deniyordu, `%0 küçüldü` mümkündü,
+  genel yükleme hatası bir sonraki listede siliniyordu, sekme çubuğu `inert`
+  değildi (yanlış seçici) — hepsi düzeltildi.
+
+### Kapanan testler / yeni testler
+
+- `A8` (kayıp mod haberi), `UD1` (geri al + dosya ekleme), `UD2` (thumbnailPending),
+  `I15` (kalıcı hata kutusu)
+- `PX1`–`PX4` (piksel doğruluğu, CMYK ICC, predictor)
+- Yeni fixture'lar: `iccbased-cmyk.pdf`, `predictor.pdf`
+- `tests/smoke.spec.mjs`: 6 sekme + uçtan uca + **sıfır ağ isteği** + **sıfır konsol hatası**
+- Beklenti güncellenenler: `F2`, `T18b`, `A1` toleransı
 
 ---
 

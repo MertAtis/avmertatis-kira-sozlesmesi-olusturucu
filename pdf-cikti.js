@@ -139,13 +139,21 @@ async function pdfBuildOutput() {
     pdfHideResult();
 
     try {
-        // A1: 'Orijinal' boyutu SADECE çıktıya giren sayfaların dosyalarından
-        // hesaplanır. Silinen sayfaların dosyası hâlâ listede duruyorsa o
-        // dosyanın tamamı sayılırsa kullanıcı 'sıkıştırma yaptım' sanar.
-        const usedFileIds = new Set(entries.map((e) => e.fileId));
-        const originalSize = pdfState.files
-            .filter((f) => usedFileIds.has(f.id))
-            .reduce((sum, f) => sum + (f.size || 0), 0);
+        // A1: 'Orijinal' boyutu SADECE çıktıya giren sayfaları içeren
+        // dosyalardan hesaplanır ve dosya başına ORANLANIR: 5 sayfalık bir
+        // dosyadan 1 sayfa çıktıya giriyorsa dosyanın tamamı sayılmaz. Aksi
+        // halde kullanıcı sayfaları silmenin yarattığı %80'lik düşüşü
+        // "sıkıştırma yaptım" sanar.
+        const usedCounts = new Map();
+        for (const entry of entries) {
+            usedCounts.set(entry.fileId, (usedCounts.get(entry.fileId) || 0) + 1);
+        }
+        const originalSize = pdfState.files.reduce((sum, f) => {
+            const used = usedCounts.get(f.id);
+            if (!used) return sum;
+            const total = f.pageCount || f.doc?.getPageCount?.() || used;
+            return sum + Math.round((f.size || 0) * Math.min(1, used / total));
+        }, 0);
         let compressReport = null;
 
         // Kayıp mod ÖNCE kontrol edilir: rasterizasyon kaynak PDF'leri doğrudan
@@ -287,19 +295,32 @@ function pdfConfirmLossy() {
     const cancel = document.getElementById('pdf-lossy-cancel');
     const confirmBtn = document.getElementById('pdf-lossy-confirm');
     const previouslyFocused = document.activeElement;
-    const appGrid = document.querySelector('.app-grid');
+    // A6: arka plan odaklanabilir kalmasın. Modal `.app-grid` İÇİNDE olduğu
+    // için inert uygulanacak düğüm modalın kendisi değil, onun dışındaki
+    // kardeşler + sekme çubuğu olmalıdır; aksi halde modal da inert olur ve
+    // hiçbir buton tıklanamaz.
+    const background = [];
+    const appGrid = modal.closest('.app-grid');
+    appGrid?.querySelectorAll(':scope > *').forEach((el) => {
+        if (el !== modal && !el.contains(modal)) background.push(el);
+    });
+    const tabBar = document.querySelector('.tab-bar, .tabs, nav');
+    if (tabBar && !modal.contains(tabBar) && !tabBar.contains(modal)) background.push(tabBar);
 
     modal.hidden = false;
-    // A6: arka plan odaklanabilir kalmasın.
-    appGrid?.setAttribute('inert', '');
-    appGrid?.setAttribute('aria-hidden', 'true');
+    background.forEach((el) => {
+        el.setAttribute('inert', '');
+        el.setAttribute('aria-hidden', 'true');
+    });
     confirmBtn?.focus();
 
     pdfLossyPrompt = new Promise((resolve) => {
         const finish = (answer) => {
             modal.hidden = true;
-            appGrid?.removeAttribute('inert');
-            appGrid?.removeAttribute('aria-hidden');
+            background.forEach((el) => {
+                el.removeAttribute('inert');
+                el.removeAttribute('aria-hidden');
+            });
             cancel?.removeEventListener('click', onCancel);
             confirmBtn?.removeEventListener('click', onConfirm);
             document.removeEventListener('keydown', onKey);
@@ -331,9 +352,14 @@ function pdfConfirmLossy() {
     return pdfLossyPrompt;
 }
 
+// A5: `pdfState.busy` yalnızca build sırasında doğrudur. Kayıp mod onayı
+// beklerken 5 eşzamanlı çağrı busy'ı boş bulup hepsi onaya gider, onay
+// çözülünce 5 indirme olurdu. Onayı da kapsayan ayrı bir kilit gerekir.
+let pdfBuildLock = false;
+
 async function pdfOnBuildClick() {
     // Çift tıklama iki çıktı üretmesin.
-    if (pdfState.busy) return;
+    if (pdfState.busy || pdfBuildLock) return;
     if (pdfState.pages.length === 0) {
         pdfShowResult(RESULT_TEXT.noPages, 'warning');
         return;
@@ -350,8 +376,11 @@ async function pdfOnBuildClick() {
     }
 
     // Metin seçilemez hale geleceği için önce onay alınır.
-    if (pdfState.output.lossy && !(await pdfConfirmLossy())) {
-        return;
+    if (pdfState.output.lossy) {
+        pdfBuildLock = true;
+        const ok = await pdfConfirmLossy();
+        pdfBuildLock = false;
+        if (!ok) return;
     }
 
     try {
@@ -359,6 +388,13 @@ async function pdfOnBuildClick() {
         pdfTriggerDownload(bytes, pdfOutputFileName());
 
         const head = `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}`;
+        // Sıkıştırma kapalıyken küçülme de olsa bu ipucu gösterilir: A4'e
+        // sığdırma tek başına küçülme yaratabilir ve kullanıcı bunu
+        // sıkıştırmanın işi sanmasın.
+        const compressOffNote = pdfState.output.compress
+            ? ''
+            : ' Sıkıştırma seçeneği kapalıydı; görselleri küçültmek için '
+                + '"Boyutu küçült" kutusunu işaretleyin.';
 
         if (outputSize < originalSize) {
             const saved = Math.round((1 - outputSize / originalSize) * 100);
@@ -366,6 +402,7 @@ async function pdfOnBuildClick() {
                 `${head} (%${saved} küçüldü)`
                 + (pdfState.output.lossy ? ' — Metin seçilemez.' : '')
                 + pdfSkipNote(compressReport)
+                + compressOffNote
             );
             return;
         }
@@ -373,16 +410,15 @@ async function pdfOnBuildClick() {
         // Küçülme olmadı. NEDENİ dürüstçe söylemek zorundayız; "zaten optimize"
         // demek, görsellerin atlanmış olduğu durumlarda yanlış bilgidir.
         if (!pdfState.output.compress) {
-            pdfShowResult(
-                `${head}. Sıkıştırma seçeneği kapalıydı; küçültmek için `
-                + '"Boyutu küçült" kutusunu işaretleyin.',
-                'warning'
-            );
+            pdfShowResult(`${head}.${compressOffNote}`, 'warning');
         } else if (compressReport && compressReport.skipped.length > 0) {
+            // Nedenleri tek tek yaz: "desteklenmeyen biçim" genel bir ifadedir,
+            // kullanıcı hangi biçimin eksik olduğunu göremez.
+            const reasons = [...new Set(compressReport.skipped.map((s) => s.reason))];
             pdfShowResult(
                 `${head}. ${compressReport.replaced} görsel yeniden kodlandı, `
                 + `ancak ${compressReport.skipped.length} görsel küçültülemedi `
-                + '(desteklenmeyen biçim).',
+                + `(${reasons.join(', ')}).`,
                 'warning'
             );
         } else {
@@ -562,8 +598,11 @@ async function pdfDecodePixels(xobj, bits, width, height) {
     const cs = dict.lookup(PDFName.of('ColorSpace'));
 
     let palette = null;
-    let base = null;
     let channels = 3;
+    // PİKSEL BAŞINA bayt sayısı. Indexed'da ham veri palet İNDİKSİ
+    // olduğu için her zaman 1 bayttır; `channels` paletin kaç renkli
+    // olduğunu anlatır, ham verinin uzunluğunu değil.
+    let sampleBytes = 3;
 
     const name = (value) => (value && value.asString
         ? '/' + value.decodeText().replace(/^\//, '')
@@ -577,26 +616,35 @@ async function pdfDecodePixels(xobj, bits, width, height) {
             const n = profile?.dict ? Number(profile.dict.lookup(PDFName.of('N'))) : 3;
             if (n !== 3 && n !== 1) return { pixels: null };
             channels = n;
+            sampleBytes = n;
         } else if (head === '/Indexed') {
-            base = name(cs.lookup(1));
+            const base = name(cs.lookup(1));
             channels = base === '/DeviceGray' ? 1 : 3;
+            sampleBytes = 1;
             const hival = Number(cs.lookup(2));
+            // Palet bir akıştır. pdf-lib'de bayt dizisi `asUint8Array()`
+            // ile alınır (`asBytes` diye bir metot YOKTUR); ham `contents`
+            // alanı da aynı diziyi verir.
             const look = cs.lookup(3);
-            const bytes = look && typeof look.asBytes === 'function' ? look.asBytes() : null;
-            if (!bytes) return { pixels: null };
+            const bytes = look
+                ? (typeof look.asUint8Array === 'function'
+                    ? look.asUint8Array()
+                    : (look.contents instanceof Uint8Array ? look.contents : null))
+                : null;
+            if (!bytes || !bytes.length) return { pixels: null };
             palette = { bytes, hival, channels };
         } else if (head === '/Separation' || head === '/DeviceN') {
             return { pixels: null };
         }
     } else {
         const simple = name(cs);
-        if (simple === '/DeviceGray') channels = 1;
-        else if (simple === '/DeviceRGB' || simple === '/ICCBased') channels = 3;
+        if (simple === '/DeviceGray') { channels = 1; sampleBytes = 1; }
+        else if (simple === '/DeviceRGB' || simple === '/ICCBased') { channels = 3; sampleBytes = 3; }
         else if (simple === '/DeviceCMYK') return { pixels: null };
         else return { pixels: null };
     }
 
-    const expected = width * height * channels;
+    const expected = width * height * sampleBytes;
     const raw = await pdfInflate(xobj.contents, expected);
     if (!raw || raw.length < expected) return { pixels: null };
 

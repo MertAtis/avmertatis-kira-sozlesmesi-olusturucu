@@ -318,9 +318,17 @@ async function buildColorSpaceFixtures() {
     // 2) Indexed (paletli) renk uzayı
     {
         const doc = await PDFDocument.create();
-        const palette = doc.context.obj(Uint8Array.from(
-            Array.from({ length: 768 }, (_, i) => (i * 7) % 256)
-        ));
+        // Palet PDF spec'ine göre bir AKIŞ olmalıdır. (Önceden
+        // `context.obj(Uint8Array)` deniyordu; bu pdf-lib sürümünde
+        // Uint8Array -> PDFDict'e çevriliyor ve palet bozuk bir sözlük
+        // olarak yazılıyordu. `asBytes` olmadığı için Indexed yolu hiç
+        // çalışmıyordu.)
+        const paletteRef = doc.context.register(
+            PDFRawStream.of(
+                doc.context.obj({}),
+                Uint8Array.from(Array.from({ length: 768 }, (_, i) => (i * 7) % 256))
+            )
+        );
         const indices = Buffer.alloc(W * H);
         let is = 0x2545F491;
         for (let i = 0; i < indices.length; i++) {
@@ -329,7 +337,7 @@ async function buildColorSpaceFixtures() {
         }
         await pageWithRawImage(doc, {
             width: W, height: H,
-            colorSpace: (d) => mixedArray(d, ['/Indexed', '/DeviceRGB', 255, palette]),
+            colorSpace: (d) => mixedArray(d, ['/Indexed', '/DeviceRGB', 255, paletteRef]),
             pixels: indices
         });
         made.push(write('indexed.pdf', await doc.save()));

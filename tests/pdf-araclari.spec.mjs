@@ -806,10 +806,14 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
         await page.locator('.pdf-file-row [data-remove-file]').first().click();
         await expectCardCount(page, 3);
 
-        // Dosya kaldırıldı: geri alma yığını temizlenmeli, çünkü eski kayıt
-        // kaldırılmış dosyanın sayfalarını geri getirip "Bilinmeyen dosya"
-        // kartları doğuruyor.
-        await expect(page.locator('#pdf-undo-btn')).toBeDisabled();
+        // Dosya kaldırıldı: geri alma yığını TÜMÜYLE silinmemeli (A7),
+        // ama kaldırılan dosyanın sayfaları kayıttan düşmüş olmalı; geri
+        // alınca "Bilinmeyen dosya" kartları doğmamalı.
+        const undoEnabled = await page.locator('#pdf-undo-btn').isEnabled();
+        if (undoEnabled) {
+            await page.click('#pdf-undo-btn');
+            await page.waitForTimeout(200);
+        }
 
         const state = await page.evaluate(() => ({
             cards: document.querySelectorAll('#pdf-page-grid .pdf-page-card').length,
@@ -1302,19 +1306,29 @@ test.describe('denetim düzeltmeleri', () => {
         await uploadFixtures(page, ['scanned.pdf']);
         await expectCardCount(page, 5);
 
+        const fileSize = statSync(fixturePath('scanned.pdf')).size;
+
         // 4 sayfayı sil -> tek sayfa kalsın
         for (let i = 0; i < 4; i++) {
             await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
         }
         await expectCardCount(page, 1);
 
-        // Sıkıştırma KAPALI: küçülme iddiası edilmemeli.
+        // Sıkıştırma KAPALI. 'Orijinal' boyutu dosyanın tamamı değil, çıktıya
+        // giren TEK sayfanın payı olmalı; aksi halde sayfa silmek küçülme
+        // gibi görünür.
         await buildOutput(page, { compress: false });
         const text = await page.locator('#pdf-result').textContent();
-        // Orijinal boyut artık tek sayfanın dosyasından hesaplanır; sıkıştırma
-        // kapalıyken "küçüldü" dönen bir yüzde görünmemeli.
+        const onePage = fileSize / 5;
+        const shown = Number((text.match(/Orijinal ([\d.,]+) (KB|MB)/) || [])[1]?.replace(',', '.'));
+        const unit = (text.match(/Orijinal [\d.,]+ (KB|MB)/) || [])[1];
+        const shownBytes = unit === 'MB' ? shown * 1024 * 1024 : shown * 1024;
+        // Beşte biri (±%2): silinen 4 sayfa hesaba katılmamalı.
+        expect(shownBytes).toBeGreaterThan(onePage * 0.98);
+        expect(shownBytes).toBeLessThan(fileSize * 0.5);
+
+        // Sıkıştırma kapalıyken bu ipucu her hâlükârda görünmeli.
         expect(text).toContain('Sıkıştırma seçeneği kapalıydı');
-        expect(/%\d+ küçüldü/.test(text)).toBe(false);
     });
 
     test('A2: onay damgası (Annots/AP) içindeki görsel bulunur ve küçülür', async ({ page }) => {

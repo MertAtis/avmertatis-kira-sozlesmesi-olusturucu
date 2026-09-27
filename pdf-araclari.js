@@ -203,12 +203,13 @@ function pdfRemoveFile(fileId) {
     pdfState.files.splice(index, 1);
     pdfState.pages = pdfState.pages.filter((p) => p.fileId !== fileId);
     // Geri alma yığını TÜMÜYLE silinmemeli: kullanıcının diğer dosyalardaki
-    // düzenlemeleri geri alınabilir kalmalı. Yalnızca kaldırılan dosyanın
-    // sayfalarını içeren kayıtlar düşürülür; aksi halde geri alınca
-    // "Bilinmeyen dosya" kartları doğar.
-    pdfState.undoStack = pdfState.undoStack.filter(
-        (entry) => !entry.pages.some((p) => p.fileId === fileId)
-    );
+    // düzenlemeleri geri alınabilir kalmalı. Her kayıt TÜM sayfaların anlık
+    // görüntüsü olduğu için, kaldırılan dosyanın sayfaları kayıttan da
+    // düşürülür (aksi halde geri alınca "Bilinmeyen dosya" kartları doğar);
+    // kalan dosyaların düzenlemeleri korunur.
+    pdfState.undoStack = pdfState.undoStack
+        .map((entry) => ({ ...entry, pages: entry.pages.filter((p) => p.fileId !== fileId) }))
+        .filter((entry) => entry.pages.length > 0);
 
     // pdf.js belgesi yok edilir; yoksa worker belleği tekrarlanan
     // yükle/kaldır döngüsünde sürekli büyür.

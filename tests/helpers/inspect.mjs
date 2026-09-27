@@ -195,7 +195,7 @@ export async function collectImages(bytes) {
             path,
             width: Number(d.lookup(PDFName.of('Width')) ?? 0),
             height: Number(d.lookup(PDFName.of('Height')) ?? 0),
-            filter: String(d.lookup(PDFName.of('Filter')) ?? 'null'),
+            filter: pdfName(d.lookup(PDFName.of('Filter'))) ?? 'null',
             colorSpace: describeColorSpace(d.lookup(PDFName.of('ColorSpace'))),
             depth: Number(d.lookup(PDFName.of('BitsPerComponent')) ?? 0),
             hasSmask: d.has(PDFName.of('SMask')),
@@ -208,15 +208,23 @@ export async function collectImages(bytes) {
     return out;
 }
 
+/**
+ * PDFName kaçışlı biçimde basar: '/FlateDecode' -> '#2FFlateDecode'.
+ * Bu yüzden toString() kullanılamaz; çözülmemiş ad decodeText() ile alınır.
+ */
+function pdfName(v) {
+    if (v === undefined || v === null) return null;
+    if (v.asString) return '/' + v.decodeText().replace(/^\//, '');
+    return String(v);
+}
+
 function describeColorSpace(cs) {
     if (cs === undefined || cs === null) return null;
     const name = cs.constructor ? cs.constructor.name : typeof cs;
     if (name === 'PDFArray') {
-        const head = cs.lookup(0);
-        // PDFName.toString() kaçışlı biçim verir ('/Indexed' -> '#2FIndexed')
-        const first = head && head.asString ? '/' + head.decodeText().replace(/^\//, '') : String(head ?? '');
+        const first = pdfName(cs.lookup(0)) ?? '';
         const n = cs.size();
         return n === 1 ? first : first + (n === 4 ? ' CMYK' : `[${n}]`);
     }
-    return String(cs);
+    return pdfName(cs);
 }

@@ -1,12 +1,35 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 27 Eylül 2026 (avukat turu)
+**Son güncelleme:** 27 Eylül 2026, 21:45 (avukat turu — CANLIDA)
 **Durum:** 🟢 **`npm test` 175 geçti, 1 atlandı (canlı site testi), 0 kırmızı.**
-**Dal:** `main-g0uefy` — `main`'e (canlı) aktarım kullanıcı onayı bekliyor.
-**Canlı site:** `origin/main` = `1353bd9`. (Eski "push EDİLMEDİ" notu yanlıştı.)
+**Canlı site:** `main` = `b5d0fd1` — GitHub Pages yayını başarılı (21:42). GitHub Actions `test` iş akışı `main` ve `main-g0uefy` üzerinde yeşil.
+**Dal:** `main-g0uefy` = `main` (aynı commit). Yeni işe `main`'den başlanabilir.
 
-> Canlıya aldıktan sonra: `npx playwright test tests/privacy-live.spec.mjs tests/smoke.spec.mjs`
-> Bulut oturumunda tarayıcı: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`. Test PDF'leri: `npm run fixtures`.
+## Normal (yerel) oturumda ilk adımlar
+
+1. `git fetch origin && git checkout main && git pull`
+2. `npm ci && npx playwright install chromium`
+3. `npm run fixtures && npm test` → 175 geçti beklenir
+4. **Canlı doğrulama (bulut oturumundan YAPILAMADI — ağ `github.io`'yu engelliyordu):**
+   `npx playwright test tests/privacy-live.spec.mjs tests/smoke.spec.mjs`
+   Elle: sitede PDF Araçları → Çıktı bölümünde "Dosya adı" kutusu ve "Mahkemeye / UYAP'a sunulacak" düğmesi görünmeli.
+
+## Açık kalan noktalar
+
+- Aşama 1.5–1.8 kodu (commit `bce2429`) Sonnet alt-ajanı tarafından yazıldı; testler yeşil ama Opus
+  satır satır incelemesi YAPILMADI. İlk iş: `git show bce2429` gözden geçir.
+- Yalnızca Chromium'da test edildi (Safari/Firefox denenmedi).
+- Testler üretilmiş örnek PDF'lerle; gerçek UYAP çıktıları / taranmış evrakla denenmedi.
+
+## Sonraki tur için önerilen sıra
+
+1. Sayfa ayırma / seçili sayfaları ayrı PDF olarak çıkarma
+2. Sayfa numarası "Sayfa x / y" ve dosya başına "EK-1, EK-2" etiketi (Helvetica, yalnız ASCII — fontkit yok)
+3. Çıktı seçeneklerini sadeleştir: hızlı ayarlar üstte, ayrıntılar "Gelişmiş" altında
+4. Karartma (KVKK — kişisel veriyi gerçekten silen, yalnız siyah kutu çizmeyen)
+5. Ertelenenler: dosya sıralama (↑/↓), klavyeyle sayfa taşıma, büyük önizleme
+
+Kararlar: e-imza uyarısı kullanıcı isteğiyle yapılmadı. Sıfır dış bağımlılık kuralı sürüyor.
 
 ## Avukat turu (plan: `docs/superpowers/plans/2026-09-27-avukat-pdf-mukemmellik.md`)
 

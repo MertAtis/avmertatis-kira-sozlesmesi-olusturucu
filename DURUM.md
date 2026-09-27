@@ -1,9 +1,26 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 27 Eylül 2026, 21:45 (avukat turu — CANLIDA)
-**Durum:** 🟢 **`npm test` 175 geçti, 1 atlandı (canlı site testi), 0 kırmızı.**
-**Canlı site:** `main` = `b5d0fd1` — GitHub Pages yayını başarılı (21:42). GitHub Actions `test` iş akışı `main` ve `main-g0uefy` üzerinde yeşil.
-**Dal:** `main-g0uefy` = `main` (aynı commit). Yeni işe `main`'den başlanabilir.
+**Son güncelleme:** 28 Eylül 2026 (sadakat turu — YEREL, push EDİLMEDİ)
+**Durum:** 🟢 **`npm test` 281/281 geçti** (yeni `tests/sadakat.spec.mjs` dahil, canlı gizlilik testi dahil).
+**Canlı site:** hâlâ `b5d0fd1` — aşağıdaki **1-bit hatası CANLIDA VAR**, düzeltme push bekliyor.
+
+## Sadakat turu (28 Eylül) — kural: yüklenen belgeye HİÇBİR şey eklenmez/çıkarılmaz
+
+`bce2429` satır satır incelendi. Yeni `tests/sadakat.spec.mjs`: 26 örnek PDF × 4 mod
+(olduğu gibi / kayıpsız / A4 / A4+kayıpsız), kaynak ve çıktı pdf.js ile not/damga
+dahil çizilip piksel piksel karşılaştırılır (104 test).
+
+| Bulgu | Etki | Düzeltme |
+|---|---|---|
+| **1-bit dönüşümü görseli SİLİYORDU** | Kayıpsız küçültmede saf siyah-beyaz taranmış sayfa BOŞ çıkıyordu: `ColorSpace: '/DeviceGray'` → pdf-lib `/#2FDeviceGray` (geçersiz ad) | Adlar `/` öneksiz yazılır (`pdf-cikti.js`) |
+| Testler bu hatayı gizliyordu | `inspect.mjs` `pdfName()` baştaki fazla `/`'yi siliyordu; örnek dosya üreticisi de aynı hatayla bozuk PDF'ler üretiyordu (`stamped`, `iccbased`, `indexed`…) | Yardımcı sıkılaştırıldı, üretici düzeltildi, örnekler yeniden üretildi |
+| **Yazdırılmaz not A4 çıktısına ekleniyordu** | Print bayrağı kapalı inceleme notu baskı kopyasına gömülüyordu | Yalnızca yazdırılan annotation gömülür (`NP1`, `noprint-annot.pdf`) |
+
+İncelemede sorun bulunmayanlar: R1 ayraç, R2/R3, 1.5 tekilleştirme (bayt+sözlük), budama
+(her çıktıda — sadakat testiyle doğrulandı), 1.6 beyaz liste, 1.7 yatay A4, 1.8 başlık.
+Canlı elle kontrol: 6 sekme, "Dosya adı", "Mahkemeye / UYAP'a sunulacak", "E-posta için küçült", yatay A4 seçeneği görünüyor.
+
+Bilinen ve bilinçli: A4 modunda form alanları düzleşir (etkileşim gider), bağlantılar (/Link) düşer.
 
 ## Normal (yerel) oturumda ilk adımlar
 
@@ -16,8 +33,6 @@
 
 ## Açık kalan noktalar
 
-- Aşama 1.5–1.8 kodu (commit `bce2429`) Sonnet alt-ajanı tarafından yazıldı; testler yeşil ama Opus
-  satır satır incelemesi YAPILMADI. İlk iş: `git show bce2429` gözden geçir.
 - Yalnızca Chromium'da test edildi (Safari/Firefox denenmedi).
 - Testler üretilmiş örnek PDF'lerle; gerçek UYAP çıktıları / taranmış evrakla denenmedi.
 

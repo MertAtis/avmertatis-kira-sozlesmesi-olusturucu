@@ -2184,6 +2184,16 @@ test.describe('PART A: pdfBakeAnnotationsForA4 inceleme düzeltmeleri', () => {
         const text = await extractAllText(bytes);
         expect(text).toContain('DAMGA');
     });
+
+    test('NP1: yazdırılmaz not A4 çıktısına EKLENMEZ, yazdırılır damga korunur', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['noprint-annot.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const text = await extractAllText(bytes);
+        expect(text).toContain('ASIL METIN');
+        expect(text).toContain('DAMGA');
+        expect(text).not.toContain('TASLAK NOTU');
+    });
 });
 
 // --- PART B: plan 1.5-1.8 ---------------------------------------------------

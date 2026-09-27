@@ -241,7 +241,9 @@ function mixedArray(doc, entries) {
     const array = PDFArray.withContext(doc.context);
     for (const entry of entries) {
         if (typeof entry === 'string') {
-            array.push(PDFName.of(entry));
+            // PDFName.of() '/' ÖNEKİNİ KENDİSİ ekler; '/ICCBased' verilirse ad
+            // '/#2FICCBased' olur ve görüntüleyici için geçersizdir.
+            array.push(PDFName.of(entry.replace(/^\//, '')));
         } else if (typeof entry === 'number') {
             array.push(doc.context.obj(entry));
         } else {
@@ -370,7 +372,7 @@ async function buildColorSpaceFixtures() {
             doc.context.obj({
                 Type: 'XObject', Subtype: 'Image',
                 Width: W, Height: H, BitsPerComponent: 8,
-                ColorSpace: '/DeviceGray', Filter: '/FlateDecode'
+                ColorSpace: 'DeviceGray', Filter: 'FlateDecode'
             }),
             deflateSync(Buffer.alloc(W * H, 128))
         ));
@@ -479,7 +481,7 @@ async function buildLosslessFixtures() {
         const imgDict = doc.context.obj({
             Type: 'XObject', Subtype: 'Image',
             Width: W, Height: H, BitsPerComponent: 8,
-            ColorSpace: '/DeviceRGB', Filter: '/FlateDecode'
+            ColorSpace: 'DeviceRGB', Filter: 'FlateDecode'
         });
         for (let i = 0; i < 3; i++) {
             const page = doc.addPage(A4);
@@ -539,7 +541,7 @@ async function buildLosslessFixtures() {
                 PDFRawStream.of(doc.context.obj({
                     Type: 'XObject', Subtype: 'Image',
                     Width: W2, Height: H2, BitsPerComponent: 8,
-                    ColorSpace: '/DeviceRGB', Filter: '/DCTDecode'
+                    ColorSpace: 'DeviceRGB', Filter: 'DCTDecode'
                 }), jpeg));
             page.node.setXObject(PDFName.of('Im'), jpegRef);
             page.pushOperators(
@@ -582,7 +584,7 @@ async function buildStructureFixtures() {
         const imgDict = doc.context.obj({
             Type: 'XObject', Subtype: 'Image',
             Width: W, Height: H, BitsPerComponent: 8,
-            ColorSpace: '/DeviceRGB', Filter: '/FlateDecode'
+            ColorSpace: 'DeviceRGB', Filter: 'FlateDecode'
         });
         const imgRef = doc.context.register(
             PDFRawStream.of(imgDict, deflateSync(rgbPixels(W, H, 33))));
@@ -760,6 +762,37 @@ async function buildNoContentsAnnotFixture() {
     page.node.set(PDFName.of('Annots'), mixedArray(doc, [annotRef]));
 
     made.push(write('no-contents-annot.pdf', await doc.save()));
+}
+
+// Yazdırılmaz (Print bayrağı kapalı) annotation: A4 çıktısı "baskıya uygun"
+// bir kopyadır; orijinal yazdırıldığında kâğıda ÇIKMAYAN bir inceleme notu
+// A4 çıktısına gömülürse belgeye içerik EKLENMİŞ olur. Sayfada gerçek metin
+// + yazdırılır damga (F 4) + yazdırılmaz not (F 0) vardır.
+async function buildNoPrintAnnotFixture() {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage(A5);
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    page.drawText('ASIL METIN', { x: 40, y: 500, size: 18, font });
+
+    const fontRef = doc.context.register(doc.context.obj({
+        Type: 'Font', Subtype: 'Type1', BaseFont: 'Helvetica'
+    }));
+    const apFor = (text) => doc.context.register(doc.context.flateStream(
+        `BT /F1 18 Tf 5 20 Td (${text}) Tj ET`,
+        { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 200, 50],
+          Resources: { Font: { F1: fontRef } } }
+    ));
+    const printable = doc.context.register(doc.context.obj({
+        Type: 'Annot', Subtype: 'Stamp', Rect: [40, 300, 240, 350], F: 4,
+        AP: { N: apFor('DAMGA') }
+    }));
+    const noPrint = doc.context.register(doc.context.obj({
+        Type: 'Annot', Subtype: 'FreeText', Rect: [40, 150, 240, 200], F: 0,
+        AP: { N: apFor('TASLAK NOTU') }
+    }));
+    page.node.set(PDFName.of('Annots'), doc.context.obj([printable, noPrint]));
+
+    made.push(write('noprint-annot.pdf', await doc.save()));
 }
 
 // ---------------------------------------------------------------------------
@@ -1037,7 +1070,7 @@ async function build() {
         const imgDict = doc.context.obj({
             Type: 'XObject', Subtype: 'Image',
             Width: W, Height: H, BitsPerComponent: 8,
-            ColorSpace: '/DeviceRGB', Filter: '/FlateDecode'
+            ColorSpace: 'DeviceRGB', Filter: 'FlateDecode'
         });
         // TEK nesne, TEK ref: 10 sayfa bu AYNI ref'i paylaşır.
         const imgRef = doc.context.register(PDFRawStream.of(imgDict, deflateSync(scanPixels(W, H, 909))));
@@ -1079,6 +1112,7 @@ async function build() {
     // olmayan sayfada annotation (R3).
     await buildContentSeamFixture();
     await buildNoContentsAnnotFixture();
+    await buildNoPrintAnnotFixture();
 
     // 1.7: tam yatay A4 sayfa (döndürülmemiş) doğrudan eklenmelidir.
     await buildLandscapeA4Fixture();

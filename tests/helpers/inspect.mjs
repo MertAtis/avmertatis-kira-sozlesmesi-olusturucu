@@ -214,7 +214,9 @@ export async function collectImages(bytes) {
  */
 function pdfName(v) {
     if (v === undefined || v === null) return null;
-    if (v.asString) return '/' + String(v.decodeText()).replace(/^\/+/, '');
+    // Baştaki '/' SİLİNMEZ: '/#2FFlateDecode' gibi bozuk bir ad ('/' + '/FlateDecode')
+    // görüntüleyicide geçersizdir ve testte '//FlateDecode' olarak görünmelidir.
+    if (v.asString) return '/' + String(v.decodeText());
     return String(v);
 }
 

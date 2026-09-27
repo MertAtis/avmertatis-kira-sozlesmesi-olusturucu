@@ -154,6 +154,7 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation, landscape = false) {
 // PDF 32000-1:2008 Tablo 165 — /F bayrak bitleri.
 const ANNOT_FLAG_HIDDEN = 2;
 const ANNOT_FLAG_NOVIEW = 32;
+const ANNOT_FLAG_PRINT = 4;
 
 /** Bir sayıyı içerik akışında güvenli biçimde yazar (bilimsel gösterim yok). */
 function pdfNum(n) {
@@ -333,6 +334,10 @@ function pdfBakeAnnotationsForA4(doc, page) {
 
         const flags = Number(annotDict.lookup(PDFName.of('F')) ?? 0);
         if ((flags & ANNOT_FLAG_HIDDEN) || (flags & ANNOT_FLAG_NOVIEW)) continue;
+        // A4 çıktısı baskıya uygun kopyadır: orijinal yazdırıldığında kâğıda
+        // ÇIKMAYAN (Print bayrağı kapalı) inceleme notu gömülürse belgeye
+        // içerik EKLENMİŞ olur. Yalnızca yazdırılan annotation gömülür.
+        if (!(flags & ANNOT_FLAG_PRINT)) continue;
 
         const appearance = pdfResolveAnnotAppearance(doc, annotDict);
         if (!appearance) {
@@ -1316,7 +1321,10 @@ async function pdfConvertExactOneBit(doc) {
         const newDict = doc.context.obj({
             Type: 'XObject', Subtype: 'Image',
             Width: w, Height: h, BitsPerComponent: 1,
-            ColorSpace: '/DeviceGray', Filter: '/FlateDecode'
+            // context.obj() dizeyi PDFName.of() ile ada çevirir; baştaki '/'
+            // KONULMAZ, yoksa ad '/#2FDeviceGray' olur, görüntüleyici görseli
+            // hiç çizmez ve sayfa BOŞ görünür.
+            ColorSpace: 'DeviceGray', Filter: 'FlateDecode'
         });
         const newRef = doc.context.register(PDFRawStream.of(newDict, deflated));
         replacement.set(ref.toString(), newRef);

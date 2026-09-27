@@ -15,7 +15,14 @@ export default defineConfig({
     projects: [
         {
             name: 'chromium',
-            use: { ...devices['Desktop Chrome'] }
+            use: {
+                ...devices['Desktop Chrome'],
+                // Önceden kurulu tarayıcı olan ortamlar için (ör. bulut oturumu):
+                // PW_CHROMIUM_PATH verilirse o kullanılır; yoksa Playwright varsayılanı.
+                ...(process.env.PW_CHROMIUM_PATH
+                    ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } }
+                    : {})
+            }
         }
     ]
 });

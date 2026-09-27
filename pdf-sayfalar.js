@@ -68,6 +68,7 @@ function pdfEffectiveThumbRotation(entry, file) {
 async function pdfRenderThumb(entry) {
     const file = pdfFileFor(entry.fileId);
     if (!file || !file.doc) return;
+    pdfActiveRenders++;
     try {
         const doc = await pdfGetDoc(file);
         const page = await doc.getPage(entry.srcIndex + 1);
@@ -87,6 +88,14 @@ async function pdfRenderThumb(entry) {
     } catch (err) {
         console.error('Küçük resim üretilemedi', err);
         entry.thumbError = true;
+    } finally {
+        pdfActiveRenders--;
+        if (pdfActiveRenders === 0 && pdfPendingDestroy.size) {
+            for (const doc of pdfPendingDestroy) {
+                try { Promise.resolve(doc.destroy()).catch(() => {}); } catch (_) { /* yoksay */ }
+            }
+            pdfPendingDestroy.clear();
+        }
     }
 }
 
@@ -98,11 +107,24 @@ const UNDO_LIMIT = 20;
  * Yalnızca sayfa dizisi geri alınır; thumbUrl referansları kopyalanmaz.
  * Kaldırılan dosya adlarının kaydı tutulur: pdfRemoveFile yalnızca o
  * kayıtları düşürür, kullanıcının diğer düzenlemeleri geri alınabilir kalır.
+ *
+ * `files` kimlik listesi de saklanır. Dosya EKLEME işlemi de geri
+ * alınabilir olmalıdır: aksi halde "yükle → geri al" sırası, sonradan
+ * yüklenen dosyanın sayfalarını çıktıdan sessizce siler (dosya satırı
+ * "3 sayfa" derken çıktıda 3 sayfa bulunmaz).
+ *
+ * `thumbnailPending` KOPYALANMAZ: kopyalanırsa geri alınan sayfa
+ * "üretiliyor" görünür ama yeniden planlanmaz ve kart kalıcı olarak
+ * "Yükleniyor..." ekranında takılır.
  */
 function pdfRecordUndo(label) {
     pdfState.undoStack.push({
         label,
-        pages: pdfState.pages.map((p) => ({ ...p }))
+        pages: pdfState.pages.map((p) => {
+            const { thumbnailPending, ...rest } = p;
+            return { ...rest };
+        }),
+        files: pdfState.files.map((f) => f.id)
     });
     while (pdfState.undoStack.length > UNDO_LIMIT) pdfState.undoStack.shift();
     pdfUpdateUndoButton();
@@ -112,6 +134,17 @@ function pdfUndo() {
     const entry = pdfState.undoStack.pop();
     if (!entry) return;
     pdfState.pages = entry.pages;
+
+    // Kayıttan SONRA eklenen dosyalar geri almanın bir parçasıdır: geri al
+    // onları hem listeden hem çıktıdan kaldırır. Böylece dosya satırı ile
+    // çıktıdaki sayfa sayısı birbirini tutar.
+    if (Array.isArray(entry.files)) {
+        const known = new Set(entry.files);
+        for (const file of [...pdfState.files]) {
+            if (!known.has(file.id)) pdfRemoveFile(file.id);
+        }
+    }
+
     pdfUpdateUndoButton();
     pdfBus.emit('pages');
 }
@@ -197,32 +230,31 @@ function pdfRenderGrid() {
     const previous = new Map(
         [...grid.querySelectorAll('.pdf-page-card')].map((el) => [Number(el.dataset.uid), el])
     );
-    const changed = new Set();
-    const reordered = previous.size !== pdfState.pages.length
-        || [...grid.querySelectorAll('.pdf-page-card')].some(
-            (el, i) => el.dataset.uid !== String(pdfState.pages[i]?.uid));
-    if (reordered) {
-        // Sira degistiyse tum kartlar yerinde tasinir; kucuk resimler korunur.
-        for (const page of pdfState.pages) {
-            if (previous.has(page.uid)) changed.add(page.uid);
+    // `rerender`: kartın HTML'i değişmeli (konumu, rozeti, etiketi).
+    // `rethumb`: küçük resim yeniden ÜRETİLMELİ. Sıra değişikliği ikisini
+    // gerektirmez: sayfa görseli aynıdır, yalnızca sıra numarası değişir.
+    // Önceden tek `changed` kümesi ikisini birden tetikliyordu; 60 sayfada tek
+    // bir SİLME 59 küçük resmi yeniden kodluyordu.
+    const rerender = new Set();
+    const rethumb = new Set();
+    pdfState.pages.forEach((page, index) => {
+        const el = previous.get(page.uid);
+        if (!el) { rerender.add(page.uid); return; }
+        const shownIndex = Number(el.dataset.index);
+        const shownRotation = Number(el.dataset.rotation || 0);
+        if (shownIndex !== index || shownRotation !== (page.rotation || 0)) {
+            rerender.add(page.uid);
         }
-    } else {
-        // Sira ayni ama DONDURME degismis olabilir: rozet ve kucuk resim
-        // guncellenmezse kullanici dondurdugunu goremez.
-        for (const page of pdfState.pages) {
-            const el = previous.get(page.uid);
-            if (!el) continue;
-            const shown = Number(el.dataset.rotation || 0);
-            if (shown !== (page.rotation || 0)) changed.add(page.uid);
-        }
-    }
+        if (shownRotation !== (page.rotation || 0)) rethumb.add(page.uid);
+    });
 
     const cards = pdfState.pages.map((page, index) => {
-        if (previous.has(page.uid) && !changed.has(page.uid)) {
+        if (previous.has(page.uid) && !rerender.has(page.uid)) {
             return previous.get(page.uid).outerHTML;
         }
-        // Donduyse kucuk resim yeniden uretilmeli.
-        if (changed.has(page.uid) && previous.has(page.uid)) {
+        // Donduyse kucuk resim yeniden uretilmeli. Siralamadan dolayi degisen
+        // kartlarda gerek yok.
+        if (rethumb.has(page.uid) && previous.has(page.uid)) {
             page.thumbUrl = null;
             page.thumbError = false;
         }
@@ -357,9 +389,25 @@ window.pdfResetEdits = pdfResetEdits;
 window.pdfUndo = pdfUndo;
 window.pdfMovePage = pdfMovePage;
 // pdf-araclari.js, girdi silindiğinde önbellekteki pdf.js belgesini yok eder.
+// `destroy()` YALNIZCA ÇALIŞAN İŞ YOKKEN çağrılabilir; çağırma sırasında bir
+// render beklemede olabilir ve bu durumda render hata verir. Bu yüzden önce
+// bekleyen render sayısı sıfırlanır, iş bittikten sonra destroy edilir.
+let pdfActiveRenders = 0;
+let pdfPendingDestroy = new Set();
+
+function pdfDestroyDocWhenIdle(doc) {
+    if (pdfActiveRenders === 0) {
+        // destroy() bir Promise döndürür; reddederse belge zaten yok demektir.
+        try { Promise.resolve(doc.destroy()).catch(() => {}); } catch (_) { /* yoksay */ }
+        return;
+    }
+    pdfPendingDestroy.add(doc);
+}
+
 window.pdfDocCacheForRelease = (fileId) => {
     const doc = pdfDocCache.get(fileId);
     pdfDocCache.delete(fileId);
+    if (doc) pdfDestroyDocWhenIdle(doc);
     return doc;
 };
 

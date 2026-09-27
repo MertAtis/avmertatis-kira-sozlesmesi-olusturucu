@@ -265,6 +265,7 @@ async function pageWithRawImage(doc, spec) {
     // Varsayılan: FlateDecode. `filter: false` ham (sıkıştırılmamış) akış demektir.
     if (spec.filter !== false) dict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'));
     if (spec.decode) dict.set(PDFName.of('Decode'), doc.context.obj(spec.decode));
+    if (spec.decodeParms) dict.set(PDFName.of('DecodeParms'), doc.context.obj(spec.decodeParms));
     if (spec.smask) dict.set(PDFName.of('SMask'), spec.smask);
 
     const payload = spec.filter === false ? spec.pixels : deflateSync(spec.pixels);
@@ -402,6 +403,55 @@ async function buildColorSpaceFixtures() {
             decode: [1, 0]
         });
         made.push(write('inverted-gray.pdf', await doc.save()));
+    }
+
+    // 6) ICCBased ama 4 kanallı (CMYK profili) — bu araç CMYK'i desteklemez,
+    //    bu yüzden görsel ATLANMALI, yanlış renkle yeniden kodlanmamalı.
+    {
+        const doc = await PDFDocument.create();
+        const icc = doc.context.register(PDFRawStream.of(
+            doc.context.obj({ N: 4 }),
+            Buffer.alloc(128, 0)
+        ));
+        const px = Buffer.alloc(W * H * 4);
+        let s4 = 0x6d2b79f5;
+        for (let i = 0; i < px.length; i++) {
+            s4 ^= s4 << 13; s4 >>>= 0; s4 ^= s4 >>> 17; s4 ^= s4 << 5; s4 >>>= 0;
+            px[i] = s4 & 0xff;
+        }
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: (d) => mixedArray(d, ['/ICCBased', icc]),
+            pixels: px
+        });
+        made.push(write('iccbased-cmyk.pdf', await doc.save()));
+    }
+
+    // 7) PNG predictor ile kodlanmış Flate görsel — satırlar fark alınarak
+    //    (delta) saklanmıştır. Kod çözülmeden inflate edilirse pikseller
+    //    gürültü olur. Araç bunu çözemediği için görseli ATLAMALIDIR.
+    {
+        const doc = await PDFDocument.create();
+        const rgb = rgbPixels(W, H, 33);
+        // Her satır: filtre tipi 0 + sol satırdan fark (Up/Sub tahmini değil,
+        // sade Sub) — gerçek üreticilerin sık ürettiği biçim.
+        const stride = 1 + W * 3;
+        const predicted = Buffer.alloc(H * stride);
+        for (let y = 0; y < H; y++) {
+            const rowStart = y * stride;
+            predicted[rowStart] = 0;
+            for (let x = 0; x < W * 3; x++) {
+                const left = x >= 3 ? rgb[y * W * 3 + x - 3] : 0;
+                predicted[rowStart + 1 + x] = (rgb[y * W * 3 + x] - left) & 0xff;
+            }
+        }
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: () => PDFName.of('DeviceRGB'),
+            pixels: predicted,
+            decodeParms: { Predictor: 15, Colors: 3, BitsPerComponent: 8, Columns: W }
+        });
+        made.push(write('predictor.pdf', await doc.save()));
     }
 }
 

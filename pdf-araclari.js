@@ -144,6 +144,7 @@ const PDF_ERROR_MESSAGES = {
 
 const pdfState = {
     files: [],        // {id, name, size, data, doc, pageCount, error}
+    loadError: null,  // son genel yükleme hatası (kalıcı)
     pages: [],        // {uid, fileId, srcIndex, rotation, thumbUrl, thumbError}
     output: { a4: true, compress: false, quality: 0.7, lossy: false },
     undoStack: [],
@@ -193,6 +194,16 @@ function pdfRenderFileList() {
             </button>
         </div>`;
     });
+
+    // I15: genel yükleme hatası kalıcıdır; liste yeniden kurulduğunda da
+    // görünür kalır.
+    if (pdfState.loadError) {
+        rows.unshift(`<div class="pdf-file-row is-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span class="pdf-file-name">${pdfEscapeHtml(pdfState.loadError.fileName)}</span>
+            <div class="pdf-file-error-msg">${pdfEscapeHtml(pdfState.loadError.message)}</div>
+        </div>`);
+    }
 
     list.innerHTML = rows.join('');
 }
@@ -275,6 +286,9 @@ async function addFiles(fileList) {
                 if (!Number.isFinite(pageCount) || pageCount === 0) {
                     record.error = PDF_ERROR_MESSAGES.empty;
                 } else {
+                    // Dosya eklemek de geri alınabilir bir işlemdir; kayıt
+                    // sayfalar EKLENMEDEN alınır (pdf-sayfalar.js).
+                    pdfRecordUndo('Dosya eklendi: ' + record.name);
                     record.doc = doc;
                     record.pageCount = pageCount;
                     for (let i = 0; i < pageCount; i++) {
@@ -315,15 +329,13 @@ async function addFiles(fileList) {
 }
 
 // Panel üstünde gösterilen genel hata kutusu.
+// I15: bu kutu bir sonraki `files` render'ında SİLİNİYORDU (liste içeriği
+// baştan kuruluyor). Hata, durumda tutulur ve liste render'ında yeniden basılır.
 function pdfShowError(fileName, message) {
     const list = document.getElementById('pdf-file-list');
     if (!list) return;
-    const row = document.createElement('div');
-    row.className = 'pdf-file-row is-error';
-    row.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i>
-        <span class="pdf-file-name">${pdfEscapeHtml(fileName)}</span>
-        <div class="pdf-file-error-msg">${message}</div>`;
-    list.prepend(row);
+    pdfState.loadError = { fileName, message };
+    pdfRenderFileList();
 }
 
 // --- Sekme açılışı ----------------------------------------------------------
@@ -379,6 +391,7 @@ window.pdfFormatBytes = pdfFormatBytes;
 window.pdfSetBusy = pdfSetBusy;
 window.pdfShowError = pdfShowError;
 window.pdfRemoveFile = pdfRemoveFile;
+window.pdfShowError = pdfShowError;   // test edilebilirlik: kalıcılık sözleşmesi
 window.pdfRetryLibs = pdfRetryLibs;
 window.pdfLibsErrorHtml = pdfLibsErrorHtml;
 window.addFiles = addFiles;

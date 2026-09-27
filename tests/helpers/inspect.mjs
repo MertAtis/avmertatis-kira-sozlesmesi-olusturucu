@@ -228,3 +228,89 @@ function describeColorSpace(cs) {
     }
     return pdfName(cs);
 }
+
+// --- Piksel doğruluk --------------------------------------------------------
+
+/**
+ * Bir görsel XObject'in HAM (saklanmış) örneklerini Node tarafında okur.
+ * Amaç: uygulamanın kendi çözümleyicisine güvenmeden, çıktıdaki JPEG'in
+ * gerçekten kaynak piksellere benzediğini doğrulamak. Yalnızca
+ * FlateDecode (sıkıştırılmamış yahut sıkıştırılmış) akışları okur.
+ * Dönüş: {width, height, channels, samples: Uint8Array}
+ */
+export async function readRawImageSamples(bytes) {
+    const { PDFDocument, PDFName } = await import('pdf-lib');
+    const { inflateSync } = await import('node:zlib');
+    const doc = await PDFDocument.load(bytes);
+    let image = null;
+    for (const page of doc.getPages()) {
+        const xobjects = page.node.Resources().lookup(PDFName.of('XObject'));
+        if (!xobjects || typeof xobjects.entries !== 'function') continue;
+        for (const [, ref] of xobjects.entries()) {
+            const stream = doc.context.lookup(ref);
+            if (!stream || !stream.dict) continue;
+            const subtype = stream.dict.lookup(PDFName.of('Subtype'));
+            // pdf-lib 1.17'de decodeText() baştaki '/' işaretini DÖNDÜRMEZ.
+            if (`/${subtype?.decodeText?.() ?? ''}` !== '/Image') continue;
+            image = stream;
+            break;
+        }
+        if (image) break;
+    }
+    if (!image) throw new Error('PDF içinde görsel XObject bulunamadı');
+    const d = image.dict;
+    const width = Number(d.lookup(PDFName.of('Width')));
+    const height = Number(d.lookup(PDFName.of('Height')));
+    const filterName = d.lookup(PDFName.of('Filter'))?.decodeText?.();
+    const filter = filterName ? `/${filterName}` : null;
+    let samples;
+    if (filter === '/FlateDecode') samples = new Uint8Array(inflateSync(Buffer.from(image.contents)));
+    else if (filter === null) samples = new Uint8Array(image.contents);
+    else throw new Error(`Node tarafında okunamayan filtre: ${filter}`);
+    const cs = d.lookup(PDFName.of('ColorSpace'));
+    const channels = cs?.constructor?.name === 'PDFArray' ? 1 : (`/${cs?.decodeText?.() ?? ''}` === '/DeviceGray' ? 1 : 3);
+    return { width, height, channels, samples };
+}
+
+/**
+ * Çıktıdaki JPEG görselini gerçek piksel değerlerine çözer (tarayıcıda).
+ * Dönüş: {width, height, data: Uint8ClampedArray} — RGBA.
+ * NOT: /Decode uygulanmaz; ham saklanmış örnekler karşılaştırılır.
+ */
+export async function decodeJpegPixelsInPage(page, bytes) {
+    return page.evaluate(async (arr) => {
+        const { PDFDocument, PDFName } = window.PDFLib;
+        const doc = await PDFDocument.load(new Uint8Array(arr));
+        let image = null;
+        for (const p of doc.getPages()) {
+            const xo = p.node.Resources().lookup(PDFName.of('XObject'));
+            if (!xo || typeof xo.entries !== 'function') continue;
+            for (const [, ref] of xo.entries()) {
+                const s = doc.context.lookup(ref);
+                if (`/${s?.dict?.lookup(PDFName.of('Subtype'))?.decodeText?.() ?? ''}` === '/Image') { image = s; break; }
+            }
+            if (image) break;
+        }
+        if (!image) throw new Error('görsel yok');
+        const w = Number(image.dict.lookup(PDFName.of('Width')));
+        const h = Number(image.dict.lookup(PDFName.of('Height')));
+        const bitmap = await createImageBitmap(new Blob([image.contents], { type: 'image/jpeg' }));
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        const px = ctx.getImageData(0, 0, w, h).data;
+        return { width: w, height: h, data: Array.from(px) };
+    }, [...bytes]);
+}
+
+/** Ortalama mutlak hata (0-255). JPEG yeniden kodlama için eşik ~12. */
+export function meanAbsError(samples, channels, rgba) {
+    const n = Math.floor(samples.length / channels);
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+        for (let c = 0; c < channels; c++) {
+            sum += Math.abs(samples[i * channels + c] - rgba[i * 4 + c]);
+        }
+    }
+    return sum / (n * channels);
+}

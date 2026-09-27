@@ -160,17 +160,22 @@ async function pdfBuildOutput() {
         // okur, vektör kopyasına gerek yoktur. Aksi halde 300 sayfalık belgede
         // hem vektör kopya hem JPEG'ler hem ikinci belge bellekte tutulur.
         if (pdfState.output.lossy) {
-            const bytes = await pdfRasterizeToOutput(entries, pdfState.output.quality);
-            return { bytes, originalSize, outputSize: bytes.length };
+            const { bytes, rasterFailures } = await pdfRasterizeToOutput(entries, pdfState.output.quality);
+            return { bytes, originalSize, outputSize: bytes.length, rasterFailures };
         }
 
         const doc = await PDFLib.PDFDocument.create();
         let count = 0;
+        // I12: kayıp mod dışı yolda da tek sayfanın hatası TÜM işi çöpe
+        // atmamalı. 300 sayfalık belgede 250. sayfa okunamazsa kullanıcı
+        // 10 dakikalık emeğini kaybetmemeli; sayfa atlanır ve haber verilir.
+        const copyFailures = [];
 
         for (const entry of entries) {
             const file = pdfState.files.find((f) => f.id === entry.fileId);
             if (!file || !file.doc) continue;
 
+            try {
             const [copied] = await doc.copyPages(file.doc, [entry.srcIndex]);
             // pdf-lib copyPages /Rotate'u korur; A4 dönüşümü kendi matrisinde
             // uygulayacağı için burada temizlenir, yoksa çift döner.
@@ -200,7 +205,14 @@ async function pdfBuildOutput() {
             // Tarayıcının nefes alması için zaman bırak; 300 sayfalık belgede
             // arayüz donmamalı.
             if (count % 4 === 0) await new Promise((r) => setTimeout(r, 0));
+            } catch (err) {
+                // Dosya adı yazılmaz (kişisel veri sızıntısı olur).
+                console.warn('Sayfa çıktıya eklenemedi, atlandı:', err);
+                copyFailures.push(entry.srcIndex + 1);
+            }
         }
+
+        if (count === 0) throw new Error(RESULT_TEXT.noPages);
 
         doc.setTitle('PDF Araçları ile oluşturuldu');
         doc.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
@@ -219,7 +231,15 @@ async function pdfBuildOutput() {
         }
 
         const bytes = await doc.save({ useObjectStreams: true });
-        return { bytes, originalSize, outputSize: bytes.length, compressReport };
+        return {
+            bytes,
+            originalSize,
+            outputSize: bytes.length,
+            compressReport,
+            copyFailures: copyFailures.length
+                ? { count: copyFailures.length, pages: copyFailures.slice(0, 10), more: copyFailures.length > 10 }
+                : null
+        };
     } catch (err) {
         console.error('Çıktı üretilemedi', err);
         throw err;
@@ -304,7 +324,9 @@ function pdfConfirmLossy() {
     appGrid?.querySelectorAll(':scope > *').forEach((el) => {
         if (el !== modal && !el.contains(modal)) background.push(el);
     });
-    const tabBar = document.querySelector('.tab-bar, .tabs, nav');
+    // Sekme çubuğu `.app-grid` DIŞINDA ve `.tab-container` sınıfını taşıyor
+    // (eski seçici `.tab-bar, .tabs, nav` hiçbir şeyi bulmuyordu).
+    const tabBar = document.querySelector('.tab-container');
     if (tabBar && !modal.contains(tabBar) && !tabBar.contains(modal)) background.push(tabBar);
 
     modal.hidden = false;
@@ -384,7 +406,7 @@ async function pdfOnBuildClick() {
     }
 
     try {
-        const { bytes, originalSize, outputSize, compressReport } = await pdfBuildOutput();
+        const { bytes, originalSize, outputSize, compressReport, rasterFailures, copyFailures } = await pdfBuildOutput();
         pdfTriggerDownload(bytes, pdfOutputFileName());
 
         const head = `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}`;
@@ -395,14 +417,34 @@ async function pdfOnBuildClick() {
             ? ''
             : ' Sıkıştırma seçeneği kapalıydı; görselleri küçültmek için '
                 + '"Boyutu küçült" kutusunu işaretleyin.';
+        // A8: kayıp modda atlanan sayfaların haberi. Bu not OLMADAN çıktı
+        // eksik sayfalarla üretilmiş olur ve kullanıcı bunu fark etmez.
+        const rasterNote = rasterFailures
+            ? ` ${rasterFailures.count} sayfa görsele çevrilemedi ve atlandı `
+                + `(sayfa ${rasterFailures.pages.join(', ')}${rasterFailures.more ? '…' : ''}).`
+            : '';
+        // I12: vektör yolda atlanan sayfalar da aynı şekilde bildirilir.
+        const copyNote = copyFailures
+            ? ` ${copyFailures.count} sayfa çıktıya eklenemedi ve atlandı `
+                + `(sayfa ${copyFailures.pages.join(', ')}${copyFailures.more ? '…' : ''}).`
+            : '';
+        const failedNote = rasterNote || copyNote;
+        // I14: "%0 küçüldü" bir küçülme iddiası değil, gürültüdür. Yüzde
+        // en az 1 olmalı; altındaysa küçülme yok sayılır ve neden açıklanır.
+        const saved = outputSize < originalSize
+            ? Math.round((1 - outputSize / originalSize) * 100)
+            : 0;
+        const shrunk = saved >= 1;
+        const message = failedNote + head + (shrunk
+            ? ` (%${saved} küçüldü)` + (pdfState.output.lossy ? ' — Metin seçilemez.' : '')
+            : '.');
 
-        if (outputSize < originalSize) {
-            const saved = Math.round((1 - outputSize / originalSize) * 100);
+        if (shrunk) {
             pdfShowResult(
-                `${head} (%${saved} küçüldü)`
-                + (pdfState.output.lossy ? ' — Metin seçilemez.' : '')
+                message
                 + pdfSkipNote(compressReport)
-                + compressOffNote
+                + compressOffNote,
+                failedNote ? 'warning' : undefined
             );
             return;
         }
@@ -410,20 +452,26 @@ async function pdfOnBuildClick() {
         // Küçülme olmadı. NEDENİ dürüstçe söylemek zorundayız; "zaten optimize"
         // demek, görsellerin atlanmış olduğu durumlarda yanlış bilgidir.
         if (!pdfState.output.compress) {
-            pdfShowResult(`${head}.${compressOffNote}`, 'warning');
+            pdfShowResult(`${failedNote}${head}.${compressOffNote}`, 'warning');
         } else if (compressReport && compressReport.skipped.length > 0) {
             // Nedenleri tek tek yaz: "desteklenmeyen biçim" genel bir ifadedir,
             // kullanıcı hangi biçimin eksik olduğunu göremez.
             const reasons = [...new Set(compressReport.skipped.map((s) => s.reason))];
             pdfShowResult(
-                `${head}. ${compressReport.replaced} görsel yeniden kodlandı, `
+                `${failedNote}${head}. ${compressReport.replaced} görsel yeniden kodlandı, `
                 + `ancak ${compressReport.skipped.length} görsel küçültülemedi `
                 + `(${reasons.join(', ')}).`,
                 'warning'
             );
         } else {
+            // I9: `replaced > 0` iken "büyük görsel bulunamadı" demek yanlıştır.
+            // Yeniden kodlama yapıldı ama dosya yine de büyüdüyse bu yazılır.
+            const replaced = compressReport?.replaced || 0;
             pdfShowResult(
-                'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
+                replaced > 0
+                    ? `${failedNote}${head}. ${replaced} görsel yeniden kodlandı ancak dosya `
+                      + 'yine de büyüdü; kalite ayarını düşürmeyi deneyebilirsiniz.'
+                    : 'Bu belgede sıkıştırılacak büyük görsel bulunamadı. Dosya zaten optimize durumda.',
                 'warning'
             );
         }
@@ -567,6 +615,17 @@ async function pdfRecodeImage(xobj, quality) {
     // bozulabilir. Bu bilinçli bir sınırdır, kullanıcıya bildirilir.
     if (dict.has(PDFName.of('SMask'))) return 'şeffaflık maskesi olan görsel';
 
+    // PNG/TIFF PREDICTOR: satırlar fark alınarak saklanmıştır. Bu çözümleyici
+    // predictor'ı TERSİNE ÇEVİRMEZ; inflate edilen baytlar doğrudan piksel
+    // sanılırsa görsel gürültüye döner. "Bozuk ama başarılı görünen" çıktı,
+    // görseli hiç yeniden kodlamaktan kötüdür → atlanır.
+    const parms = dict.lookup(PDFName.of('DecodeParms'));
+    if (parms) {
+        const parmDict = parms.contents ? parms.dict : parms;
+        const predictor = Number(parmDict.lookup(PDFName.of('Predictor')));
+        if (Number.isFinite(predictor) && predictor !== 1) return 'PNG predictor kodlanmış görsel';
+    }
+
     const raw = xobj.contents;
     if (!raw || raw.length < MIN_RECODE_BYTES) return 'çok küçük';
 
@@ -612,13 +671,25 @@ async function pdfDecodePixels(xobj, bits, width, height) {
         // Dizi biçimli: [/ICCBased N 0 R], [/Indexed base hival palette]
         const head = name(cs.lookup(0));
         if (head === '/ICCBased') {
-            const profile = xobj.doc?.context?.lookup(cs.lookup(1));
-            const n = profile?.dict ? Number(profile.dict.lookup(PDFName.of('N'))) : 3;
-            if (n !== 3 && n !== 1) return { pixels: null };
+            // PDFStream'da `.doc` alanı YOKTUR (pdf-lib 1.17) — önceki kod
+            // `xobj.doc?.context` arıyordu, hep `undefined` buluyor ve N her
+            // zaman 3 varsayılıyordu. 4 kanallı (CMYK) profiller bu yüzden
+            // RGB sanılıp sessizce bozuluyordu. Bağlam `dict.context`'tedir.
+            const context = dict.context || xobj.context;
+            const profile = context ? context.lookup(cs.lookup(1)) : null;
+            const profileDict = profile?.contents ? profile.dict : profile;
+            const n = profileDict && typeof profileDict.lookup === 'function'
+                ? Number(profileDict.lookup(PDFName.of('N')))
+                : NaN;
+            // Profil okunamıyorsa ya da 4 kanal (CMYK) ise desteklenmiyor.
+            if (!Number.isFinite(n) || (n !== 3 && n !== 1)) return { pixels: null };
             channels = n;
             sampleBytes = n;
         } else if (head === '/Indexed') {
+            // Paletin taban renk uzayı ya DeviceGray (1) ya DeviceRGB (3)
+            // olmalıdır. CMYK tabanlı palet (4) sessizce yanlış renk verir.
             const base = name(cs.lookup(1));
+            if (base !== '/DeviceGray' && base !== '/DeviceRGB') return { pixels: null };
             channels = base === '/DeviceGray' ? 1 : 3;
             sampleBytes = 1;
             const hival = Number(cs.lookup(2));
@@ -632,6 +703,10 @@ async function pdfDecodePixels(xobj, bits, width, height) {
                     : (look.contents instanceof Uint8Array ? look.contents : null))
                 : null;
             if (!bytes || !bytes.length) return { pixels: null };
+            // Palet yetersizse indeksler undefined'a düşer ve Uint8ClampedArray
+            // onu 0'a çevirir: sessizce SİYAH pikseller. Önceden doğrula.
+            if (!Number.isInteger(hival) || hival < 0) return { pixels: null };
+            if (bytes.length < (hival + 1) * channels) return { pixels: null };
             palette = { bytes, hival, channels };
         } else if (head === '/Separation' || head === '/DeviceN') {
             return { pixels: null };
@@ -773,18 +848,18 @@ async function pdfRasterizeToOutput(entries, quality) {
 
     if (done === 0) throw new Error('Hiçbir sayfa görsele çevrilemedi.');
 
-    if (failed > 0) {
-        pdfShowResult(
-            `${failed} sayfa görsele çevrilemedi ve atlandı `
-            + `(sayfa ${failures.slice(0, 10).join(', ')}${failures.length > 10 ? '…' : ''}). `
-            + 'Dosya yine de oluşturuldu.',
-            'warning'
-        );
-    }
-
+    // A8: kayıp modda atlanan sayfalar KULLANICIYA bildirilir. Ancak mesaj
+    // BURADA gösterilmez: pdfOnBuildClick hemen ardından boyut özetini
+    // yazar ve mesaj ezilirdi (kullanıcı 4 sayfalık dosyayı "zaten optimize"
+    // diye sanıyordu). Bunun yerine çağırana verilir.
     out.setTitle('PDF Araçları ile oluşturuldu (görsele çevrilmiş)');
     out.setProducer('PDF Araçları (kira-sozlesmesi-olusturucu)');
-    return out.save({ useObjectStreams: true });
+    return {
+        bytes: await out.save({ useObjectStreams: true }),
+        rasterFailures: failed
+            ? { count: failed, pages: failures.slice(0, 10), more: failures.length > 10 }
+            : null
+    };
 }
 
 // --- Bağlantılar -----------------------------------------------------------

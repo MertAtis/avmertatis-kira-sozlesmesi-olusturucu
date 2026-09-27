@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync, statSync } from 'node:fs';
-import { extractAllText, readPageBoxes, readImageCount, textPositions, collectImages } from './helpers/inspect.mjs';
+import { extractAllText, readPageBoxes, readImageCount, textPositions, collectImages, readRawImageSamples, decodeJpegPixelsInPage, meanAbsError } from './helpers/inspect.mjs';
 import { PDFDocument } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -130,6 +130,21 @@ test.describe('dosya yükleme ve hata yönetimi', () => {
         expect(await page.evaluate(() => window.pdfState.pages.length)).toBe(4);
     });
 
+    test('I15: genel yükleme hatası sonraki render\'da KAYBOLMAZ', async ({ page }) => {
+        await openPdfTab(page);
+        await page.evaluate(() => pdfShowError('Yükleme', 'Beklenmeyen bir hata oluştu.'));
+        await expect(page.locator('#pdf-file-list .is-error')).toHaveCount(1);
+
+        // Dosya listesi yeniden kurulduğunda hata satırı SİLİNMEDİĞİ için
+        // kullanıcı hatayı kaybetmez. (Eskiden `prepend` edilen satır bir
+        // sonraki render'da yok oluyordu.)
+        await uploadFixtures(page, ['a.pdf']);
+        await expect(page.locator('#pdf-file-list .is-error')).toHaveCount(1);
+        await expect(page.locator('#pdf-file-list')).toContainText('Beklenmeyen bir hata oluştu.');
+        // Dosya satırı da görünür kalmalı.
+        await expect(page.locator('#pdf-file-list .pdf-file-name')).toHaveCount(2);
+    });
+
     test('T14b: PDF olmayan dosya reddedilir', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['not-a-pdf.pdf']);
@@ -251,11 +266,22 @@ test.describe('sayfa ızgarası ve düzenleme', () => {
         expect(await pageOrder(page)).toEqual([0, 1, 2, 3]);
     });
 
-    test('T18b: düzenleme yokken geri al butonu devre dışıdır', async ({ page }) => {
+    test('T18b: geri al yığını boşken buton devre dışıdır, dosya eklemek geri alınabilir', async ({ page }) => {
         await openPdfTab(page);
+        // Dosya eklemek de geri alınabilir bir işlemdir: geri al, eklenen
+        // dosyayı hem listeden hem çıktıdan kaldırmalı. Bu yüzden düğme
+        // yüklemeden sonra ETKİN olur ve ne yapacağını yazar (A9).
         await uploadFixtures(page, ['a.pdf']);
         await expectCardCount(page, 4);
-        await expect(page.locator('#pdf-undo-btn')).toBeDisabled();
+        await expect(page.locator('#pdf-undo-btn')).toBeEnabled();
+        await expect(page.locator('#pdf-undo-label')).toHaveText(/Dosya eklendi/);
+
+        // Yığın tüketilince düğme yeniden devre dışı olur.
+        while (await page.locator('#pdf-undo-btn').isEnabled()) {
+            await page.click('#pdf-undo-btn');
+            await page.waitForTimeout(100);
+        }
+        await expect(page.locator('#pdf-page-grid .pdf-page-label').first()).toHaveText(/Henüz dosya eklenmedi/);
     });
 
     test('T18c: sıralamayı ve döndürmeyi sıfırla', async ({ page }) => {
@@ -563,6 +589,47 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
         expect(await page.evaluate(() => window.pdfState.busy)).toBe(false);
     });
 
+    test('A8: kayıp modda tek sayfa hata verirse mesaj KULLANICIYA ULAŞIR', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        await expectCardCount(page, 5);
+
+        // 2. sayfanın rasterizasyonu başarısız olsun: canvas -> JPEG dönüşümü
+        // null döndürür (tarayıcıda JPEG kodlaması başarısız olduğunda olan
+        // budur). Küçük resimler çoktan üretildiği için sayaç onları saymaz.
+        await page.evaluate(() => {
+            const original = HTMLCanvasElement.prototype.toBlob;
+            let calls = 0;
+            HTMLCanvasElement.prototype.toBlob = function patched(cb, type, quality) {
+                calls++;
+                if (calls === 2) { cb(null); return; }
+                return original.call(this, cb, type, quality);
+            };
+        });
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('#pdf-opt-lossy').setChecked(true);
+        await page.click('#pdf-build-btn');
+        await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+        await page.click('#pdf-lossy-confirm');
+        const download = await downloadPromise;
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
+
+        // Dosya yine de üretildi ve 5 sayfadan 4'ü var.
+        const { PDFDocument } = await import('pdf-lib');
+        expect((await PDFDocument.load(bytes)).getPageCount()).toBe(4);
+
+        // KRİTİK: hangi sayfanın eksik olduğu kullanıcıya söylenmeli. Mesaj
+        // daha önce hemen eziliyor ve "dosya zaten optimize" deniyordu.
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('görsele çevrilemedi');
+        expect(text).toContain('1 sayfa');
+    });
+
     test('T12: onaylanınca metin kaybolur ve dosya büyük ölçüde küçülür', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['scanned.pdf']);
@@ -796,6 +863,71 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
         expect(boxes[0].rotation).toBe(180);
     });
 
+    test('UD2: geri alma kaydı "üretiliyor" durumunu TAŞIMAZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+
+        // Geri alma kaydı, üretilmekte olan sayfanın durumunu da kopyalar.
+        // `thumbnailPending` kopyalanırsa geri al, o sayfayı yeniden
+        // planlamaz (filtre onu "zaten üretiliyor" sayar) ve kart kalıcı
+        // olarak "Yükleniyor..." ekranında takılır.
+        const copied = await page.evaluate(() => {
+            const target = pdfState.pages[1];
+            target.thumbnailPending = true;
+            pdfRotatePage(target.uid);           // geri alma kaydı alır
+            const top = pdfState.undoStack[pdfState.undoStack.length - 1];
+            const snapshot = top.pages.find((p) => p.uid === target.uid);
+            return { recorded: !!top, pending: snapshot ? !!snapshot.thumbnailPending : null };
+        });
+        expect(copied.recorded).toBe(true);
+        expect(copied.pending).toBe(false);
+    });
+
+    test('UD1: dosya ekledikten sonra geri al, eklenen dosyayı ÇIKTIDAN SİLMEZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['a.pdf']);
+        await expectCardCount(page, 4);
+
+        // Geri alma yığınına bir kayıt girsin (döndürme).
+        await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
+
+        // Sonra ikinci dosya yüklensin.
+        await uploadFixtures(page, ['b.pdf']);
+        await expectCardCount(page, 7);
+
+        // Geri al düğmesi ne yapacağını yazar (A9): en son işlem dosya eklemek.
+        await expect(page.locator('#pdf-undo-label')).toHaveText(/Dosya eklendi/);
+        await page.click('#pdf-undo-btn');
+        await page.waitForTimeout(200);
+
+        // Geri al, b.pdf'yi hem listeden hem çıktıdan kaldırmalı; a.pdf ve
+        // ondaki döndürme KORUNMALI. Dosya satırı "3 sayfa" derken çıktıda
+        // 3 sayfa bulunmasının bir yolu kalmamalı.
+        const state = await page.evaluate(() => ({
+            pages: pdfState.pages.length,
+            cards: document.querySelectorAll('.pdf-page-card').length,
+            files: pdfState.files.map((f) => f.name),
+            rows: document.querySelectorAll('.pdf-file-row').length,
+            rotated: pdfState.pages.filter((p) => p.rotation !== 0).length
+        }));
+        expect(state.files).toEqual(['a.pdf']);
+        expect(state.rows).toBe(1);
+        expect(state.pages).toBe(4);
+        expect(state.cards).toBe(4);
+        expect(state.rotated).toBe(1);
+
+        // İkinci geri al: döndürme de geri gelmeli.
+        await page.click('#pdf-undo-btn');
+        await page.waitForTimeout(200);
+        const after = await page.evaluate(() => ({
+            rotated: pdfState.pages.filter((p) => p.rotation !== 0).length,
+            pages: pdfState.pages.length
+        }));
+        expect(after.rotated).toBe(0);
+        expect(after.pages).toBe(4);
+    });
+
     test('F2: dosya kaldırıldıktan sonra geri al hayalet kart üretmez', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['a.pdf', 'b.pdf']);
@@ -977,6 +1109,20 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
         await page.waitForTimeout(3000);
         const afterAll = await page.evaluate(() => window.__thumbRenders);
         expect(afterAll - beforeAll).toBe(60);
+
+        // SİLME ve SÜRÜKLEME küçük resimleri yeniden üretmemeli: sayfa
+        // görseli değişmemiştir, yalnızca sırası/numarası değişmiştir. Önceden
+        // 60 sayfada tek silme 59 yeniden kodlama tetikliyordu.
+        const beforeDelete = afterAll;
+        await page.locator('.pdf-page-card').first().locator('[data-action="delete"]').click();
+        await expectCardCount(page, 59);
+        await page.waitForTimeout(1200);
+        expect(await page.evaluate(() => window.__thumbRenders) - beforeDelete).toBe(0);
+
+        const beforeDrag = await page.evaluate(() => window.__thumbRenders);
+        await page.evaluate(() => pdfMovePage(pdfState.pages[5].uid, 0));
+        await page.waitForTimeout(1200);
+        expect(await page.evaluate(() => window.__thumbRenders) - beforeDrag).toBe(0);
     });
 });
 
@@ -1050,6 +1196,7 @@ test.describe('döndürme görsel geri bildirimi ve önizleme paneli', () => {
                     const img = document.querySelector('.pdf-page-card .pdf-page-thumb');
                     return img ? { w: img.naturalWidth, h: img.naturalHeight } : null;
                 });
+
                 if (last && last.w > 0) {
                     // 210x148 => genişlik büyük => YATAY
                     const ok = want === 'landscape' ? last.w > last.h : last.h > last.w;
@@ -1323,8 +1470,11 @@ test.describe('denetim düzeltmeleri', () => {
         const shown = Number((text.match(/Orijinal ([\d.,]+) (KB|MB)/) || [])[1]?.replace(',', '.'));
         const unit = (text.match(/Orijinal [\d.,]+ (KB|MB)/) || [])[1];
         const shownBytes = unit === 'MB' ? shown * 1024 * 1024 : shown * 1024;
-        // Beşte biri (±%2): silinen 4 sayfa hesaba katılmamalı.
-        expect(shownBytes).toBeGreaterThan(onePage * 0.98);
+        // Beşte biri: silinen 4 sayfa hesaba katılmamalı. Tolerans, biçimlendiricinin
+        // (0,1 MB'ye yuvarlama) kendi hatasından GENİŞ olmalı; aksi halde test
+        // kendi kaba yuvarlaması yüzünden kırmızıya döner.
+        expect(shownBytes / onePage).toBeGreaterThan(0.95);
+        expect(shownBytes / onePage).toBeLessThan(1.05);
         expect(shownBytes).toBeLessThan(fileSize * 0.5);
 
         // Sıkıştırma kapalıyken bu ipucu her hâlükârda görünmeli.
@@ -1396,6 +1546,89 @@ test.describe('denetim düzeltmeleri', () => {
         expect(text).toContain('renk uzayı');
         // "zaten optimize" gibi yanlış bilgi verilmemeli
         expect(text).not.toContain('zaten optimize');
+    });
+
+    // --- Yeniden kodlamanın GÖRÜNTÜ DOĞRULUĞU ---------------------------------
+    // Filtre '/DCTDecode' olması "başarılı" demek DEĞİLDİR: pikseller
+    // bozulmuş olabilir. Bu testler kaynak örnekleri bağımsız olarak
+    // (Node + zlib) okuyup çıktıdaki JPEG ile karşılaştırır.
+
+    test('PX1: ters gri tonlu görsel yeniden kodlandığında pikselleri bozulmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['inverted-gray.pdf']);
+
+        const source = await readRawImageSamples(fixtureBytes('inverted-gray.pdf'));
+        expect(source.channels).toBe(1);
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.85' });
+        const after = await collectImages(bytes);
+        expect(after[0].filter).toBe('/DCTDecode');
+        // /Decode korunmalı: aynı /Decode ile kaydedilen örnekler aynı görünür.
+        // /Decode [1 0] korunmalı: aynı /Decode ile yazılan örnekler aynı görünür.
+        expect(after[0].decode).toContain('1');
+
+        const pixels = await decodeJpegPixelsInPage(page, bytes);
+        expect(pixels.width).toBe(source.width);
+        expect(pixels.height).toBe(source.height);
+        // Ters çevirme uygulanmadan ham örnekler karşılaştırılır; 90 kalite
+        // için ortalama hata 12'nin altında olmalı. Ters çevrilmiş bir çıktı
+        // ortalama hatayı ~85'e çıkarır.
+        expect(meanAbsError(source.samples, 1, pixels.data)).toBeLessThan(12);
+    });
+
+    test('PX2: Indexed görsel yeniden kodlandığında pikselleri bozulmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['indexed.pdf']);
+
+        // Kaynak paletten bağımsız olarak hesaplanır.
+        const palette = Array.from({ length: 768 }, (_, i) => (i * 7) % 256);
+        const { inflateSync } = await import('node:zlib');
+        const { PDFDocument, PDFName } = await import('pdf-lib');
+        const doc = await PDFDocument.load(fixtureBytes('indexed.pdf'));
+        let image = null;
+        for (const [, ref] of doc.getPages()[0].node.Resources().lookup(PDFName.of('XObject')).entries()) {
+            image = doc.context.lookup(ref);
+        }
+        const indices = new Uint8Array(inflateSync(Buffer.from(image.contents)));
+        const expected = new Uint8Array(indices.length * 3);
+        for (let i = 0; i < indices.length; i++) {
+            expected[i * 3] = palette[indices[i] * 3];
+            expected[i * 3 + 1] = palette[indices[i] * 3 + 1];
+            expected[i * 3 + 2] = palette[indices[i] * 3 + 2];
+        }
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.85' });
+        expect((await collectImages(bytes))[0].filter).toBe('/DCTDecode');
+        const pixels = await decodeJpegPixelsInPage(page, bytes);
+        expect(meanAbsError(expected, 3, pixels.data)).toBeLessThan(20);
+    });
+
+    test('PX3: 4 kanallı ICCBased (CMYK) görsel sessizce bozulmaz, atlanır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['iccbased-cmyk.pdf']);
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const after = await collectImages(bytes);
+        // Yeniden kodlanmamalı: CMYK profili desteklenmiyor.
+        expect(after[0].filter).toBe('/FlateDecode');
+
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('küçültülemedi');
+        expect(text).toContain('renk uzayı');
+    });
+
+    test('PX4: PNG predictor kodlanmış görsel atlanır, bozulmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['predictor.pdf']);
+
+        const { bytes } = await buildOutput(page, { compress: true, quality: '0.7' });
+        const after = await collectImages(bytes);
+        // Predictor çözülmeden yeniden kodlanırsa pikseller gürültü olur.
+        expect(after[0].filter).toBe('/FlateDecode');
+
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('küçültülemedi');
+        expect(text).toContain('predictor');
     });
 
     test('A2c: SMask olan görsel atlanır ve bu durum bildirilir', async ({ page }) => {

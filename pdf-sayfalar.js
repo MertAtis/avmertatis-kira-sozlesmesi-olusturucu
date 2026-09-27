@@ -49,13 +49,19 @@ async function pdfGetDoc(file) {
 /**
  * Kaynak sayfanın kendi /Rotate değeri. Kullanıcının eklediği döndürme bunun
  * ÜSTÜNE değil ÜSTÜNE EKLENİR (pdf-cikti.js ile aynı kural).
+ *
+ * A1.3: `/Rotate` MİRAS ALINABİLİR bir özelliktir (PDF 32000 §7.7.3.4);
+ * yalnızca sayfanın kendi sözlüğü okunursa kök /Pages düğümüne yazılmış
+ * değer kaçırılır. `page.getRotation()` bunun yerine pdf-lib'in kendi
+ * `getInheritableAttribute` zincirini kullanır ve mirası doğru okur.
+ * Bu yardımcı pdf-cikti.js (pdfEffectiveRotation) tarafından da kullanılır;
+ * iki dosya da AYNI mantığı paylaşsın diye tek yerde tutulur.
  */
 function pdfSourceRotation(file, srcIndex) {
     if (!file?.doc) return 0;
     try {
-        const raw = file.doc.getPage(srcIndex).node.get(PDFLib.PDFName.of('Rotate'));
-        const value = Number(raw?.toString?.() ?? raw);
-        if (Number.isFinite(value)) return ((Math.round(value / 90) * 90) % 360 + 360) % 360;
+        const angle = file.doc.getPage(srcIndex).getRotation().angle;
+        if (Number.isFinite(angle)) return ((Math.round(angle / 90) * 90) % 360 + 360) % 360;
     } catch { /* okunamayan sayfa: döndürme yok sayılır */ }
     return 0;
 }
@@ -412,3 +418,4 @@ window.pdfDocCacheForRelease = (fileId) => {
 };
 
 window.pdfRenderThumb = pdfRenderThumb;
+window.pdfSourceRotation = pdfSourceRotation;

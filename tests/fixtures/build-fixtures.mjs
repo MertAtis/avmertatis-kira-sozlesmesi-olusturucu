@@ -687,6 +687,65 @@ function buildPatternPdf(W, H) {
 }
 
 // ---------------------------------------------------------------------------
+// A1.2 fixture'ları: form alanı (Widget) görünümü, gizli annotation, AP'siz widget
+// ---------------------------------------------------------------------------
+
+async function buildFormFieldFixtures() {
+    // Yeniden ölçeklenen (A5) sürüm: A4 modunda embedPage devreye girer.
+    {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        const page = doc.addPage(A5);
+        page.drawText('FORM ALANI TESTI', { x: 30, y: 560, size: 14, font });
+
+        const form = doc.getForm();
+        const textField = form.createTextField('avukat.ad');
+        textField.setText('AVUKAT TEST');
+        textField.addToPage(page, { x: 30, y: 480, width: 220, height: 26, font });
+        form.updateFieldAppearances(font);
+
+        // Gizli (Hidden, /F bit 2) annotation: GÖRÜNÜMÜ olsa bile A4
+        // çıktısında ÇİZİLMEMELİ.
+        const hiddenAP = doc.context.register(doc.context.flateStream(
+            '1 0 0 RG 0 0 40 20 re S',
+            { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 40, 20] }
+        ));
+        const hiddenAnnot = doc.context.register(doc.context.obj({
+            Type: 'Annot', Subtype: 'Widget', Rect: [30, 440, 70, 460],
+            F: 2, AP: { N: hiddenAP }
+        }));
+
+        // Görünümü (AP) OLMAYAN widget: sessizce atlanır ama sonuç mesajına
+        // uyarı düşmeli.
+        const noApWidget = doc.context.register(doc.context.obj({
+            Type: 'Annot', Subtype: 'Widget', Rect: [30, 400, 150, 420], F: 4
+        }));
+
+        const annots = page.node.Annots();
+        annots.push(hiddenAnnot);
+        annots.push(noApWidget);
+
+        made.push(write('form-field.pdf', await doc.save()));
+    }
+
+    // Tam A4 sürüm: yeniden ölçeklenmemeli, /Annots olduğu gibi kalmalı.
+    {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        const page = doc.addPage(A4);
+        page.drawText('FORM ALANI TESTI A4', { x: 30, y: 800, size: 14, font });
+
+        const form = doc.getForm();
+        const textField = form.createTextField('avukat.ad');
+        textField.setText('AVUKAT TEST');
+        textField.addToPage(page, { x: 30, y: 700, width: 220, height: 26, font });
+        form.updateFieldAppearances(font);
+
+        made.push(write('form-field-a4.pdf', await doc.save()));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Üretim
 // ---------------------------------------------------------------------------
 
@@ -827,8 +886,62 @@ async function build() {
         page.setCropBox(100, 150, 500, 700);
         page.drawText('KIRPMA TESTI', { x: 130, y: 620, size: 18, font });
         page.drawText('BU SATIR ALT KOSEDE', { x: 130, y: 190, size: 10, font });
+        // A1.4: CropBox DIŞINDA (y=100 < CropBox alt sınırı 150) bir metin.
+        // Görünür kutu hesabı CropBox'ı yok sayarsa bu satır çıktıda
+        // görünür şekilde konumlanır (kırpılmış olması gerekirken).
+        page.drawText('GIZLI KENAR', { x: 130, y: 100, size: 10, font });
         made.push(write('cropbox.pdf', await doc.save()));
     }
+
+    // A1.1: Aynı büyük görsel 10 sayfada PAYLAŞILAN TEK nesne (ortak referans)
+    // olarak kullanılıyor — gerçek belgede tekrar eden başlık logosu gibi.
+    // Sayfa başına ayrı copyPages() çağrısı bu paylaşımı kaybedip görseli
+    // her sayfada yeniden kopyalar (ölçülen 10× şişme); dosya başına TEK
+    // toplu copyPages() çağrısı görseli bir kez kopyalamalı.
+    {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        const W = 600, H = 800;
+        const imgDict = doc.context.obj({
+            Type: 'XObject', Subtype: 'Image',
+            Width: W, Height: H, BitsPerComponent: 8,
+            ColorSpace: '/DeviceRGB', Filter: '/FlateDecode'
+        });
+        // TEK nesne, TEK ref: 10 sayfa bu AYNI ref'i paylaşır.
+        const imgRef = doc.context.register(PDFRawStream.of(imgDict, deflateSync(scanPixels(W, H, 909))));
+        for (let i = 1; i <= 10; i++) {
+            const page = doc.addPage(A4);
+            page.drawText(`SHARED SAYFA ${i}`, { x: 40, y: 780, size: 20, font });
+            page.node.setXObject(PDFName.of('Logo'), imgRef);
+            page.pushOperators(
+                pushGraphicsState(),
+                concatTransformationMatrix(220, 0, 0, 293, 40, 420),
+                drawObject('Logo'),
+                popGraphicsState()
+            );
+        }
+        made.push(write('shared-resources.pdf', await doc.save()));
+    }
+
+    // A1.3: /Rotate yalnızca KÖK /Pages düğümünde (miras); sayfanın kendi
+    // sözlüğünde YOK. Doğrudan node.get('Rotate') okuyan kod bu değeri kaçırır.
+    {
+        const doc = await PDFDocument.create();
+        const font = await doc.embedFont(StandardFonts.Helvetica);
+        const page = doc.addPage(A4);
+        page.drawText('KAYNAK DONDURULMUS MIRAS', { x: 40, y: 700, size: 22, font });
+        // Sayfada /Rotate YOK; kök /Pages düğümüne elle yazılıyor.
+        const pagesDict = doc.context.lookup(doc.catalog.get(PDFName.of('Pages')));
+        pagesDict.set(PDFName.of('Rotate'), doc.context.obj(90));
+        made.push(write('inherited-rotate.pdf', await doc.save()));
+    }
+
+    // A1.2: A4 modunda annotation/form alanı kayboluyor. embedPage yalnızca
+    // içerik akışını Form XObject yapar; /Annots (form alanı görünümü, damga)
+    // düşer. Aşağıdaki A5 sayfa yeniden ölçeklenir (A4 modunda embedPage'e
+    // girer); tam A4 sürüm ise yeniden ölçeklenmemeli, /Annots olduğu gibi
+    // kalmalı.
+    await buildFormFieldFixtures();
 
     // --- Sıkıştırma kör noktalarını kapatan fixture'lar -----------------
     // Bunlar pdf-lib ile doğrudan YAPILAMAZ; sözlük girdileri elle kurulur.

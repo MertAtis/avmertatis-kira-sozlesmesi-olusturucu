@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync, statSync } from 'node:fs';
 import { extractAllText, readPageBoxes, readImageCount, textPositions, collectImages, readRawImageSamples, decodeJpegPixelsInPage, meanAbsError } from './helpers/inspect.mjs';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'file://' + join(REPO, 'index.html');
@@ -1960,5 +1960,150 @@ test.describe('denetim düzeltmeleri', () => {
         expect(boxes[0].height).toBeCloseTo(841.89, 0);
         // Metin korunmuş olmalı
         expect(await extractAllText(bytes)).toContain('KIRPMA TESTI');
+    });
+});
+
+// --- AŞAMA 1: doğrulanmış çıktı hataları -----------------------------------
+
+test.describe('AŞAMA 1: doğrulanmış çıktı hataları', () => {
+    test('A1.1a: paylaşılan görsel dosya başına TEK kez kopyalanır (10x şişme yok)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['shared-resources.pdf']);
+        const input = fixtureBytes('shared-resources.pdf');
+
+        for (const a4 of [true, false]) {
+            const { bytes } = await buildOutput(page, { a4 });
+            expect(bytes.length, `a4=${a4}: çıktı boyutu`).toBeLessThan(input.length * 1.5);
+            const images = await collectImages(bytes);
+            expect(images.length, `a4=${a4}: benzersiz görsel nesnesi`).toBe(1);
+        }
+    });
+
+    test('A1.1b: iki dosya karışık sıralanınca metin sırası doğru kalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['shared-resources.pdf', 'a.pdf']);
+        await expectCardCount(page, 14);
+        // shared-resources.pdf'in son sayfasını a.pdf'in sayfaları ARASINA taşı.
+        await dragCard(page, 9, 11); // -> [...ilk9, ALFA1, ALFA2, SHARED10, ALFA3, ALFA4]
+        const { bytes } = await buildOutput(page, { a4: true });
+        const text = await extractAllText(bytes);
+        const order = ['SHARED SAYFA 9', 'ALFA SAYFA 1', 'ALFA SAYFA 2', 'SHARED SAYFA 10', 'ALFA SAYFA 3', 'ALFA SAYFA 4']
+            .map((label) => text.indexOf(label));
+        expect(order.every((i) => i >= 0), `bulunamayan etiket var: ${JSON.stringify(order)}`).toBe(true);
+        expect([...order].sort((a, b) => a - b)).toEqual(order);
+    });
+
+    test('A1.3a: kök /Pages düğümünden MİRAS gelen /Rotate uygulanır (A4 kapalı)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['inherited-rotate.pdf']);
+        const { bytes } = await buildOutput(page, { a4: false });
+        const boxes = await readPageBoxes(bytes);
+        expect(boxes).toHaveLength(1);
+        expect(boxes[0].rotation).toBe(90);
+    });
+
+    test('A1.3b: kök /Pages düğümünden MİRAS gelen /Rotate A4 modunda da uygulanır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['inherited-rotate.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const positions = await textPositions(bytes);
+        expect(positions.length).toBeGreaterThan(0);
+        // Kaynakta sol üstte (x=40,y=700); 90° saat yönünde döndürülünce
+        // A4'ün sağ üstüne düşmeli (bkz. F1 testi ile aynı ölçüt).
+        for (const p of positions) {
+            expect(p.x).toBeGreaterThan(595.28 * 0.4);
+            expect(p.y).toBeGreaterThan(841.89 * 0.6);
+        }
+    });
+
+    test('A1.3c: miras /Rotate küçük resimde de görünür (rozet 90°)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['inherited-rotate.pdf']);
+        await expectCardCount(page, 1);
+        await expect(page.locator('.pdf-page-badge')).toHaveText('90°');
+    });
+
+    test('A1.4a: KIRPMA TESTI konumu CropBox ölçeğine göre doğru yerde (±2pt)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['cropbox.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const positions = await textPositions(bytes);
+        const marker = positions.find((p) => p.text.includes('KIRPMA'));
+        expect(marker, 'KIRPMA TESTI çıktıda bulunamadı').toBeTruthy();
+        // Fixture: setCropBox(100, 150, 500, 700) -> CropBox = [100,150,600,850]
+        // (pdf-lib imzası x,y,GENİŞLİK,YÜKSEKLİK'tir, köşe değil). MediaBox
+        // [0,0,595.28,841.89] ile kesişimi (GÖRÜNÜR kutu) = [100,150,595.28,841.89]
+        // -> genişlik 495.28, yükseklik 691.89.
+        // Kaynakta (130,620); görünür kutuya göre yerel konum (30,470).
+        const visW = 595.28 - 100, visH = 841.89 - 150;
+        const scale = Math.min(595.28 / visW, 841.89 / visH);
+        const dx = (595.28 - visW * scale) / 2;
+        const dy = (841.89 - visH * scale) / 2;
+        const expectedX = dx + 30 * scale;
+        const expectedY = dy + 470 * scale;
+        expect(marker.x).toBeGreaterThan(expectedX - 2);
+        expect(marker.x).toBeLessThan(expectedX + 2);
+        expect(marker.y).toBeGreaterThan(expectedY - 2);
+        expect(marker.y).toBeLessThan(expectedY + 2);
+    });
+
+    test('A1.4b: A4 çıktısında gömülü Form XObject BBox = CropBox (GIZLI KENAR kırpılır)', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['cropbox.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        const doc = await PDFDocument.load(bytes);
+        const outPage = doc.getPage(0);
+        const xo = outPage.node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict);
+        expect(xo).toBeTruthy();
+        let bbox = null;
+        for (const [key] of xo.entries()) {
+            const obj = xo.lookup(key);
+            if (String(obj?.dict?.lookup(PDFName.of('Subtype'))) === '/Form') {
+                const arr = obj.dict.lookup(PDFName.of('BBox'));
+                bbox = [0, 1, 2, 3].map((i) => Number(arr.lookup(i)));
+            }
+        }
+        expect(bbox, 'Form XObject bulunamadı').toBeTruthy();
+        // Görünür kutu = CropBox[100,150,600,850] ∩ MediaBox[0,0,595.28,841.89].
+        expect(bbox[0]).toBeCloseTo(100, 0);
+        expect(bbox[1]).toBeCloseTo(150, 0);
+        expect(bbox[2]).toBeCloseTo(595.28, 0);
+        expect(bbox[3]).toBeCloseTo(841.89, 0);
+    });
+
+    test('A1.2a: A4 modunda form alanı görünümü (AVUKAT TEST) çıktıda kaybolmaz', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['form-field.pdf']);
+        const { bytes } = await buildOutput(page, { a4: true });
+        expect(await extractAllText(bytes)).toContain('AVUKAT TEST');
+    });
+
+    test('A1.2b: tam A4 sayfada (yeniden ölçeklenmeyen) /Annots olduğu gibi kalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['form-field-a4.pdf']);
+        const input = await PDFDocument.load(fixtureBytes('form-field-a4.pdf'));
+        const beforeAnnots = input.getPage(0).node.Annots()?.size() ?? 0;
+        expect(beforeAnnots).toBeGreaterThan(0);
+
+        const { bytes } = await buildOutput(page, { a4: true });
+        const doc = await PDFDocument.load(bytes);
+        const outAnnots = doc.getPage(0).node.Annots();
+        const afterAnnots = outAnnots?.size() ?? 0;
+        expect(afterAnnots).toBe(beforeAnnots);
+        // Widget annotation'ın kendisi (AP/N görünümü, Rect konumu) DOKUNULMADAN
+        // kalmalı — tam A4 sayfa embedPage/annotation gömme yolundan GEÇMEZ.
+        const widget = doc.context.lookupMaybe(outAnnots.get(0), PDFDict);
+        expect(widget).toBeTruthy();
+        const ap = widget.lookupMaybe(PDFName.of('AP'), PDFDict);
+        expect(ap).toBeTruthy();
+        expect(ap.get(PDFName.of('N'))).toBeTruthy();
+    });
+
+    test('A1.2c: görünümü olmayan (AP\'siz) widget için dürüst uyarı gösterilir', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['form-field.pdf']);
+        await buildOutput(page, { a4: true });
+        const text = await page.locator('#pdf-result').textContent();
+        expect(text).toContain('form alanının görünümü yok');
     });
 });

@@ -51,7 +51,34 @@ function pdfHideResult() {
 // --- A4 yerleştirme ---------------------------------------------------------
 
 /**
+ * Sayfanın GÖRÜNÜR kutusu: CropBox ∩ MediaBox (CropBox yoksa MediaBox).
+ *
+ * A1.4: `getSize()` yalnızca MediaBox'ı kullanır; CropBox varsa (ör. tarama
+ * sırasında kırpılmış kenarlar) gizli kenarlar A4'e taşınırken YENİDEN
+ * görünür hale gelir ve ölçek yanlış hesaplanır (kırpılan alan da dahil
+ * edildiği için içerik gereğinden küçük basılır).
+ *
+ * Dönüş: {left, bottom, right, top} — pdf-lib `embedPage` boundingBox biçimi.
+ */
+function pdfVisibleBox(page) {
+    const media = page.getMediaBox();
+    const crop = page.getCropBox();
+    const left = Math.max(media.x, crop.x);
+    const bottom = Math.max(media.y, crop.y);
+    const right = Math.min(media.x + media.width, crop.x + crop.width);
+    const top = Math.min(media.y + media.height, crop.y + crop.height);
+    // Bozuk/dejenere CropBox (MediaBox ile kesişmiyor): MediaBox'a düş.
+    if (!(right > left) || !(top > bottom)) {
+        return { left: media.x, bottom: media.y, right: media.x + media.width, top: media.y + media.height };
+    }
+    return { left, bottom, right, top };
+}
+
+/**
  * Kaynak sayfayı A4'e ölçekleyip ortalanarak yerleştirir; içerik kırpılmaz.
+ *
+ * Ölçek/konum, sayfanın GÖRÜNÜR kutusundan (CropBox ∩ MediaBox) hesaplanır
+ * (bkz. `pdfVisibleBox`) — yalnızca MediaBox'tan DEĞİL.
  *
  * Döndürme ÖNCE uygulanmış sayfanın sınır kutusu üzerinden hesaplanır:
  * 90/270 derecede genişlik ve yükseklik yer değiştirir. Bu sıra ters
@@ -66,7 +93,9 @@ function pdfHideResult() {
  * doğrulanmıştır: dört dönüşme açısında da üç köşe işareti doğru köşeye düşer.
  */
 async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
-    const { width: w, height: h } = srcPage.getSize();
+    const box = pdfVisibleBox(srcPage);
+    const w = box.right - box.left;
+    const h = box.top - box.bottom;
     const target = targetDoc.addPage([A4_WIDTH, A4_HEIGHT]);
 
     // Bozuk PDF'lerde MediaBox sıfır ya da geçersiz olabilir; ölçek NaN olur
@@ -96,7 +125,10 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
         return target;
     }
 
-    const embedded = await targetDoc.embedPage(srcPage);
+    // `box` verilerek yalnızca GÖRÜNÜR kutu Form XObject'in /BBox'ı olur;
+    // CropBox dışındaki içerik (ör. tarama kenarındaki gürültü) çıktıda
+    // görünmez kalır.
+    const embedded = await targetDoc.embedPage(srcPage, box);
     target.drawPage(embedded, {
         x: dx - minX,
         y: dy - minY,
@@ -105,6 +137,222 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
         rotate: PDFLib.radians((-rotation * Math.PI) / 180)
     });
     return target;
+}
+
+// --- Annotation gömme (A4 modu) ---------------------------------------------
+
+// PDF 32000-1:2008 Tablo 165 — /F bayrak bitleri.
+const ANNOT_FLAG_HIDDEN = 2;
+const ANNOT_FLAG_NOVIEW = 32;
+
+/** Bir sayıyı içerik akışında güvenli biçimde yazar (bilimsel gösterim yok). */
+function pdfNum(n) {
+    if (!Number.isFinite(n)) return '0';
+    return Number(n.toFixed(4)).toString();
+}
+
+/**
+ * PDF 32000-1:2008 §12.5.5 — bir görünüm akışının (/AP /N) /BBox'ını
+ * /Matrix ile dönüştürüp eksen hizalı KAPSAYAN kutuyu ("transformed
+ * appearance box") hesaplar, sonra bu kutuyu annotation'ın /Rect'ine
+ * eşleyen A matrisini döndürür. İçerik akışına `A cm` yazılıp ardından
+ * Form XObject `Do` edilirse, AP'nin kendi /Matrix'iyle birlikte tam
+ * /Rect'e oturur.
+ */
+function pdfAnnotAppearanceMatrix(bbox, matrix, rect) {
+    const [bx0, by0, bx1, by1] = bbox;
+    const [ma, mb, mc, md, me, mf] = matrix;
+    const corners = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]]
+        .map(([x, y]) => [ma * x + mc * y + me, mb * x + md * y + mf]);
+    const xs = corners.map((c) => c[0]);
+    const ys = corners.map((c) => c[1]);
+    const tx0 = Math.min(...xs), tx1 = Math.max(...xs);
+    const ty0 = Math.min(...ys), ty1 = Math.max(...ys);
+    const tw = (tx1 - tx0) || 1;
+    const th = (ty1 - ty0) || 1;
+
+    let [rx0, ry0, rx1, ry1] = rect;
+    if (rx0 > rx1) { const t = rx0; rx0 = rx1; rx1 = t; }
+    if (ry0 > ry1) { const t = ry0; ry0 = ry1; ry1 = t; }
+
+    const sx = (rx1 - rx0) / tw;
+    const sy = (ry1 - ry0) / th;
+    return [sx, 0, 0, sy, rx0 - tx0 * sx, ry0 - ty0 * sy];
+}
+
+/** Bir PDFObject bir AKIŞ mı (Form XObject vb.)? `.dict` VE `.contents` varsa evet. */
+function pdfIsStream(obj) {
+    return !!(obj && obj.dict && obj.contents !== undefined);
+}
+
+/**
+ * Bir annotation'ın NORMAL (/AP /N) görünüm akışını çözer. /AS ile seçilen
+ * DURUM (checkbox on/off vb.) da desteklenir. Akış dolaylı değilse (gömülü
+ * sözlükse) dolaylı hale getirilir — içerikte /XObject girdisi olarak
+ * referans vermek için bir PDFRef gerekir.
+ * Dönüş: {ref, stream} ya da görünüm yoksa null.
+ */
+function pdfResolveAnnotAppearance(doc, annotDict) {
+    const { PDFName, PDFDict } = PDFLib;
+    const apDict = annotDict.lookupMaybe(PDFName.of('AP'), PDFDict);
+    if (!apDict) return null;
+    let ref = apDict.get(PDFName.of('N'));
+    if (!ref) return null;
+    let val = doc.context.lookup(ref);
+    if (!val) return null;
+
+    if (!pdfIsStream(val)) {
+        // Durum sözlüğü (ör. /Off, /Yes): /AS ile hangisinin aktif olduğu seçilir.
+        if (!(val instanceof PDFDict)) return null;
+        const asName = annotDict.get(PDFName.of('AS'));
+        if (!asName) return null;
+        ref = val.get(asName);
+        if (!ref) return null;
+        val = doc.context.lookup(ref);
+        if (!pdfIsStream(val)) return null;
+    }
+
+    if (!(ref && ref.tag)) ref = doc.context.register(val);
+    return { ref, stream: val };
+}
+
+/**
+ * Sayfaya ÖZEL (paylaşılmayan) bir Resources sözlüğü kurar ve döner.
+ * Kaynaklar (/Resources) miras/paylaşımlı olabilir: A1.1'in toplu
+ * copyPages() çağrısı, PAYLAŞILAN bir /Resources sözlüğünü birden fazla
+ * sayfaya AYNI referansla kopyalar (ortak font/logo tekilleştirme kazancı
+ * için istenen davranış budur). Bu yüzden buraya /XObject eklemeden ÖNCE
+ * sığ bir kopya alınır; paylaşılan sözlük MUTASYONA UĞRATILMAZ (aksi halde
+ * başka sayfaları da bozar).
+ */
+function pdfPrivatePageResources(doc, page) {
+    const { PDFName, PDFDict } = PDFLib;
+    const node = page.node;
+    const shared = node.Resources();
+
+    const ownResources = doc.context.obj({});
+    if (shared) {
+        for (const [key, value] of shared.entries()) ownResources.set(key, value);
+    }
+    const sharedXObject = shared?.lookupMaybe(PDFName.of('XObject'), PDFDict);
+    const ownXObject = doc.context.obj({});
+    if (sharedXObject) {
+        for (const [key, value] of sharedXObject.entries()) ownXObject.set(key, value);
+    }
+    ownResources.set(PDFName.of('XObject'), ownXObject);
+    node.set(PDFName.of('Resources'), ownResources);
+    return { resources: ownResources, xObject: ownXObject };
+}
+
+/** Akış içeriğini (filtre çözülmüş olarak) Uint8Array döndürür. */
+function pdfDecodeStreamBytes(stream) {
+    const { PDFRawStream, PDFContentStream, decodePDFRawStream } = PDFLib;
+    if (stream instanceof PDFRawStream) return decodePDFRawStream(stream).decode();
+    if (stream instanceof PDFContentStream) return stream.getUnencodedContents();
+    return new Uint8Array(0);
+}
+
+/** Birden fazla Uint8Array'i TEK diziye birleştirir (string'e çevirmeden; ikili güvenli). */
+function pdfConcatBytes(parts) {
+    let total = 0;
+    for (const p of parts) total += p.length;
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const p of parts) { out.set(p, offset); offset += p.length; }
+    return out;
+}
+
+/**
+ * A4 modunda embedPage yalnızca sayfanın içerik akışını Form XObject'e
+ * çevirir; /Annots (form alanı görünümü, damga, not) SONUÇTA KAYBOLUR
+ * (ölçüm: form alanı 1 -> 0). Bu yüzden embedPage ÇAĞRILMADAN ÖNCE her
+ * annotation'ın normal görünüm akışı (/AP /N) sayfanın İÇERİĞİNE gömülür
+ * (PDF 32000-1:2008 §12.5.5).
+ *
+ * Atlanan annotation'lar: Hidden (/F biti 2) veya NoView (/F biti 32),
+ * /Subtype /Popup, ve görünümü olmayan diğer türler (/Link vb., sessizce).
+ * Görünümü OLMASI beklenen ama /AP'si EKSİK bir /Widget varsa SAYILIR —
+ * kullanıcı dürüstçe uyarılmalı (bu alan A4 çıktısında görünmeyecek).
+ *
+ * Yalnızca YENİDEN ÖLÇEKLENEN sayfalarda (embedPage'e giren) çağrılır; tam
+ * A4 sayfa /Annots'unu olduğu gibi korur (bkz. pdfBuildOutput).
+ *
+ * Dönüş: görünümü olmayan (/AP'siz) widget sayısı.
+ */
+function pdfBakeAnnotationsForA4(doc, page) {
+    const { PDFName, PDFDict, PDFArray } = PDFLib;
+    const node = page.node;
+    if (!node.Contents()) return 0;                  // içerik yok: gömülecek bir şey yok
+    const annots = node.Annots();
+    if (!annots || annots.size() === 0) return 0;
+
+    let noAppearance = 0;
+    const drawOps = [];
+    let xObjectDict = null;
+    let counter = 0;
+
+    for (let i = 0; i < annots.size(); i++) {
+        const annotDict = doc.context.lookupMaybe(annots.get(i), PDFDict);
+        if (!annotDict) continue;
+
+        const subtype = String(annotDict.lookup(PDFName.of('Subtype')) ?? '');
+        if (subtype === '/Popup') continue;
+
+        const flags = Number(annotDict.lookup(PDFName.of('F')) ?? 0);
+        if ((flags & ANNOT_FLAG_HIDDEN) || (flags & ANNOT_FLAG_NOVIEW)) continue;
+
+        const appearance = pdfResolveAnnotAppearance(doc, annotDict);
+        if (!appearance) {
+            if (subtype === '/Widget') noAppearance++;
+            continue;                                  // /Link vb.: sessizce atla
+        }
+
+        const rectArr = annotDict.lookupMaybe(PDFName.of('Rect'), PDFArray);
+        if (!rectArr || rectArr.size() !== 4) continue;
+        const rect = [0, 1, 2, 3].map((k) => Number(rectArr.lookup(k)));
+
+        const apDict = appearance.stream.dict;
+        const bboxArr = apDict.lookupMaybe(PDFName.of('BBox'), PDFArray);
+        const bbox = bboxArr ? [0, 1, 2, 3].map((k) => Number(bboxArr.lookup(k))) : rect;
+        const matrixArr = apDict.lookupMaybe(PDFName.of('Matrix'), PDFArray);
+        const matrix = matrixArr ? [0, 1, 2, 3, 4, 5].map((k) => Number(matrixArr.lookup(k))) : [1, 0, 0, 1, 0, 0];
+
+        // AP akışında /Type /XObject /Subtype /Form yoksa ekle (spec'e göre
+        // zorunludur, ama bazı üreticiler eksik bırakır).
+        if (!apDict.has(PDFName.of('Type'))) apDict.set(PDFName.of('Type'), PDFName.of('XObject'));
+        if (!apDict.has(PDFName.of('Subtype'))) apDict.set(PDFName.of('Subtype'), PDFName.of('Form'));
+        if (!apDict.has(PDFName.of('BBox'))) apDict.set(PDFName.of('BBox'), doc.context.obj(bbox));
+
+        const A = pdfAnnotAppearanceMatrix(bbox, matrix, rect);
+
+        if (!xObjectDict) xObjectDict = pdfPrivatePageResources(doc, page).xObject;
+        const key = PDFName.of(`FlatN${counter++}`);
+        xObjectDict.set(key, appearance.ref);
+
+        const keyText = key.asString ? key.decodeText() : String(key).replace(/^\//, '');
+        drawOps.push(`q ${A.map(pdfNum).join(' ')} cm /${keyText} Do Q`);
+    }
+
+    if (drawOps.length === 0) return noAppearance;
+
+    // Orijinal içeriği q...Q ile sar (grafik durumu annotation çizimine
+    // SIZMASIN), annotation çizimlerini SONA ekle.
+    const contents = node.Contents();
+    const streams = contents instanceof PDFArray
+        ? Array.from({ length: contents.size() }, (_, i) => doc.context.lookup(contents.get(i)))
+        : [contents];
+    const originalBytes = pdfConcatBytes(streams.filter(Boolean).map(pdfDecodeStreamBytes));
+    const enc = new TextEncoder();
+    const combined = pdfConcatBytes([
+        enc.encode('q\n'),
+        originalBytes,
+        enc.encode('\nQ\n' + drawOps.join('\n') + '\n')
+    ]);
+
+    const newRef = doc.context.register(doc.context.flateStream(combined, {}));
+    node.set(PDFName.of('Contents'), newRef);
+
+    return noAppearance;
 }
 
 // --- Çıktı kurulumu ---------------------------------------------------------
@@ -122,12 +370,10 @@ async function pdfPlaceOnA4(targetDoc, srcPage, rotation) {
  * /Rotate'u uygular (doğru görünür), çıktıda ise sayfa dik çıkar.
  */
 function pdfEffectiveRotation(entry, file) {
-    let source = 0;
-    if (file?.doc) {
-        const raw = file.doc.getPage(entry.srcIndex).node.get(PDFLib.PDFName.of('Rotate'));
-        const value = Number(raw?.toString?.() ?? raw);
-        if (Number.isFinite(value)) source = ((Math.round(value / 90) * 90) % 360 + 360) % 360;
-    }
+    // A1.3: pdf-sayfalar.js içindeki pdfSourceRotation ile AYNI (miras
+    // /Rotate'i okuyan) mantık kullanılır; iki dosya ayrı ayrı yanlış
+    // (yalnızca doğrudan sözlük) okuma yapmasın diye tek yardımcıya indirildi.
+    const source = pdfSourceRotation(file, entry.srcIndex);
     return (source + (entry.rotation || 0)) % 360;
 }
 
@@ -171,26 +417,89 @@ async function pdfBuildOutput() {
         // atmamalı. 300 sayfalık belgede 250. sayfa okunamazsa kullanıcı
         // 10 dakikalık emeğini kaybetmemeli; sayfa atlanır ve haber verilir.
         const copyFailures = [];
+        // A1.2: A4 modunda yeniden ölçeklenen sayfalarda görünümü OLMAYAN
+        // (/AP'siz) form alanı widget'larının toplam sayısı.
+        let annotWarnings = 0;
+
+        // A1.1: sayfa başına AYRI copyPages([i]) çağrısı her seferinde yeni
+        // bir PDFObjectCopier açar; ortak font/logo her sayfada YENİDEN
+        // kopyalanır (ölçüm: 58 KB -> 559 KB). Dosya başına TEK toplu
+        // copyPages(indices) çağrısı TEK bir kopyalayıcı kullanır; paylaşılan
+        // dolaylı nesneler (ör. gömülü görsel) yalnızca BİR kez kopyalanıp
+        // sonraki kullanımlarda aynı hedef referansa yönlendirilir (bkz.
+        // PDFObjectCopier.copyPDFIndirectObject önbelleği). Aynı srcIndex
+        // birden fazla kez kullanılıyorsa (indices dizisinde tekrar), pdf-lib
+        // sayfanın kendisi için HER ZAMAN ayrı bir klon üretir
+        // (copyPDFPage önbelleğe bakmaz) — bu yüzden çıktıda aynı PDFPage
+        // nesnesi iki kez eklenmiş olmaz, sıra da korunur.
+        const copiedByEntry = new Map();
+        const groupsByFile = new Map(); // fileId -> {file, entries: []}
+        for (const entry of entries) {
+            const file = pdfState.files.find((f) => f.id === entry.fileId);
+            if (!file || !file.doc) continue;
+            let group = groupsByFile.get(entry.fileId);
+            if (!group) { group = { file, entries: [] }; groupsByFile.set(entry.fileId, group); }
+            group.entries.push(entry);
+        }
+
+        for (const group of groupsByFile.values()) {
+            const { file, entries: groupEntries } = group;
+            const indices = groupEntries.map((e) => e.srcIndex);
+            try {
+                const copied = await doc.copyPages(file.doc, indices);
+                groupEntries.forEach((entry, i) => copiedByEntry.set(entry, copied[i]));
+            } catch (err) {
+                // Toplu kopya başarısız oldu: eski sayfa-başı yola geri dön;
+                // tek sayfanın hatası bu dosyanın DİĞER sayfalarını etkilemesin.
+                for (const entry of groupEntries) {
+                    try {
+                        const [single] = await doc.copyPages(file.doc, [entry.srcIndex]);
+                        copiedByEntry.set(entry, single);
+                    } catch (innerErr) {
+                        // Dosya adı yazılmaz (kişisel veri sızıntısı olur).
+                        console.warn('Sayfa çıktıya eklenemedi, atlandı:', innerErr);
+                        copyFailures.push(entry.srcIndex + 1);
+                    }
+                }
+            }
+        }
 
         for (const entry of entries) {
             const file = pdfState.files.find((f) => f.id === entry.fileId);
             if (!file || !file.doc) continue;
+            const copied = copiedByEntry.get(entry);
+            if (!copied) continue; // yukarıda zaten copyFailures'a eklendi
 
             try {
-            const [copied] = await doc.copyPages(file.doc, [entry.srcIndex]);
             // pdf-lib copyPages /Rotate'u korur; A4 dönüşümü kendi matrisinde
             // uygulayacağı için burada temizlenir, yoksa çift döner.
             const rotation = pdfEffectiveRotation(entry, file);
             copied.node.delete(PDFLib.PDFName.of('Rotate'));
 
             if (pdfState.output.a4) {
+                // A1.4: yalnızca MediaBox A4 boyutunda olması YETMEZ — CropBox
+                // MediaBox'tan küçükse gerçek görünür alan A4 DEĞİLDİR ve
+                // yeniden ölçeklenmesi gerekir. `isExactA4`, GÖRÜNÜR kutunun
+                // A4 boyutunda VE MediaBox'IN görünür kutuyla AYNI (kırpma
+                // yok) olmasını ister.
+                const visible = pdfVisibleBox(copied);
+                const visibleW = visible.right - visible.left;
+                const visibleH = visible.top - visible.bottom;
+                const media = copied.getMediaBox();
                 const isExactA4 = !rotation
-                    && Math.abs(copied.getWidth() - A4_WIDTH) < 1
-                    && Math.abs(copied.getHeight() - A4_HEIGHT) < 1;
+                    && Math.abs(visibleW - A4_WIDTH) < 1
+                    && Math.abs(visibleH - A4_HEIGHT) < 1
+                    && Math.abs(media.width - visibleW) < 1
+                    && Math.abs(media.height - visibleH) < 1;
                 if (isExactA4) {
                     // Zaten tam A4 ve döndürülmemiş: gereksiz yeniden ölçekleme yapma.
                     doc.addPage(copied);
                 } else {
+                    // A1.2: embedPage YALNIZCA içerik akışını Form XObject
+                    // yapar; /Annots düşer. embedPage ÇAĞRILMADAN ÖNCE
+                    // annotation görünümleri içeriğe gömülür. Tam A4 (yukarıdaki
+                    // dal) buna gerek duymaz: /Annots olduğu gibi kalır.
+                    annotWarnings += pdfBakeAnnotationsForA4(doc, copied);
                     // A4 modunda döndürme dönüşüme gömülür; /Rotate yazılmaz.
                     // Yazılsaydı içerik iki kez dönerdi.
                     await pdfPlaceOnA4(doc, copied, rotation);
@@ -246,7 +555,8 @@ async function pdfBuildOutput() {
             losslessReport,
             copyFailures: copyFailures.length
                 ? { count: copyFailures.length, pages: copyFailures.slice(0, 10), more: copyFailures.length > 10 }
-                : null
+                : null,
+            annotWarnings
         };
     } catch (err) {
         console.error('Çıktı üretilemedi', err);
@@ -414,8 +724,18 @@ async function pdfOnBuildClick() {
     }
 
     try {
-        const { bytes, originalSize, outputSize, compressReport, losslessReport, rasterFailures, copyFailures } = await pdfBuildOutput();
+        const { bytes, originalSize, outputSize, compressReport, losslessReport, rasterFailures, copyFailures, annotWarnings } = await pdfBuildOutput();
         pdfTriggerDownload(bytes, pdfOutputFileName());
+
+        // A1.2: görünümü olmayan (/AP'siz) form alanı widget'ları vardı;
+        // bu alanlar A4 çıktısında görünmeyebilir. Kullanıcı sessizce
+        // aldatılmasın diye bu uyarı, aşağıdaki HANGİ dal çalışırsa çalışsın
+        // (EKLENEREK) mesajın sonuna eklenir — mevcut mesaj mantığı bozulmaz.
+        const annotNote = annotWarnings
+            ? ` ${annotWarnings} form alanının görünümü yok; A4'e sığdırmada bu alanlar `
+                + `çıktıda görünmeyebilir. A4 seçeneğini kapatarak deneyin.`
+            : '';
+        const showResult = (msg, kind) => pdfShowResult(msg + annotNote, kind || (annotNote ? 'warning' : undefined));
 
         const head = `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}`;
         // Sıkıştırma kapalıyken küçülme de olsa bu ipucu gösterilir: A4'e
@@ -467,7 +787,7 @@ async function pdfOnBuildClick() {
                 ? ' Görseller zaten sıkıştırılmış; resmî belgede görünümü '
                   + 'bozmadan daha fazla küçültme kayıpsız olarak mümkün değil.'
                 : '';
-            pdfShowResult(
+            showResult(
                 `${failedNote}${head}. Kayıpsız yöntem: ${done}${nothingToDo}`,
                 parts.length === 0 ? 'warning' : undefined
             );
@@ -475,7 +795,7 @@ async function pdfOnBuildClick() {
         }
 
         if (shrunk) {
-            pdfShowResult(
+            showResult(
                 message
                 + pdfSkipNote(compressReport)
                 + compressOffNote,
@@ -487,12 +807,12 @@ async function pdfOnBuildClick() {
         // Küçülme olmadı. NEDENİ dürüstçe söylemek zorundayız; "zaten optimize"
         // demek, görsellerin atlanmış olduğu durumlarda yanlış bilgidir.
         if (!pdfState.output.compress) {
-            pdfShowResult(`${failedNote}${head}.${compressOffNote}`, 'warning');
+            showResult(`${failedNote}${head}.${compressOffNote}`, 'warning');
         } else if (compressReport && compressReport.skipped.length > 0) {
             // Nedenleri tek tek yaz: "desteklenmeyen biçim" genel bir ifadedir,
             // kullanıcı hangi biçimin eksik olduğunu göremez.
             const reasons = [...new Set(compressReport.skipped.map((s) => s.reason))];
-            pdfShowResult(
+            showResult(
                 `${failedNote}${head}. ${compressReport.replaced} görsel yeniden kodlandı, `
                 + `ancak ${compressReport.skipped.length} görsel küçültülemedi `
                 + `(${reasons.join(', ')}).`,
@@ -502,7 +822,7 @@ async function pdfOnBuildClick() {
             // I9: `replaced > 0` iken "büyük görsel bulunamadı" demek yanlıştır.
             // Yeniden kodlama yapıldı ama dosya yine de büyüdüyse bu yazılır.
             const replaced = compressReport?.replaced || 0;
-            pdfShowResult(
+            showResult(
                 replaced > 0
                     ? `${failedNote}${head}. ${replaced} görsel yeniden kodlandı ancak dosya `
                       + 'yine de büyüdü; kalite ayarını düşürmeyi deneyebilirsiniz.'

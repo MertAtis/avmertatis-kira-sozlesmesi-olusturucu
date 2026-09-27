@@ -702,38 +702,6 @@ function pdfSyncOutputNamePlaceholder() {
     if (input) input.placeholder = pdfDefaultOutputFileName();
 }
 
-/**
- * Hızlı ayarlar. Yalnızca mevcut kutuları işaretler; kullanıcı sonradan
- * istediğini değiştirebilir.
- *  - court: A4, kayıpsız sıkıştırma, görsele çevirme KAPALI (metin seçilebilir,
- *    görünüm birebir aynı).
- *  - email: A4, kaliteyi düşürerek küçült (orta), görsele çevirme KAPALI.
- */
-function pdfApplyPreset(kind) {
-    const set = (id, value) => { const el = document.getElementById(id); if (el) el.checked = value; };
-    const radio = (name, value) => {
-        const el = document.querySelector(`input[name="${name}"][value="${value}"]`);
-        if (el) el.checked = true;
-    };
-    set('pdf-opt-a4', true);
-    set('pdf-opt-landscape', true);
-    set('pdf-opt-compress', true);
-    set('pdf-opt-lossy', false);
-    if (kind === 'email') {
-        radio('pdf-compress-mode', 'quality');
-        radio('pdf-quality', '0.7');
-    } else {
-        radio('pdf-compress-mode', 'lossless');
-    }
-    pdfReadOutputState();
-    const note = document.getElementById('pdf-preset-note');
-    if (note) {
-        note.textContent = kind === 'email'
-            ? 'E-posta ayarı: görseller orta kalitede küçültülür, metin seçilebilir kalır. Resmî sunum için kullanmayın.'
-            : 'Mahkeme/UYAP ayarı: A4, kayıpsız — görünüm birebir aynı, metin seçilebilir.';
-    }
-}
-
 function pdfTriggerDownload(bytes, fileName) {
     const blob = new Blob([bytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
@@ -840,12 +808,26 @@ function pdfConfirmLossy() {
 // çözülünce 5 indirme olurdu. Onayı da kapsayan ayrı bir kilit gerekir.
 let pdfBuildLock = false;
 
-async function pdfOnBuildClick() {
+/**
+ * İki düğme:
+ *  - 'plain' (Birleştir / Kaydet): Gelişmiş ayarlar neyse o. Varsayılanda
+ *    sıkıştırma KAPALI — görünüm birebir aynı (mahkeme/UYAP).
+ *  - 'small' (Birleştir ve Küçült): görseller, Gelişmiş'teki kalite
+ *    seviyesiyle (varsayılan Orta) yeniden kodlanır; metin seçilebilir kalır.
+ * Ayar her tıklamada sayfadan YENİDEN okunur: 'small' geçersiz kılması
+ * sonraki 'plain' çıktıya sızmaz.
+ */
+async function pdfOnBuildClick(kind = 'plain') {
     // Çift tıklama iki çıktı üretmesin.
     if (pdfState.busy || pdfBuildLock) return;
     if (pdfState.pages.length === 0) {
         pdfShowResult(RESULT_TEXT.noPages, 'warning');
         return;
+    }
+
+    pdfReadOutputState();
+    if (kind === 'small') {
+        pdfState.output = { ...pdfState.output, compress: true, compressMode: 'quality', lossy: false };
     }
 
     // Kayıp modda her sayfa A4'e çizilir; A4 kapalıysa kullanıcıyı uyar.
@@ -895,8 +877,8 @@ async function pdfOnBuildClick() {
         // sıkıştırmanın işi sanmasın.
         const compressOffNote = pdfState.output.compress
             ? ''
-            : ' Sıkıştırma seçeneği kapalıydı; görselleri küçültmek için '
-                + '"Boyutu küçült" kutusunu işaretleyin.';
+            : ' Sıkıştırma seçeneği kapalıydı; e-posta için daha küçük dosya '
+                + 'gerekirse "Küçült" düğmesini kullanın.';
         // A8: kayıp modda atlanan sayfaların haberi. Bu not OLMADAN çıktı
         // eksik sayfalarla üretilmiş olur ve kullanıcı bunu fark etmez.
         const rasterNote = rasterFailures
@@ -1787,11 +1769,19 @@ function pdfReadOutputState() {
 
 function pdfUpdateBuildButton() {
     const bar = document.getElementById('pdf-action-bar');
-    const button = document.getElementById('pdf-build-btn');
     const hasPages = pdfState.pages.length > 0;
     // Aksiyon çubuğu yalnızca işlenecek sayfa varken görünür.
     if (bar) bar.hidden = !hasPages;
-    if (button) button.disabled = !hasPages || pdfState.busy;
+    for (const id of ['pdf-build-btn', 'pdf-build-small-btn']) {
+        const button = document.getElementById(id);
+        if (button) button.disabled = !hasPages || pdfState.busy;
+    }
+    // Tek dosyada "Birleştir" anlamsızdır (sayfa silip/döndürüp kaydetmek).
+    const many = pdfState.files.filter((f) => !f.error).length > 1;
+    const label = document.getElementById('pdf-build-label');
+    const smallLabel = document.getElementById('pdf-build-small-label');
+    if (label) label.textContent = many ? 'Birleştir' : 'Kaydet';
+    if (smallLabel) smallLabel.textContent = many ? 'Birleştir ve Küçült' : 'Küçültüp Kaydet';
 }
 
 (function initPdfOutput() {
@@ -1812,10 +1802,10 @@ function pdfUpdateBuildButton() {
         el.addEventListener('change', pdfReadOutputState);
     });
 
-    document.getElementById('pdf-build-btn')?.addEventListener('click', pdfOnBuildClick);
-    document.getElementById('pdf-preset-court')?.addEventListener('click', () => pdfApplyPreset('court'));
-    document.getElementById('pdf-preset-email')?.addEventListener('click', () => pdfApplyPreset('email'));
+    document.getElementById('pdf-build-btn')?.addEventListener('click', () => pdfOnBuildClick('plain'));
+    document.getElementById('pdf-build-small-btn')?.addEventListener('click', () => pdfOnBuildClick('small'));
     pdfBus.on('files', pdfSyncOutputNamePlaceholder);
+    pdfBus.on('files', pdfUpdateBuildButton);
     pdfSyncOutputNamePlaceholder();
     pdfBus.on('pages', pdfUpdateBuildButton);
     pdfBus.on('busy', pdfUpdateBuildButton);

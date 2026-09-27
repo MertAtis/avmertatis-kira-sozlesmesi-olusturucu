@@ -34,6 +34,8 @@ test('canlı sitede hiçbir veri dışarı çıkmaz', async ({ page }) => {
     // Gerçek bir belge yükle ve çıktı üret.
     await page.setInputFiles('#pdf-file-input', fixture('a.pdf'));
     await expect.poll(() => page.locator('.pdf-page-card').count()).toBe(4);
+    // Yeni sürümde seçenekler kapalı "Gelişmiş ayarlar" altında; eski sürümde yok.
+    await page.evaluate(() => { const d = document.getElementById('pdf-advanced'); if (d) d.open = true; });
     await page.locator('#pdf-opt-compress').setChecked(true);
     const downloadPromise = page.waitForEvent('download');
     await page.click('#pdf-build-btn');

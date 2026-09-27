@@ -1,8 +1,27 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 28 Eylül 2026 (sadakat turu — YEREL, push EDİLMEDİ)
-**Durum:** 🟢 **`npm test` 281/281 geçti** (yeni `tests/sadakat.spec.mjs` dahil, canlı gizlilik testi dahil).
-**Canlı site:** hâlâ `b5d0fd1` — aşağıdaki **1-bit hatası CANLIDA VAR**, düzeltme push bekliyor.
+**Son güncelleme:** 28 Eylül 2026 (iki düğme turu — YEREL, push EDİLMEDİ)
+**Durum:** 🟢 **`npm test` 282/282 geçti.**
+**Canlı site:** `be03f22` (sadakat turu + 1-bit düzeltmesi canlıda).
+
+## İki düğme turu (28 Eylül)
+
+Hızlı ayarlar ("Mahkemeye / UYAP", "E-posta için küçült") kaldırıldı — basınca neredeyse
+hiçbir şey değişmiyor, aynı karar iki kez soruluyordu. Yerine İndir bölümünde iki düğme:
+
+| Düğme | Ne yapar |
+|---|---|
+| **Birleştir** (tek dosyada **Kaydet**) | Gelişmiş ayarlar neyse o; varsayılanda sıkıştırma yok, görünüm birebir |
+| **Birleştir ve Küçült** (tek dosyada **Küçültüp Kaydet**) | Görseller Gelişmiş'teki kaliteyle (varsayılan Orta) yeniden kodlanır; metin seçilebilir; altında "mahkemeye sunulacak belgede kullanmayın" notu |
+
+A4, yatay A4, sıkıştırma yöntemi, kalite, görsele çevirme → kapalı **"Gelişmiş ayarlar"** (`#pdf-advanced`).
+Ayar her tıklamada sayfadan yeniden okunur; Küçült geçersiz kılması sonraki Birleştir'e sızmaz (`B3`).
+Testler: `B1`–`B3` (`tests/avukat-ux.spec.mjs`); test yardımcıları Gelişmiş'i açar.
+
+### Araştırma: görünümü bozmadan küçültme (sonraki tur adayı)
+JPEG taramalar görünüm korunarak en fazla ~%5–10 küçülür (Huffman optimizasyonu; saf JS yok, WASM yasak).
+Yapılabilir ve anlamlı: **CCITT G4** (siyah-beyaz taramada 1-bit Flate'in 2–4 katı küçük, tüm okuyucular
+destekler) ve **PNG predictor + RGB→gri / palet** (ekran görüntüsü, dijital belge: %20–50). Tahmini 2–3 saat.
 
 ## Sadakat turu (28 Eylül) — kural: yüklenen belgeye HİÇBİR şey eklenmez/çıkarılmaz
 

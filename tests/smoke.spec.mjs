@@ -65,6 +65,8 @@ test.describe('duman testi (canlı öncesi)', () => {
         await page.click('#pdf-undo-btn');
         await expect.poll(() => page.locator('.pdf-page-card').count()).toBe(7);
 
+        // Kullanıcı gibi: "Gelişmiş ayarlar"ı aç.
+        await page.locator('#pdf-advanced > summary').click();
         await page.locator('#pdf-opt-compress').setChecked(true);
         // Varsayılan kayıpsızdır; duman testi iki yöntemi de dener.
         const downloadPromise = page.waitForEvent('download');

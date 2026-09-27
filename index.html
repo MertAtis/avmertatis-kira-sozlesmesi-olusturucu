@@ -772,7 +772,14 @@
         }
         [data-theme="dark"] .pdf-file-error-msg { color: #f87171; }
 
-        .pdf-preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .pdf-build-row:not([hidden]) { display: flex; flex-wrap: wrap; gap: 12px; }
+        .pdf-build-col { flex: 1 1 220px; min-width: 0; }
+        .pdf-build-col .btn { gap: 8px; }
+        .pdf-build-col .pdf-mode-note { margin: 6px 2px 0; }
+        .pdf-name-row > span { white-space: nowrap; }
+        .pdf-advanced { margin-top: 10px; }
+        .pdf-advanced > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+        .pdf-advanced[open] > summary { margin-bottom: 6px; }
         .pdf-name-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
         .pdf-name-row input { flex: 1 1 auto; min-width: 0; padding: 6px 8px; border: 1px solid var(--border, #d4d4d8); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
 
@@ -1562,72 +1569,74 @@
                     <!-- AŞAMA 3: ÇIKTI -->
                     <div class="pdf-stage" id="pdf-stage-output">
                         <div class="pdf-stage-head"><span class="pdf-stage-num">3</span> Çıktı</div>
-                        <!-- Hızlı ayar: yalnızca aşağıdaki kutuları işaretler; sonra elle değiştirilebilir. -->
-                        <div class="pdf-preset-row" role="group" aria-label="Hızlı ayar">
-                            <span>Hızlı ayar:</span>
-                            <button class="btn btn-shadcn-outline" type="button" id="pdf-preset-court">
-                                <i class="fa-solid fa-scale-balanced"></i> Mahkemeye / UYAP'a sunulacak
-                            </button>
-                            <button class="btn btn-shadcn-outline" type="button" id="pdf-preset-email">
-                                <i class="fa-solid fa-envelope"></i> E-posta için küçült
-                            </button>
-                        </div>
-                        <p class="pdf-mode-note" id="pdf-preset-note" aria-live="polite"></p>
                         <label class="pdf-name-row" for="pdf-output-name">
                             <span>Dosya adı:</span>
                             <input type="text" id="pdf-output-name" maxlength="120" autocomplete="off" spellcheck="false">
                         </label>
-                        <label class="pdf-check">
-                            <input type="checkbox" id="pdf-opt-a4" checked>
-                            <span><i class="fa-solid fa-arrows-up-down-left-right"></i> Her sayfayı A4'e sığdır (baskıya uygun)</span>
-                        </label>
-                        <label class="pdf-check pdf-check-sub">
-                            <input type="checkbox" id="pdf-opt-landscape" checked>
-                            <span>Yatay sayfaları yatay A4 yap</span>
-                        </label>
-                        <label class="pdf-check">
-                            <input type="checkbox" id="pdf-opt-compress">
-                            <span><i class="fa-solid fa-compress"></i> Boyutu küçült</span>
-                        </label>
-                        <div id="pdf-compress-options" class="pdf-compress-options" hidden>
-                            <div class="pdf-mode-row">
-                                <span>Yöntem:</span>
-                                <label class="pdf-check pdf-check-inline">
-                                    <input type="radio" name="pdf-compress-mode" value="lossless" checked>
-                                    <span>Kayıpsız — görünüm aynı kalır</span>
-                                </label>
-                                <label class="pdf-check pdf-check-inline">
-                                    <input type="radio" name="pdf-compress-mode" value="quality">
-                                    <span>Kaliteyi düşürerek küçült — görünüm değişir</span>
-                                </label>
-                            </div>
-                            <p class="pdf-mode-note" id="pdf-mode-note">
-                                Resmî belge ve sözleşmelerde kayıpsız yöntemi kullanın: pikseller
-                                birebir aynı kalır, yalnızca tekrarlanan görseller tekleştirilir
-                                ve dosya içindeki gereksiz bilgiler atılır.
-                            </p>
-                            <div id="pdf-quality-block" hidden>
-                                <label class="pdf-check pdf-check-sub">
-                                    <input type="checkbox" id="pdf-opt-lossy">
-                                    <span><i class="fa-solid fa-triangle-exclamation"></i> Metin seçilemez olsun (sayfaları görsele çevir)</span>
-                                </label>
-                                <div class="pdf-quality-row">
-                                    <span>Görsel kalitesi:</span>
-                                    <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.5"><span>Düşük</span></label>
-                                    <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.7" checked><span>Orta</span></label>
-                                    <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.85"><span>Yüksek</span></label>
+                        <!-- Ayrıntılar kapalı durur: günlük iş aşağıdaki iki düğmeyle yapılır. -->
+                        <details class="pdf-advanced" id="pdf-advanced">
+                            <summary>Gelişmiş ayarlar</summary>
+                            <label class="pdf-check">
+                                <input type="checkbox" id="pdf-opt-a4" checked>
+                                <span><i class="fa-solid fa-arrows-up-down-left-right"></i> Her sayfayı A4'e sığdır (baskıya uygun)</span>
+                            </label>
+                            <label class="pdf-check pdf-check-sub">
+                                <input type="checkbox" id="pdf-opt-landscape" checked>
+                                <span>Yatay sayfaları yatay A4 yap</span>
+                            </label>
+                            <label class="pdf-check">
+                                <input type="checkbox" id="pdf-opt-compress">
+                                <span><i class="fa-solid fa-compress"></i> Boyutu küçült</span>
+                            </label>
+                            <div id="pdf-compress-options" class="pdf-compress-options" hidden>
+                                <div class="pdf-mode-row">
+                                    <span>Yöntem:</span>
+                                    <label class="pdf-check pdf-check-inline">
+                                        <input type="radio" name="pdf-compress-mode" value="lossless" checked>
+                                        <span>Kayıpsız — görünüm aynı kalır</span>
+                                    </label>
+                                    <label class="pdf-check pdf-check-inline">
+                                        <input type="radio" name="pdf-compress-mode" value="quality">
+                                        <span>Kaliteyi düşürerek küçült — görünüm değişir</span>
+                                    </label>
+                                </div>
+                                <p class="pdf-mode-note" id="pdf-mode-note">
+                                    Resmî belge ve sözleşmelerde kayıpsız yöntemi kullanın: pikseller
+                                    birebir aynı kalır, yalnızca tekrarlanan görseller tekleştirilir
+                                    ve dosya içindeki gereksiz bilgiler atılır.
+                                </p>
+                                <div id="pdf-quality-block" hidden>
+                                    <label class="pdf-check pdf-check-sub">
+                                        <input type="checkbox" id="pdf-opt-lossy">
+                                        <span><i class="fa-solid fa-triangle-exclamation"></i> Metin seçilemez olsun (sayfaları görsele çevir)</span>
+                                    </label>
+                                    <div class="pdf-quality-row">
+                                        <span>Görsel kalitesi:</span>
+                                        <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.5"><span>Düşük</span></label>
+                                        <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.7" checked><span>Orta</span></label>
+                                        <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.85"><span>Yüksek</span></label>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </details>
                     </div>
 
                     <!-- AŞAMA 4: İNDİR -->
                     <div class="pdf-stage" id="pdf-stage-build">
                         <div class="pdf-stage-head"><span class="pdf-stage-num">4</span> İndir</div>
-                        <div id="pdf-action-bar" hidden>
-                            <button class="btn btn-shadcn-primary btn-block" id="pdf-build-btn" type="button">
-                                <i class="fa-solid fa-file-arrow-down"></i> PDF Birleştir ve İndir
-                            </button>
+                        <div id="pdf-action-bar" class="pdf-build-row" hidden>
+                            <div class="pdf-build-col">
+                                <button class="btn btn-shadcn-primary btn-block" id="pdf-build-btn" type="button">
+                                    <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i><span id="pdf-build-label">Birleştir</span>
+                                </button>
+                                <p class="pdf-mode-note">Görünüm birebir aynı kalır. Mahkeme / UYAP / noter için.</p>
+                            </div>
+                            <div class="pdf-build-col">
+                                <button class="btn btn-shadcn-outline btn-block" id="pdf-build-small-btn" type="button">
+                                    <i class="fa-solid fa-compress" aria-hidden="true"></i><span id="pdf-build-small-label">Birleştir ve Küçült</span>
+                                </button>
+                                <p class="pdf-mode-note" id="pdf-small-note">E-posta / WhatsApp içindir. Görseller biraz bozulabilir; mahkemeye sunulacak belgede kullanmayın.</p>
+                            </div>
                         </div>
                         <div id="pdf-progress-wrap" class="pdf-progress-wrap" hidden>
                             <div class="pdf-progress-track"><div id="pdf-progress-bar" class="pdf-progress-bar"></div></div>

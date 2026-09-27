@@ -25,6 +25,8 @@ export async function openPdfTab(page) {
         () => page.evaluate(() => !!window.pdfState?.libsLoaded),
         { timeout: 30000, message: 'kütüphaneler yüklenmedi' }
     ).toBe(true);
+    // Ayrıntılı seçenekler kapalı "Gelişmiş ayarlar" altındadır; testler onlara erişebilsin.
+    await page.evaluate(() => { const d = document.getElementById('pdf-advanced'); if (d) d.open = true; });
 }
 
 /** Fixture dosyalarını uygulamanın dosya seçicine yükler. */
@@ -511,7 +513,8 @@ test.describe('çıktı üretimi ve A4 normalizasyonu', () => {
         await buildOutput(page, { compress: false });
         const text = await page.locator('#pdf-result').textContent();
         expect(text).toContain('Sıkıştırma seçeneği kapalıydı');
-        expect(text).toContain('Boyutu küçült');
+        // Kullanıcı yeni "Küçült" düğmesine yönlendirilir.
+        expect(text).toContain('"Küçült" düğmesini');
     });
 
     test('sıkıştırma AÇIKKEN küçülme yoksa görsel mesajı verilir', async ({ page }) => {
@@ -1303,7 +1306,7 @@ test.describe('alt aksiyon çubuğu: PDF Birleştir ve İndir', () => {
         const bar = page.locator('#pdf-action-bar');
         await expect(bar).toBeVisible();
         await expect(page.locator('#pdf-build-btn')).toBeVisible();
-        await expect(page.locator('#pdf-build-btn')).toContainText('PDF Birleştir ve İndir');
+        await expect(page.locator('#pdf-build-btn')).toHaveText('Birleştir');
         // Buton panelin en altında olmalı.
         const barBox = await bar.boundingBox();
         const cardBox = await page.locator('#pdf-araclari-form-block').boundingBox();
@@ -1332,10 +1335,10 @@ test.describe('alt aksiyon çubuğu: PDF Birleştir ve İndir', () => {
         expect(text).toContain('BETA SAYFA 1');
     });
 
-    test('H4: buton metni tek dosyada da aynıdır', async ({ page }) => {
+    test('H4: tek dosyada buton "Kaydet" der', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['a.pdf']);
-        await expect(page.locator('#pdf-build-btn')).toContainText('PDF Birleştir ve İndir');
+        await expect(page.locator('#pdf-build-btn')).toHaveText('Kaydet');
     });
 
     test('H5: dosya kaldırılınca buton tekrar gizlenir', async ({ page }) => {

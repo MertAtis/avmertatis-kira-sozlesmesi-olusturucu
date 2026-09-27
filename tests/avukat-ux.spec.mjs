@@ -1,9 +1,10 @@
-// AŞAMA 2 (kısaltılmış kapsam): avukat kullanımı — düzenlenebilir çıktı adı, "Mahkemeye/UYAP" ve "E-posta" ön ayarları.
+// Avukat kullanımı — düzenlenebilir çıktı adı ve iki düğme: "Birleştir" / "Birleştir ve Küçült".
 // Test PDF'leri burada, bellekte üretilir (fixture dosyası gerekmez).
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { readFileSync } from 'node:fs';
+import { PDFDocument, StandardFonts, PDFName } from 'pdf-lib';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'file://' + join(REPO, 'index.html');
@@ -12,6 +13,8 @@ async function openPdfTab(page) {
     await page.goto(PAGE);
     await page.click('#tab-pdf-araclari');
     await expect.poll(() => page.evaluate(() => !!window.pdfState?.libsLoaded), { timeout: 30000 }).toBe(true);
+    // Ayrıntılı seçenekler kapalı "Gelişmiş ayarlar" altındadır; testler onlara erişebilsin.
+    await page.evaluate(() => { const d = document.getElementById('pdf-advanced'); if (d) d.open = true; });
 }
 
 async function upload(page, files) {
@@ -26,11 +29,22 @@ async function plainPdf(text = 'DILEKCE') {
     return Buffer.from(await doc.save());
 }
 
+/** Belgedeki tüm görsel akışlarının /Filter adları. */
+function imageFilters(doc) {
+    const out = [];
+    for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+        if (obj?.dict && String(obj.dict.get(PDFName.of('Subtype'))) === '/Image') {
+            out.push(String(obj.dict.get(PDFName.of('Filter'))));
+        }
+    }
+    return out.join(' ');
+}
+
 const pdfFile = (name, buffer) => ({ name, mimeType: 'application/pdf', buffer });
 
-async function build(page) {
+async function build(page, button = '#pdf-build-btn') {
     const dl = page.waitForEvent('download');
-    await page.click('#pdf-build-btn');
+    await page.click(button);
     const download = await dl;
     const chunks = [];
     for await (const c of await download.createReadStream()) chunks.push(c);
@@ -63,28 +77,42 @@ test.describe('AŞAMA 2: avukat kullanımı', () => {
         expect((await build(page)).name).toBe('Bilirkisi Raporu.PDF');
     });
 
-    test('P1: "E-posta için küçült" kaliteli küçültmeyi seçer, görsele çevirmeyi seçmez', async ({ page }) => {
+    test('B1: iki düğme — çok dosyada "Birleştir", tek dosyada "Kaydet"', async ({ page }) => {
         await openPdfTab(page);
         await upload(page, [pdfFile('a.pdf', await plainPdf())]);
-        await page.getByRole('button', { name: /E-posta için küçült/ }).click();
-        const out = await page.evaluate(() => window.pdfState.output);
-        expect(out).toMatchObject({ a4: true, compress: true, compressMode: 'quality', lossy: false, quality: 0.7 });
-        await expect(page.locator('#pdf-quality-block')).toBeVisible();
-        await expect(page.locator('#pdf-preset-note')).toContainText('E-posta');
+        await expect(page.locator('#pdf-build-btn')).toHaveText('Kaydet');
+        await expect(page.locator('#pdf-build-small-btn')).toHaveText('Küçültüp Kaydet');
+        await upload(page, [pdfFile('b.pdf', await plainPdf('B'))]);
+        await expect(page.locator('#pdf-build-btn')).toHaveText('Birleştir');
+        await expect(page.locator('#pdf-build-small-btn')).toHaveText('Birleştir ve Küçült');
+        // Küçült düğmesinin altında resmî sunum uyarısı.
+        await expect(page.locator('#pdf-small-note')).toContainText('E-posta');
+        await expect(page.locator('#pdf-small-note')).toContainText(/mahkeme/i);
     });
 
-    test('P2: "Mahkemeye / UYAP" kayıpsız A4 seçer ve e-posta ayarını geri alır', async ({ page }) => {
+    test('B2: eski hızlı ayarlar yok; ayrıntılar kapalı "Gelişmiş ayarlar" altında', async ({ page }) => {
+        await page.goto(PAGE);
+        await page.click('#tab-pdf-araclari');
+        await expect(page.locator('#pdf-preset-court')).toHaveCount(0);
+        await expect(page.locator('#pdf-preset-email')).toHaveCount(0);
+        const advanced = page.locator('#pdf-advanced');
+        await expect(advanced).toHaveJSProperty('open', false);
+        await expect(advanced.locator('#pdf-opt-a4')).toBeHidden();
+        await expect(page.locator('#pdf-output-name')).toBeVisible();
+    });
+
+    test('B3: "Küçült" görselleri kaliteli küçültür; ardından "Birleştir" görünümü birebir korur', async ({ page }) => {
         await openPdfTab(page);
-        await upload(page, [pdfFile('a.pdf', await plainPdf())]);
-        await page.getByRole('button', { name: /E-posta için küçült/ }).click();
-        await page.locator('#pdf-opt-lossy').check();
-        await page.getByRole('button', { name: /Mahkemeye \/ UYAP/ }).click();
-        const out = await page.evaluate(() => window.pdfState.output);
-        expect(out).toMatchObject({ a4: true, landscape: true, compress: true, compressMode: 'lossless', lossy: false });
-        await expect(page.locator('#pdf-quality-block')).toBeHidden();
-        // Kayıpsız çıktıda metin seçilebilir kalır.
-        const { bytes } = await build(page);
-        expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+        const scan = readFileSync(join(REPO, 'tests', 'fixtures', 'scanned.pdf'));
+        await upload(page, [pdfFile('tarama.pdf', scan)]);
+
+        const small = await build(page, '#pdf-build-small-btn');
+        expect(imageFilters(await PDFDocument.load(small.bytes))).toContain('DCTDecode');
+        expect(small.bytes.length).toBeLessThan(scan.length);
         await expect(page.locator('#pdf-lossy-modal')).toBeHidden();
+
+        // Küçült ayarı "Birleştir"e SIZMAMALI.
+        const plain = await build(page, '#pdf-build-btn');
+        expect(imageFilters(await PDFDocument.load(plain.bytes))).not.toContain('DCTDecode');
     });
 });

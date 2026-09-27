@@ -23,6 +23,8 @@ async function openPdfTab(page) {
     await page.goto('file://' + join(REPO, 'index.html'));
     await page.click('#tab-pdf-araclari');
     await expect.poll(() => page.evaluate(() => !!window.pdfState?.libsLoaded), { timeout: 30000 }).toBe(true);
+    // Ayrıntılı seçenekler kapalı "Gelişmiş ayarlar" altındadır; testler onlara erişebilsin.
+    await page.evaluate(() => { const d = document.getElementById('pdf-advanced'); if (d) d.open = true; });
 }
 
 async function uploadFixtures(page, names) {

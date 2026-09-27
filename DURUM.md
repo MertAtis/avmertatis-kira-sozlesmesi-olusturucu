@@ -1,7 +1,7 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
 **Son güncelleme:** 27 Eylül 2026
-**Durum:** 🟢 **`npm test` 132/132 geçiyor, 0 kırmızı. Duman testi yeşil.**
+**Durum:** 🟢 **`npm test` 147/147 geçiyor, 0 kırmızı. Duman + gizlilik + dış bağımlılık testleri yeşil.**
 **Branch:** `main`, commit `586bd5c` (canlıya **push EDİLMEDİ**)
 **Canlı site:** hâlâ `d0f0045` (testleri geçen eski sürüm).
 
@@ -11,7 +11,27 @@
 
 ---
 
-## Bu turda bulunan ve düzeltilen hatalar (bağımsız inceleme)
+## Kayıpsız öncelikli sıkıştırma (resmî belge kullanımı)
+
+Belgeler resmî kurumlara sunulduğu için **görünüm bozulmaz** ve **dış bağımlılık
+olmaz** kuralıyla sıkıştırma yeniden tasarlandı.
+
+| Yöntem | Ne yapar | Görünüm |
+|---|---|---|
+| **Kayıpsız** (varsayılan) | Tekrarlanan görselleri tekleştirir, gereksiz belge bilgisini atar, kullanılmayan nesneleri budar, **piksel birebir 0/255 ise** 1-bit'e çevirir | **birebir aynı** (testle kanıtlanır) |
+| **Kaliteyi düşürerek küçült** (bilinçli seçim) | Görselleri seçilen kalitede JPEG'e yeniden kodlar | değişir — resmî belge için kullanılmaz |
+
+Gerçekçi sınır: JPEG'li bir taranmış PDF, **görünümü bozmadan** büyük ölçüde
+küçültülemez. Araç artık bunu saklamaz: *"Görseller zaten sıkıştırılmış; resmî
+belgede görünümü korumak için dokunulmadı."* der. Kazanç yoksa sahte yüzde göstermez.
+
+Dış bağımlılık guard'ı eklendi (`tests/dependencies.spec.mjs`): bir CDN, uzak API,
+WASM izni (`wasm-unsafe-eval`) veya sabitlenmemiş sürüm eklenirse **test kırmızıya
+döner**. Tasarım: `docs/superpowers/specs/2026-09-27-kayipsiz-oncelikli-sikastirma-design.md`
+
+---
+
+## Önceki turda bulunan ve düzeltilen hatalar (bağımsız inceleme)
 
 Daha önce "düzeltildi" yazan 4 kayıt **gerçekte çalışmıyordu**. Hepsi için önce
 kırmızı test yazıldı, sonra düzeltildi.

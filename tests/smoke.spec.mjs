@@ -66,6 +66,7 @@ test.describe('duman testi (canlı öncesi)', () => {
         await expect.poll(() => page.locator('.pdf-page-card').count()).toBe(7);
 
         await page.locator('#pdf-opt-compress').setChecked(true);
+        // Varsayılan kayıpsızdır; duman testi iki yöntemi de dener.
         const downloadPromise = page.waitForEvent('download');
         await page.click('#pdf-build-btn');
         const download = await downloadPromise;
@@ -78,7 +79,8 @@ test.describe('duman testi (canlı öncesi)', () => {
         expect(bytes.length).toBeGreaterThan(1000);
         expect(readFileSync).toBeTruthy();
 
-        // 5) Kayıp mod: tek onay, tek indirme.
+        // 5) Kayıp mod (kalite yöntemi): tek onay, tek indirme.
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         let downloads = 0;
         page.on('download', () => { downloads++; });

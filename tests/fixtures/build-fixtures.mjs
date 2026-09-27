@@ -459,6 +459,117 @@ async function buildColorSpaceFixtures() {
 // Yapısal fixture'lar: Annots/AP (damga) ve tiling Pattern
 // ---------------------------------------------------------------------------
 
+// --- Kayıpsız sıkıştırma fixture'ları --------------------------------------
+
+/**
+ * Kayıpsız optimizasyonun SINIRINI ölçen fixture'lar:
+ *  - duplicate-images: aynı görsel 3 sayfada 3 ayrı nesne olarak gömülü
+ *    (tekilleştirme kazancı)
+ *  - pure-bw: yalnız 0 ve 255 tonlarından oluşan görsel (1-bit'e ÇEVİLEBİLİR,
+ *    çünkü birebir kayıpsızdır)
+ *  - photo: gri tonlu sürekli geçişli fotoğraf (1-bit'e çevrilMEMELİ)
+ */
+async function buildLosslessFixtures() {
+    const W = 620, H = 820;
+
+    // 1) Aynı görsel üç kez gömülü
+    {
+        const doc = await PDFDocument.create();
+        const imgDict = doc.context.obj({
+            Type: 'XObject', Subtype: 'Image',
+            Width: W, Height: H, BitsPerComponent: 8,
+            ColorSpace: '/DeviceRGB', Filter: '/FlateDecode'
+        });
+        for (let i = 0; i < 3; i++) {
+            const page = doc.addPage(A4);
+            // Her sayfaya AYRI bir nesne: içerik aynı, referans farklı.
+            const imgRef = doc.context.register(
+                PDFRawStream.of(imgDict, deflateSync(rgbPixels(W, H, 44))));
+            const content = `q ${W} 0 0 ${H} 0 0 cm /Im Do Q`;
+            page.pushOperators(
+                pushGraphicsState(),
+                concatTransformationMatrix(W, 0, 0, H, 0, 0),
+                drawObject('Im'),
+                popGraphicsState()
+            );
+            page.node.setXObject(PDFName.of('Im'), imgRef);
+        }
+        made.push(write('duplicate-images.pdf', await doc.save()));
+    }
+
+    // 2) Saf siyah-beyaz (yalnız 0 ve 255). 200 DPI A4 boyutunda ki, boyut
+    //    farkları anlamlı ölçülsün.
+    {
+        const doc = await PDFDocument.create();
+        const BW = 1240, BH = 1640;
+        // Gerçek bir b/w TARANMIŞ SAYFA: çoğu beyaz, satırlar hâlinde siyah
+        // yazı ve kalın bir kenarlık. Ara ton YOK (birebir 1-bit'e uygundur)
+        // ve 1-bit + Flate ile çok iyi sıkışır.
+        const px = Buffer.alloc(BW * BH, 255);
+        let s = 0x1f2e3d4c;
+        for (let y = 60; y < BH - 60; y += 3) {
+            const lineLen = 300 + ((s >>> 8) & 220);
+            const left = 55 + ((s >>> 16) & 40);
+            s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+            for (let y2 = y; y2 < y + 2 && y2 < BH; y2++) {
+                for (let x = left; x < left + lineLen && x < BW; x++) px[y2 * W + x] = 0;
+            }
+        }
+        for (let y = 0; y < BH; y++) {                      // sol kenar çizgisi
+            for (let x = 40; x < 88; x++) px[y * BW + x] = 0;
+        }
+        await pageWithRawImage(doc, {
+            width: BW, height: BH,
+            colorSpace: () => PDFName.of('DeviceGray'),
+            pixels: px
+        });
+        made.push(write('pure-bw.pdf', await doc.save()));
+    }
+
+    // 2b) JPEG-only: sayfa görselleri DOĞRUDAN JPEG olarak gömülü (tipik
+    // telefon/tarayıcı çıktısı). Kayıpsız modda bunlara dokunulmamalı.
+    {
+        const doc = await PDFDocument.create();
+        const W2 = 620, H2 = 820;
+        for (let i = 0; i < 2; i++) {
+            const page = doc.addPage(A4);
+            const jpeg = readFileSync(join(OUT, 'assets', 'page-photo.jpg'));
+            const jpegRef = doc.context.register(
+                PDFRawStream.of(doc.context.obj({
+                    Type: 'XObject', Subtype: 'Image',
+                    Width: W2, Height: H2, BitsPerComponent: 8,
+                    ColorSpace: '/DeviceRGB', Filter: '/DCTDecode'
+                }), jpeg));
+            page.node.setXObject(PDFName.of('Im'), jpegRef);
+            page.pushOperators(
+                pushGraphicsState(),
+                concatTransformationMatrix(W2, 0, 0, H2, 0, 0),
+                drawObject('Im'),
+                popGraphicsState()
+            );
+        }
+        made.push(write('jpeg-only.pdf', await doc.save()));
+    }
+
+    // 3) Gri tonlu fotoğraf (ara tonlar var -> 1-bit'e çevrilmemeli)
+    {
+        const doc = await PDFDocument.create();
+        const px = Buffer.alloc(W * H);
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const v = 40 + Math.round(180 * (0.5 + 0.5 * Math.sin(x / 23) * Math.cos(y / 31)));
+                px[y * W + x] = Math.max(0, Math.min(255, v));
+            }
+        }
+        await pageWithRawImage(doc, {
+            width: W, height: H,
+            colorSpace: () => PDFName.of('DeviceGray'),
+            pixels: px
+        });
+        made.push(write('photo-gray.pdf', await doc.save()));
+    }
+}
+
 async function buildStructureFixtures() {
     const W = 620, H = 820;
 
@@ -723,6 +834,7 @@ async function build() {
     // Bunlar pdf-lib ile doğrudan YAPILAMAZ; sözlük girdileri elle kurulur.
     await buildColorSpaceFixtures();
     await buildStructureFixtures();
+    await buildLosslessFixtures();
 
     made.push(write('encrypted.pdf', buildEncryptedPdf()));
     made.push(write('corrupt.pdf', buildCorruptPdf()));

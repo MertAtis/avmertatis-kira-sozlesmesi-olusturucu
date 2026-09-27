@@ -214,7 +214,7 @@ export async function collectImages(bytes) {
  */
 function pdfName(v) {
     if (v === undefined || v === null) return null;
-    if (v.asString) return '/' + v.decodeText().replace(/^\//, '');
+    if (v.asString) return '/' + String(v.decodeText()).replace(/^\/+/, '');
     return String(v);
 }
 
@@ -251,7 +251,7 @@ export async function readRawImageSamples(bytes) {
             if (!stream || !stream.dict) continue;
             const subtype = stream.dict.lookup(PDFName.of('Subtype'));
             // pdf-lib 1.17'de decodeText() baştaki '/' işaretini DÖNDÜRMEZ.
-            if (`/${subtype?.decodeText?.() ?? ''}` !== '/Image') continue;
+            if (`/${String(subtype?.decodeText?.() ?? '').replace(/^\/+/, '')}` !== '/Image') continue;
             image = stream;
             break;
         }
@@ -262,7 +262,9 @@ export async function readRawImageSamples(bytes) {
     const width = Number(d.lookup(PDFName.of('Width')));
     const height = Number(d.lookup(PDFName.of('Height')));
     const filterName = d.lookup(PDFName.of('Filter'))?.decodeText?.();
-    const filter = filterName ? `/${filterName}` : null;
+    // pdf-lib sürümleri arasında decodeText() baştaki '/' işaretini bazen
+    // veriyor bazen vermiyor; normalize et.
+    const filter = filterName ? `/${String(filterName).replace(/^\/+/, '')}` : null;
     let samples;
     if (filter === '/FlateDecode') samples = new Uint8Array(inflateSync(Buffer.from(image.contents)));
     else if (filter === null) samples = new Uint8Array(image.contents);
@@ -287,7 +289,7 @@ export async function decodeJpegPixelsInPage(page, bytes) {
             if (!xo || typeof xo.entries !== 'function') continue;
             for (const [, ref] of xo.entries()) {
                 const s = doc.context.lookup(ref);
-                if (`/${s?.dict?.lookup(PDFName.of('Subtype'))?.decodeText?.() ?? ''}` === '/Image') { image = s; break; }
+                if (`/${String(s?.dict?.lookup(PDFName.of('Subtype'))?.decodeText?.() ?? '').replace(/^\/+/, '')}` === '/Image') { image = s; break; }
             }
             if (image) break;
         }

@@ -365,12 +365,18 @@ async function dragCard(page, fromIndex, toIndex) {
 }
 
 /** Çıktıyı indirir ve bayt dizisini Node tarafında döndürür. */
-export async function buildOutput(page, { a4 = true, compress = false, quality = null, lossy = false } = {}) {
+export async function buildOutput(page, { a4 = true, compress = false, quality = null, lossy = false, mode = null } = {}) {
     await page.locator('#pdf-opt-a4').setChecked(a4);
     await page.locator('#pdf-opt-compress').setChecked(compress);
     if (compress) {
-        await page.locator('#pdf-opt-lossy').setChecked(lossy);
-        if (quality !== null) await page.locator(`input[name="pdf-quality"][value="${quality}"]`).check();
+        // Varsayılan KAYIPSIZ. Kayıplı yöntemi (görsel yeniden kodlama) veya
+        // görsele çevirme modunu deneyen testler açıkça mode: 'quality' der.
+        const wanted = mode || (lossy || quality !== null ? 'quality' : 'lossless');
+        await page.locator(`input[name="pdf-compress-mode"][value="${wanted}"]`).check();
+        if (wanted === 'quality') {
+            await page.locator('#pdf-opt-lossy').setChecked(lossy);
+            if (quality !== null) await page.locator(`input[name="pdf-quality"][value="${quality}"]`).check();
+        }
     }
     const downloadPromise = page.waitForEvent('download');
     await page.click('#pdf-build-btn');
@@ -599,6 +605,7 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
         page.on('download', () => { downloaded = true; });
 
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
 
@@ -632,6 +639,7 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
 
         const downloadPromise = page.waitForEvent('download');
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
@@ -659,6 +667,7 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
 
         const downloadPromise = page.waitForEvent('download');
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
@@ -686,6 +695,7 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
         await uploadFixtures(page, ['mixed-sizes.pdf']);
         await page.locator('#pdf-opt-a4').setChecked(false);
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         // Modal çıkmaz, doğrudan dürüst hata verilir.
@@ -696,6 +706,7 @@ test.describe('sıkıştırma mod 2 — görsele çevirme ve onay', () => {
     test('kayıp mod uyarısı metni hukuki riski açıkça söyler', async ({ page }) => {
         await openPdfTab(page);
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await uploadFixtures(page, ['scanned.pdf']);
         await page.click('#pdf-build-btn');
@@ -836,6 +847,7 @@ test.describe('tema ve duyarlılık', () => {
         await openPdfTab(page);
         await uploadFixtures(page, ['a.pdf']);
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         const box = await page.locator('#pdf-lossy-modal .pdf-modal').boundingBox();
@@ -1010,6 +1022,7 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
         });
 
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         await page.click('#pdf-lossy-confirm');
@@ -1329,6 +1342,8 @@ test.describe('alt aksiyon çubuğu: PDF Birleştir ve İndir', () => {
         await openPdfTab(page);
         await uploadFixtures(page, ['scanned.pdf']);
         await page.locator('#pdf-opt-compress').setChecked(true);
+        // Kalite seçeneği kayıplı yöntemde anlamlıdır.
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('input[name="pdf-quality"][value="0.7"]').check();
 
         const downloadPromise = page.waitForEvent('download');
@@ -1640,6 +1655,138 @@ test.describe('denetim düzeltmeleri', () => {
         expect(text).toContain('renk uzayı');
     });
 
+    // --- Kayıpsız sıkıştırma (kurumsal kullanım) ---------------------------
+
+    test('L1: aynı görsel 3 kez gömülüyse çıktıda TEK nesne kalır', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['duplicate-images.pdf']);
+        await expectCardCount(page, 3);
+
+        const before = await collectImages(fixtureBytes('duplicate-images.pdf'));
+        expect(before).toHaveLength(3);
+
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+
+        // Üç sayfa korunur, ama görsel NESNESİ tektir (piksel aynı).
+        const { PDFDocument } = await import('pdf-lib');
+        expect((await PDFDocument.load(bytes)).getPageCount()).toBe(3);
+        expect(after).toHaveLength(1);
+        // Görselin kendisi değişmemiş olmalı: örnekler birebir aynı.
+        expect(after[0].bytes).toBe(before[0].bytes);
+    });
+
+    test('L2: kayıpsız modda görsel baytları DOKUNULMAZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        const before = await collectImages(fixtureBytes('scanned.pdf'));
+
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+        expect(after.length).toBe(before.length);
+        for (let i = 0; i < before.length; i++) {
+            // Filtre değişmemeli (Flate kalmalı, DCTDecode olmamalı) ve
+            // bayt sayısı aynı olmalı.
+            expect(after[i].filter).toBe(before[i].filter);
+            expect(after[i].bytes).toBe(before[i].bytes);
+        }
+    });
+
+    test('L3: varsayılan (kayıpsız) mod görseli JPEG\'e ÇEVRİLMEZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['scanned.pdf']);
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+        // Dönüşüm olsaydı burada DCTDecode olurdu.
+        expect(after.some((i) => i.filter === '/DCTDecode')).toBe(false);
+    });
+
+    test('L8: karmaşık belgeler kayıpsız modda BOZULMAZ', async ({ page }) => {
+        await openPdfTab(page);
+        // Damga, tiling pattern, döndürülmüş kaynak, CropBox, çok sayfa:
+        // kullanılmayan nesne budama (prune) bunları bozabilirdi.
+        for (const name of ['stamped.pdf', 'pattern.pdf', 'source-rotated.pdf',
+            'cropbox.pdf', 'sixty-pages.pdf', 'nested-image.pdf']) {
+            await page.setInputFiles('#pdf-file-input', fixturePath(name));
+            await expect.poll(() => page.evaluate(() => window.pdfState.busy)).toBe(false);
+
+            const input = fixtureBytes(name);
+            const beforePages = (await PDFDocument.load(input)).getPageCount();
+            const beforeImages = (await collectImages(input)).length;
+            const beforeText = (await extractAllText(input)).replace(/\s+/g, '').length;
+
+            const { bytes } = await buildOutput(page, { compress: true });
+
+            const after = await PDFDocument.load(bytes);
+            expect(after.getPageCount(), `${name}: sayfa sayısı`).toBe(beforePages);
+            expect((await collectImages(bytes)).length, `${name}: görsel sayısı`).toBe(beforeImages);
+            const afterText = (await extractAllText(bytes)).replace(/\s+/g, '').length;
+            expect(afterText, `${name}: metin korundu`).toBe(beforeText);
+
+            // Sayfayı temizle ki sonraki dosya birikmesin.
+            await page.evaluate(() => {
+                for (const f of [...pdfState.files]) pdfRemoveFile(f.id);
+            });
+            await expect.poll(() => page.locator('.pdf-page-card').count()).toBe(0);
+        }
+    });
+
+    test('L7a: saf siyah-beyaz sayfa 1-bit\'e çevrilir, pikseller BİREBİR aynı', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['pure-bw.pdf']);
+        const before = await collectImages(fixtureBytes('pure-bw.pdf'));
+        expect(before[0].depth).toBe(8);
+
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+        // 1-bit gri görsel: /DeviceGray + BitsPerComponent 1 + Flate.
+        expect(after[0].depth).toBe(1);
+        expect(after[0].filter).toBe('/FlateDecode');
+        expect(after[0].width).toBe(before[0].width);
+        expect(after[0].height).toBe(before[0].height);
+
+        // Kayıpsızlık: kaynak 8-bit örnekleri (yalnız 0/255) ile çıktının
+        // 1-bit örnekleri birebir aynı olmalı.
+        const source = await readRawImageSamples(fixtureBytes('pure-bw.pdf'));
+        const packed = await readRawImageSamples(bytes);
+        const stride = Math.ceil(source.width / 8);
+        expect(packed.samples.length).toBe(stride * source.height);
+        let diff = 0;
+        for (let i = 0; i < source.width * source.height; i++) {
+            const bit = (packed.samples[(i / source.width | 0) * stride + ((i % source.width) >> 3)]
+                >> (7 - (i % source.width & 7))) & 1;
+            if ((bit ? 255 : 0) !== source.samples[i]) diff++;
+        }
+        expect(diff).toBe(0);
+
+        // Ve gerçekten küçüldü mü?
+        expect(bytes.length).toBeLessThan(fixtureBytes('pure-bw.pdf').length * 0.5);
+    });
+
+    test('L7b: gri tonlu fotoğraf 1-bit\'e ÇEVRİLMEZ', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['photo-gray.pdf']);
+        const before = await collectImages(fixtureBytes('photo-gray.pdf'));
+
+        const { bytes } = await buildOutput(page, { compress: true });
+        const after = await collectImages(bytes);
+        // Fotoğrafın ara tonları var: 1-bit'e çevirmek görünümü bozardı.
+        expect(after[0].depth).toBe(8);
+        expect(after[0].bytes).toBe(before[0].bytes);
+    });
+
+    test('L4: JPEG-only belgede dürüst mesaj, sahte yüzde yok', async ({ page }) => {
+        await openPdfTab(page);
+        await uploadFixtures(page, ['jpeg-only.pdf']);
+        await buildOutput(page, { compress: true });
+        const text = await page.locator('#pdf-result').textContent();
+        // Ne yapıldığı açıkça yazılmalı...
+        expect(text).toMatch(/kayıpsız/i);
+        // ...ve kullanıcı yanlış yönlendirilmemeli.
+        expect(text).not.toContain('zaten JPEG');
+        expect(text).not.toContain('%0 küçüldü');
+    });
+
     test('PX4: PNG predictor kodlanmış görsel atlanır, bozulmaz', async ({ page }) => {
         await openPdfTab(page);
         await uploadFixtures(page, ['predictor.pdf']);
@@ -1702,6 +1849,7 @@ test.describe('denetim düzeltmeleri', () => {
         page.on('download', () => { downloads++; });
 
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.evaluate(async () => {
             for (let i = 0; i < 5; i++) pdfOnBuildClick();
@@ -1716,6 +1864,7 @@ test.describe('denetim düzeltmeleri', () => {
         await openPdfTab(page);
         await uploadFixtures(page, ['a.pdf']);
         await page.locator('#pdf-opt-compress').setChecked(true);
+        await page.locator('input[name="pdf-compress-mode"][value="quality"]').check();
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         await expect(page.locator('#pdf-lossy-modal')).toBeVisible();

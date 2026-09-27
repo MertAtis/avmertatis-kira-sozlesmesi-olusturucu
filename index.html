@@ -1567,15 +1567,33 @@
                             <span><i class="fa-solid fa-compress"></i> Boyutu küçült</span>
                         </label>
                         <div id="pdf-compress-options" class="pdf-compress-options" hidden>
-                            <label class="pdf-check pdf-check-sub">
-                                <input type="checkbox" id="pdf-opt-lossy">
-                                <span><i class="fa-solid fa-triangle-exclamation"></i> Metin seçilemez olsun (sayfaları görsele çevir)</span>
-                            </label>
-                            <div class="pdf-quality-row">
-                                <span>Görsel kalitesi:</span>
-                                <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.5"><span>Düşük</span></label>
-                                <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.7" checked><span>Orta</span></label>
-                                <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.85"><span>Yüksek</span></label>
+                            <div class="pdf-mode-row">
+                                <span>Yöntem:</span>
+                                <label class="pdf-check pdf-check-inline">
+                                    <input type="radio" name="pdf-compress-mode" value="lossless" checked>
+                                    <span>Kayıpsız — görünüm aynı kalır</span>
+                                </label>
+                                <label class="pdf-check pdf-check-inline">
+                                    <input type="radio" name="pdf-compress-mode" value="quality">
+                                    <span>Kaliteyi düşürerek küçült — görünüm değişir</span>
+                                </label>
+                            </div>
+                            <p class="pdf-mode-note" id="pdf-mode-note">
+                                Resmî belge ve sözleşmelerde kayıpsız yöntemi kullanın: pikseller
+                                birebir aynı kalır, yalnızca tekrarlanan görseller tekleştirilir
+                                ve dosya içindeki gereksiz bilgiler atılır.
+                            </p>
+                            <div id="pdf-quality-block" hidden>
+                                <label class="pdf-check pdf-check-sub">
+                                    <input type="checkbox" id="pdf-opt-lossy">
+                                    <span><i class="fa-solid fa-triangle-exclamation"></i> Metin seçilemez olsun (sayfaları görsele çevir)</span>
+                                </label>
+                                <div class="pdf-quality-row">
+                                    <span>Görsel kalitesi:</span>
+                                    <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.5"><span>Düşük</span></label>
+                                    <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.7" checked><span>Orta</span></label>
+                                    <label class="pdf-check pdf-check-inline"><input type="radio" name="pdf-quality" value="0.85"><span>Yüksek</span></label>
+                                </div>
                             </div>
                         </div>
                     </div>

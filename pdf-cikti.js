@@ -155,6 +155,7 @@ async function pdfBuildOutput() {
             return sum + Math.round((f.size || 0) * Math.min(1, used / total));
         }, 0);
         let compressReport = null;
+        let losslessReport = null;
 
         // Kayıp mod ÖNCE kontrol edilir: rasterizasyon kaynak PDF'leri doğrudan
         // okur, vektör kopyasına gerek yoktur. Aksi halde 300 sayfalık belgede
@@ -219,7 +220,13 @@ async function pdfBuildOutput() {
 
         // Sıkıştırma modu 1: gömülü görselleri JPEG olarak yeniden kodlar,
         // metin ve vektör içerik olduğu gibi kalır.
-        if (pdfState.output.compress) {
+        if (pdfState.output.compress && pdfState.output.compressMode === 'lossless') {
+            // KAYIPSIZ: piksellere dokunulmaz. Yalnızca yinelenen görseller
+            // tekilleştirilir ve üst veri atılır.
+            await doc.flush();
+            const lossless = await pdfLosslessOptimize(doc);
+            losslessReport = lossless;
+        } else if (pdfState.output.compress) {
             // flush() nesneleri context'e kaydeder. Bu olmadan sayfa
             // kaynaklarındaki PDFRef'ler çözülemiyor ve sıkıştırma hiçbir
             // görseli bulamadan sessizce başarısız oluyor.
@@ -236,6 +243,7 @@ async function pdfBuildOutput() {
             originalSize,
             outputSize: bytes.length,
             compressReport,
+            losslessReport,
             copyFailures: copyFailures.length
                 ? { count: copyFailures.length, pages: copyFailures.slice(0, 10), more: copyFailures.length > 10 }
                 : null
@@ -406,7 +414,7 @@ async function pdfOnBuildClick() {
     }
 
     try {
-        const { bytes, originalSize, outputSize, compressReport, rasterFailures, copyFailures } = await pdfBuildOutput();
+        const { bytes, originalSize, outputSize, compressReport, losslessReport, rasterFailures, copyFailures } = await pdfBuildOutput();
         pdfTriggerDownload(bytes, pdfOutputFileName());
 
         const head = `Orijinal ${pdfFormatBytes(originalSize)} → Çıktı ${pdfFormatBytes(outputSize)}`;
@@ -438,6 +446,33 @@ async function pdfOnBuildClick() {
         const message = failedNote + head + (shrunk
             ? ` (%${saved} küçüldü)` + (pdfState.output.lossy ? ' — Metin seçilemez.' : '')
             : '.');
+
+        // KAYIPSIZ YÖNTEM raporu: ne yapıldığını ve neden az küçüldüğünü yaz.
+        if (pdfState.output.compress && losslessReport) {
+            const parts = [];
+            if (losslessReport.deduped > 0) {
+                parts.push(`${losslessReport.deduped} yinelenen görsel tekilleştirildi `
+                    + `(${pdfFormatBytes(losslessReport.dedupedBytes)} tasarruf edildi)`);
+            }
+            if (losslessReport.oneBit > 0) {
+                parts.push(`${losslessReport.oneBit} saf siyah-beyaz sayfa 1-bit'e çevrildi`);
+            }
+            if (losslessReport.metadataStripped > 0) {
+                parts.push(`${losslessReport.metadataStripped} gereksiz belge bilgisi atıldı`);
+            }
+            const done = parts.length
+                ? parts.join(', ') + '.'
+                : 'Kayıpsız sıkıştırma için elde edilebilir bir tasarruf bulunamadı.';
+            const nothingToDo = parts.length === 0
+                ? ' Görseller zaten sıkıştırılmış; resmî belgede görünümü '
+                  + 'bozmadan daha fazla küçültme kayıpsız olarak mümkün değil.'
+                : '';
+            pdfShowResult(
+                `${failedNote}${head}. Kayıpsız yöntem: ${done}${nothingToDo}`,
+                parts.length === 0 ? 'warning' : undefined
+            );
+            return;
+        }
 
         if (shrunk) {
             pdfShowResult(
@@ -487,6 +522,321 @@ async function pdfOnBuildClick() {
 
 // spec §5.1 atlama kuralları. Hepsi sağlanmazsa görsel atlanır.
 const MIN_RECODE_BYTES = 20 * 1024;
+// 1-bit dönüşümü için üst sınır: 40 MP üzeri görsel bellekte pahalıdır.
+const MAX_ONEBIT_PIXELS = 40 * 1000 * 1000;
+
+// --- Kayıpsız sıkıştırma (varsayılan yöntem) -------------------------------
+
+/**
+ * FNV-1a 32-bit. `crypto.subtle` `file://` üzerinde güvenli bağlam olmadığı
+ * için kullanılamaz; saf JS gerekiyor. Çakışma ihtimali önemsizdir: eşitlik
+ * kararı verilmeden önce bayt bayt da doğrulanır.
+ */
+function pdfHashBytes(bytes) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) {
+        h ^= bytes[i];
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h;
+}
+
+/**
+ * Aynı İÇERİĞE sahip yinelenen görsel nesnelerini tekilleştirir ve
+ * kullanılmayan üst veriyi atar. HİÇBİR piksel değişmez.
+ *
+ * Kurgusal belge (imza, dilekçe) için "görünüm aynı kalsın" şartı: bu yüzden
+ * burada yalnızca bayt bayt kayıpsız işlemler yapılır.
+ *
+ * Dönüş: {deduped, dedupedBytes, metadataStripped}
+ */
+async function pdfLosslessOptimize(doc) {
+    const { PDFName, PDFDict, PDFArray } = PDFLib;
+    let deduped = 0;
+    let dedupedBytes = 0;
+    let metadataStripped = 0;
+
+    // 1) Görsel nesneleri içerik hash'iyle eşle.
+    //    Önce kayıt, sonra referansları değiştirme: hash çakışmaları ve eksik
+    //    nesneler yanlışlıkla birleştirilmesin diye baytlar da karşılaştırılır.
+    const objects = doc.context.enumerateIndirectObjects();
+    const byHash = new Map();
+    const keeperByRef = new Map();   // yinelenen PDFRef -> tutan PDFRef
+    // enumerateIndirectObjects() [PDFRef, nesne] ÇİFTLERİ verir.
+    for (const [ref, resolved] of objects) {
+        const obj = resolved;
+        if (!obj || !obj.contents || !obj.dict) continue;
+        const subtype = obj.dict.lookup(PDFName.of('Subtype'));
+        const isImage = subtype && subtype.asString
+            ? `/${subtype.decodeText()}` === '/Image'
+            : String(subtype) === '/Image';
+        if (!isImage) continue;
+        const hash = pdfHashBytes(obj.contents);
+        const bucket = byHash.get(hash);
+        if (bucket) {
+            const same = bucket.find((k) => {
+                const other = doc.context.lookup(k);
+                const a = other.contents;
+                const b = obj.contents;
+                if (a.length !== b.length) return false;
+                for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+                return true;
+            });
+            if (same) {
+                keeperByRef.set(ref.toString(), same);
+                deduped++;
+                dedupedBytes += obj.contents.length;
+                continue;
+            }
+            bucket.push(ref);
+        } else {
+            byHash.set(hash, [ref]);
+        }
+    }
+
+    if (keeperByRef.size > 0) {
+        // 2) Nesne AĞACINI özyinelemeli gez ve yinelenen referansları tutana
+        //    yönlendir. Yalnızca üst düzey sözlükler taranırsa işe yaramaz:
+        //    A4 normalizasyonundan sonra her sayfanın görseli kendi Form
+        //    XObject'inin RESOURCES sözlüğünde, o sözlük de çoğu zaman
+        //    dolaylı (indirect) değil, gömülü durumdadır.
+        const swap = (value) => keeperByRef.get(value?.toString?.()) || value;
+        const seen = new Set();
+        const walk = (value, depth) => {
+            if (!value || depth > 32) return;
+            if (value instanceof PDFArray) {
+                for (let i = 0; i < value.size(); i++) {
+                    const current = value.get(i);
+                    const next = swap(current);
+                    if (next !== current) value.set(i, next);
+                    else walk(next, depth + 1);
+                }
+                return;
+            }
+            if (value instanceof PDFDict) {
+                if (seen.has(value)) return;
+                seen.add(value);
+                for (const [key, current] of [...value.entries()]) {
+                    const next = swap(current);
+                    if (next !== current) value.set(key, next);
+                    else walk(next, depth + 1);
+                }
+            }
+        };
+        for (const [, obj] of objects) {
+            // Akışların sözlüğü de gezilir (Form XObject kaynakları burada).
+            if (obj instanceof PDFDict) walk(obj, 0);
+            else if (obj && obj.contents && obj.dict) walk(obj.dict, 0);
+        }
+    }
+
+    // 3) Üst veri temizliği: görünüme etkisi olmayan, boyuta katkısı olan
+    //    girdiler atılır (XMP Metadata, sayfa PieceInfo, belge Thumb).
+    const catalog = doc.catalog;
+    for (const key of ['Metadata', 'PieceInfo', 'Requirements']) {
+        if (catalog.has(PDFName.of(key))) {
+            catalog.delete(PDFName.of(key));
+            metadataStripped++;
+        }
+    }
+    for (const page of doc.getPages()) {
+        for (const key of ['PieceInfo', 'Thumb']) {
+            if (page.node.has(PDFName.of(key))) {
+                page.node.delete(PDFName.of(key));
+                metadataStripped++;
+            }
+        }
+    }
+
+    // 4) 1-bit dönüşümü — YALNIZCA birebir kayıpsızsa.
+    //    Görsel çözülür; pikselin TAMAMI 0 ya da 255 ise (ara ton sıfır) 1-bit
+    //    olarak paketlenir. Fotoğraf veya kenar yumuşatma içeren tarama bu testi
+    //    geçmez; geçse bile birebir aynı görünür.
+    const oneBit = await pdfConvertExactOneBit(doc);
+    metadataStripped += 0;
+
+    // 5) Kullanılmayan nesneleri at. pdf-lib `save()` context'teki TÜM
+    //    dolaylı nesneleri serileştirir; tekilleştirilen ya da 1-bit'e
+    //    çevrilen görsellerin ESKİ kopyaları dosyada kalır ve tasarruf
+    //    tamamen boşa gider. Katalogdan ulaşılabilir olanlar tutulur.
+    const pruned = pdfPruneUnusedObjects(doc);
+
+    return { deduped, dedupedBytes, metadataStripped, oneBit, pruned };
+}
+
+
+/**
+ * Katalogdan ulaşılamayan dolaylı nesneleri siler.
+ * pdf-lib `save()` tüm context'i yazdığı için, referanssız kalan nesneler
+ * (tekilleştirme ve 1-bit dönüşümünden sonra eski görseller) dosyada kalır.
+ * Dönüş: silinen nesne sayısı.
+ */
+function pdfPruneUnusedObjects(doc) {
+    const { PDFArray, PDFDict, PDFName } = PDFLib;
+    const context = doc.context;
+    const reachable = new Set();
+    const queue = [];
+
+    // KÖK: bir PDFRef görülürse kuyruğa alınır; nesne BFS ile çözülür.
+    // (Yalnızca "köklerde geçen ref'ler" tutulursa hiçbir şey ulaşılamaz.)
+    const visitValue = (value, depth) => {
+        if (!value || depth > 64) return;
+        if (value.tag) {                                   // PDFRef
+            const key = value.toString();
+            if (reachable.has(key)) return;
+            reachable.add(key);
+            queue.push(value);
+            return;
+        }
+        if (value instanceof PDFArray) {
+            for (let i = 0; i < value.size(); i++) visitValue(value.get(i), depth + 1);
+            return;
+        }
+        if (value instanceof PDFDict) {
+            for (const [, v] of value.entries()) visitValue(v, depth + 1);
+            return;
+        }
+        // AKIŞ: Form XObject'in kaynak sözlüğü akışın İÇİNDEDİR ve PDFStream
+        // PDFDict DEĞİLDİR. Bu dal olmadan o sözlük ulaşılamaz sayılır.
+        if (value && value.contents && value.dict) visitValue(value.dict, depth + 1);
+    };
+
+    for (const [key, value] of Object.entries(context.trailerInfo || {})) {
+        if (key === 'ID') continue;                        // bayt dizisi, referans değil
+        visitValue(value, 0);
+    }
+    visitValue(doc.catalog, 0);
+    for (const page of doc.getPages()) visitValue(page.node, 0);
+
+    while (queue.length > 0) {
+        const ref = queue.pop();
+        visitValue(context.lookup(ref), 0);
+    }
+
+    let removed = 0;
+    for (const [ref, obj] of context.enumerateIndirectObjects()) {
+        if (reachable.has(ref.toString())) continue;
+        // Savunma: bir şüpheli durumda (sayfa düğümü vb.) silme.
+        const type = obj?.dict?.lookup ? String(obj.dict.lookup(PDFName.of('Type'))) : '';
+        const objType = obj instanceof PDFDict ? String(obj.lookup(PDFName.of('Type'))) : '';
+        if (type.includes('/Page') || objType.includes('/Page')) continue;
+        if (obj instanceof PDFArray || obj instanceof PDFDict) {
+            // Yapıda gerçekten kullanılmayan sözlük/ dizi: silinir.
+        } else if (obj && obj.contents) {
+            // Akış (görsel/form): silinir.
+        } else {
+            continue;                                      // bilinmeyen tür: dokunma
+        }
+        context.delete(ref);
+        removed++;
+    }
+    return removed;
+}
+
+/** Bir görselin pikselleri tamamen 0/255 ise 1-bit + Flate'e çevirir. */
+async function pdfConvertExactOneBit(doc) {
+    const { PDFName, PDFRawStream } = PDFLib;
+    let converted = 0;
+
+    const images = [];
+    for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+        if (!obj || !obj.contents || !obj.dict) continue;
+        const subtype = obj.dict.lookup(PDFName.of('Subtype'));
+        const isImage = subtype && subtype.asString
+            ? `/${subtype.decodeText()}` === '/Image'
+            : String(subtype) === '/Image';
+        if (isImage) images.push([ref, obj]);
+    }
+
+    const replacement = new Map();
+    for (const [ref, obj] of images) {
+        const dict = obj.dict;
+        if (Number(dict.lookup(PDFName.of('BitsPerComponent'))) !== 8) continue;
+        const w = Number(dict.lookup(PDFName.of('Width')));
+        const h = Number(dict.lookup(PDFName.of('Height')));
+        if (!w || !h || w * h > MAX_ONEBIT_PIXELS) continue;
+        if (dict.has(PDFName.of('SMask'))) continue;
+
+        let rgba = null;
+        try {
+            ({ pixels: rgba } = await pdfDecodePixels(obj, 8, w, h));
+        } catch (err) {
+            rgba = null;   // çözülemedi: dokunma
+        }
+        if (!rgba) continue;
+
+        let pure = true;
+        for (let i = 0; i < rgba.length; i += 4) {
+            const v = rgba[i];
+            if (v !== 0 && v !== 255) { pure = false; break; }
+            if (rgba[i + 1] !== v || rgba[i + 2] !== v) { pure = false; break; }
+        }
+        if (!pure) continue;
+
+        // 1-bit paketleme (MSBFirst, her satırda tam bayt).
+        const stride = Math.ceil(w / 8);
+        const packed = new Uint8Array(stride * h);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                if (rgba[(y * w + x) * 4] === 255) {
+                    packed[y * stride + (x >> 3)] |= 0x80 >> (x & 7);
+                }
+            }
+        }
+        const deflated = await pdfDeflate(packed);
+        if (!deflated || deflated.length >= obj.contents.length) continue;
+
+        const newDict = doc.context.obj({
+            Type: 'XObject', Subtype: 'Image',
+            Width: w, Height: h, BitsPerComponent: 1,
+            ColorSpace: '/DeviceGray', Filter: '/FlateDecode'
+        });
+        const newRef = doc.context.register(PDFRawStream.of(newDict, deflated));
+        replacement.set(ref.toString(), newRef);
+        converted++;
+    }
+
+    if (replacement.size > 0) {
+        const swap = (value) => replacement.get(value?.toString?.()) || value;
+        const seen = new Set();
+        const walk = (value, depth) => {
+            if (!value || depth > 32) return;
+            if (value instanceof PDFLib.PDFArray) {
+                for (let i = 0; i < value.size(); i++) {
+                    const current = value.get(i);
+                    const next = swap(current);
+                    if (next !== current) value.set(i, next); else walk(next, depth + 1);
+                }
+                return;
+            }
+            if (value instanceof PDFLib.PDFDict) {
+                if (seen.has(value)) return;
+                seen.add(value);
+                for (const [key, current] of [...value.entries()]) {
+                    const next = swap(current);
+                    if (next !== current) value.set(key, next); else walk(next, depth + 1);
+                }
+            }
+        };
+        for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+            if (obj instanceof PDFLib.PDFDict) walk(obj, 0);
+            else if (obj && obj.contents && obj.dict) walk(obj.dict, 0);
+        }
+    }
+    return converted;
+}
+
+/** zlib (deflate) SIKIŞTIRIR (DecompressionStream'in tersi). */
+async function pdfDeflate(data) {
+    if (typeof CompressionStream !== 'function') return null;
+    try {
+        const stream = new Blob([data]).stream()
+            .pipeThrough(new CompressionStream('deflate'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch (err) {
+        return null;
+    }
+}
 
 /**
  * Sayfadaki /Image XObject'lerini JPEG olarak yeniden kodlar.
@@ -506,6 +856,7 @@ const MIN_RECODE_BYTES = 20 * 1024;
  *    yeni PDFRef kaydı gerekmez
  *  - `PDFRawStream.of` imzası `(dict, contents)` sırasındadır (burada gerekmiyor)
  */
+// --- Kayıplı sıkıştırma: gömülü görselleri JPEG olarak yeniden kodla --------
 async function pdfCompressImages(doc, quality) {
     const { PDFName, PDFDict, PDFArray } = PDFLib;
     let replaced = 0;
@@ -868,6 +1219,10 @@ function pdfSyncOutputState() {
     const compress = document.getElementById('pdf-opt-compress');
     const options = document.getElementById('pdf-compress-options');
     if (options && compress) options.hidden = !compress.checked;
+    // Kalite seçenekleri YALNIZCA kayıplı yöntemde anlamlıdır.
+    const mode = document.querySelector('input[name="pdf-compress-mode"]:checked')?.value || 'lossless';
+    const qualityBlock = document.getElementById('pdf-quality-block');
+    if (qualityBlock) qualityBlock.hidden = mode !== 'quality';
 }
 
 function pdfReadOutputState() {
@@ -876,6 +1231,8 @@ function pdfReadOutputState() {
     pdfState.output = {
         a4: document.getElementById('pdf-opt-a4')?.checked ?? true,
         compress: document.getElementById('pdf-opt-compress')?.checked ?? false,
+        // Varsayılan KAYIPSIZ: piksellere dokunulmaz.
+        compressMode: document.querySelector('input[name="pdf-compress-mode"]:checked')?.value || 'lossless',
         lossy: lossy?.checked ?? false,
         quality: quality ? Number(quality.value) : 0.7
     };
@@ -899,6 +1256,12 @@ function pdfUpdateBuildButton() {
     for (const id of ['#pdf-opt-a4', '#pdf-opt-lossy']) {
         document.querySelector(id)?.addEventListener('change', pdfReadOutputState);
     }
+    document.querySelectorAll('input[name="pdf-compress-mode"]').forEach((el) => {
+        el.addEventListener('change', () => {
+            pdfReadOutputState();
+            pdfSyncOutputState();
+        });
+    });
     document.querySelectorAll('input[name="pdf-quality"]').forEach((el) => {
         el.addEventListener('change', pdfReadOutputState);
     });

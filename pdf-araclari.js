@@ -138,7 +138,9 @@ const PDF_ERROR_MESSAGES = {
     heic:
         'iPhone fotoğrafı (HEIC) bu tarayıcıda açılamıyor. iPhone\'da <strong>Ayarlar → Kamera → '
         + 'Biçimler → En Uyumlu</strong> seçip fotoğrafı yeniden çekin ya da JPG olarak paylaşın.',
-    image: 'görsel okunamadı (desteklenenler: PDF, JPG, PNG).'
+    image: 'görsel okunamadı (desteklenenler: PDF, JPG, PNG, TIFF).',
+    tiff: (reason) => `Bu TIFF türü desteklenmiyor (${reason}). `
+        + 'Dosyayı bir görüntüleyicide açıp <strong>PDF olarak kaydedin</strong> ve onu yükleyin.'
 };
 
 // --- Fotoğraftan PDF ----------------------------------------------------------
@@ -148,6 +150,8 @@ function pdfSniffType(bytes) {
     if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'pdf';
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
     if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+    if ((bytes[0] === 0x49 && bytes[1] === 0x49 && (bytes[2] === 0x2a || bytes[2] === 0x2b) && bytes[3] === 0)
+        || (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0 && (bytes[3] === 0x2a || bytes[3] === 0x2b))) return 'tiff';
     const brand = String.fromCharCode(...bytes.subarray(4, 12));
     if (/^ftyp(heic|heix|hevc|heim|heis|mif1|msf1)/.test(brand)) return 'heic';
     return 'pdf';   // bilinmeyen: PDF olarak denenir, olmazsa "geçerli PDF değil" hatası
@@ -387,6 +391,14 @@ async function addFiles(fileList) {
                 let buffer = new Uint8Array(await file.arrayBuffer());
                 const kind = pdfSniffType(buffer);
                 if (kind === 'heic') throw new Error('HEIC');
+                if (kind === 'tiff') {
+                    try {
+                        buffer = await pdfTiffToPdf(buffer);
+                    } catch (tiffErr) {
+                        if (tiffErr?.name === 'PdfTiffUnsupported') throw new Error('TIFFU:' + tiffErr.message);
+                        throw new Error('IMAGE: ' + (tiffErr?.message || ''));
+                    }
+                }
                 if (kind === 'jpeg' || kind === 'png') {
                     try {
                         buffer = await pdfImageToPdf(buffer, kind);
@@ -424,6 +436,8 @@ async function addFiles(fileList) {
                 const msg = String(err?.message || '');
                 record.error = msg === 'HEIC'
                     ? PDF_ERROR_MESSAGES.heic
+                    : msg.startsWith('TIFFU:')
+                    ? PDF_ERROR_MESSAGES.tiff(pdfEscapeHtml(msg.slice(6)))
                     : msg.startsWith('IMAGE:')
                     ? PDF_ERROR_MESSAGES.image
                     : /encrypt/i.test(msg)

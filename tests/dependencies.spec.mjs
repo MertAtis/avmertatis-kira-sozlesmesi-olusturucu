@@ -9,7 +9,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
-const APP_FILES = ['index.html', 'pdf-araclari.js', 'pdf-sayfalar.js', 'pdf-cikti.js'];
+const APP_FILES = ['index.html', 'pdf-tiff.js', 'pdf-araclari.js', 'pdf-sayfalar.js', 'pdf-cikti.js'];
 
 const PINNED = {
     'pdf-lib.min.js': '0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f',

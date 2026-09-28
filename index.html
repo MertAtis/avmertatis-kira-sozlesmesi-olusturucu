@@ -1564,7 +1564,7 @@
                 <div class="form-section">
                     <div class="form-section-head"><i class="fa-solid fa-file-circle-plus"></i> PDF Araçları</div>
                     <p class="pdf-intro">
-                        Birden fazla PDF'yi veya fotoğrafı (JPG, PNG) birleştirin, sayfaları silin / sıralayın / döndürün,
+                        Birden fazla PDF'yi, fotoğrafı (JPG, PNG) veya TIFF'i birleştirin, sayfaları silin / sıralayın / döndürün,
                         tüm çıktıyı A4'e sığdırın ve boyutunu küçültün. Tüm işlemler
                         yalnızca bu tarayıcıda yapılır; hiçbir dosya sunucuya gönderilmez.
                     </p>
@@ -1578,11 +1578,11 @@
                         <div class="pdf-stage-head"><span class="pdf-stage-num">1</span> Dosyalar</div>
                         <div id="pdf-dropzone" class="pdf-dropzone">
                             <i class="fa-solid fa-cloud-arrow-up"></i>
-                            <p>PDF veya fotoğraf (JPG, PNG) dosyalarını buraya sürükleyin</p>
+                            <p>PDF, fotoğraf (JPG, PNG) veya TIFF dosyalarını buraya sürükleyin</p>
                             <button class="btn btn-shadcn-outline" id="pdf-file-pick-btn" type="button">
                                 <i class="fa-solid fa-folder-open"></i> Dosya Seç
                             </button>
-                            <input type="file" id="pdf-file-input" accept="application/pdf,image/jpeg,image/png,.jpg,.jpeg,.png,.heic" multiple hidden>
+                            <input type="file" id="pdf-file-input" accept="application/pdf,image/jpeg,image/png,image/tiff,.jpg,.jpeg,.png,.tif,.tiff,.heic" multiple hidden>
                         </div>
                         <div id="pdf-file-list" class="pdf-file-list"></div>
                     </div>
@@ -1722,6 +1722,7 @@
     </div>
 </div>
 
+<script src="pdf-tiff.js"></script>
 <script src="pdf-araclari.js"></script>
 <script src="pdf-sayfalar.js"></script>
 <script src="pdf-cikti.js"></script>

@@ -1,8 +1,29 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 28 Eylül 2026 (sekme bölgeleri — CANLIDA)
-**Durum:** 🟢 **`npm test` 298/298 geçti.**
+**Son güncelleme:** 28 Eylül 2026 (TIFF → PDF — CANLIDA)
+**Durum:** 🟢 **`npm test` 319/319 geçti.**
 **Canlı site:** `main`.
+
+## TIFF → PDF (28 Eylül) — `pdf-tiff.js`
+
+Dış kütüphane YOK. Görünüm libtiff ile piksel piksel aynı (test oracle'ı gerçek libtiff).
+
+| TIFF türü | Yol |
+|---|---|
+| CCITT G3/G4, tek şerit | Sıkıştırılmış baytlar AYNEN (`CCITTFaxDecode`) |
+| CCITT G3/G4, çok şerit (libtiff/Pillow varsayılanı!) | Şeritler geçici sayfada pdf.js ile 1:1 çizilir → 1-bit Flate |
+| JPEG, tek şerit | JPEGTables + şerit birleştirilir, AYNEN (`DCTDecode`) |
+| JPEG, çok şerit | pdf.js ile 1:1 çizilir → Flate |
+| LZW / Deflate / PackBits / sıkıştırmasız (+predictor 2) | Çözülür → Flate (gri, RGB, palet, CMYK) |
+
+- Sayfa boyutu TIFF'in DPI'ından (inç/cm/birimsiz; faks 204x98 gibi kare olmayan piksel dahil).
+- Orientation → sayfa `/Rotate` (pikseller dönmez). Çok sayfalı TIFF; küçük resim IFD'leri atlanır.
+- Kritik ayrıntılar: `BlackIs1: true` + min-is-white'ta `Decode [1 0]`; `EndOfBlock: false`
+  (yoksa her şeridin SON satırı eksik çözülüyordu — testle bulundu).
+- Reddedilir (açık nedenle): döşemeli, alfa kanallı, 16 bit, düzlemsel, BigTIFF, eski LZW, YCbCr ham.
+- Test dosyaları: `tests/fixtures/tiff/` (depoda; CI'da Python yok). Yeniden üretim:
+  `python3 tests/fixtures/tiff/build-tiff-fixtures.py` (Pillow + tiffcp gerekir).
+- Testler: `tests/tiff.spec.mjs` (21 test).
 
 ## Sekme bölgeleri (28 Eylül)
 

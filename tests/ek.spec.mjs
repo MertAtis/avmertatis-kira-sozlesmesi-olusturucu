@@ -53,44 +53,54 @@ async function analyse(page, bytes) {
     }, Buffer.from(bytes).toString('base64'));
 }
 
-test.describe('EK-1 / EK-2 damgası', () => {
-    test('E1: her sayfada iki düğme var, biri diğerini kapatır, tekrar basınca kalkar', async ({ page }) => {
+/** Ana listedeki n. kartı (0 tabanlı) seçip EK bölmesine taşır. */
+async function moveToEk(page, mainIndices, ek) {
+    for (const i of mainIndices) await page.locator('#pdf-page-grid .pdf-page-card').nth(i).locator('[data-action="sel"]').check();
+    await page.click(`#pdf-to-ek${ek}`);
+}
+
+test.describe('EK-1 / EK-2 bölmeleri', () => {
+    test('E1: seçim çubuğu, bölmeler ve geri dönüş', async ({ page }) => {
         await openWith(page, [A]);
-        const card = page.locator('.pdf-page-card').first();
-        await card.locator('[data-action="ek1"]').click();
-        await expect(page.locator('.pdf-page-card').first().locator('[data-action="ek1"]')).toHaveAttribute('aria-pressed', 'true');
-        await page.locator('.pdf-page-card').first().locator('[data-action="ek2"]').click();
-        const first = page.locator('.pdf-page-card').first();
-        await expect(first.locator('[data-action="ek1"]')).toHaveAttribute('aria-pressed', 'false');
-        await expect(first.locator('[data-action="ek2"]')).toHaveAttribute('aria-pressed', 'true');
-        await first.locator('[data-action="ek2"]').click();
-        await expect(page.locator('.pdf-page-card').first().locator('[data-action="ek2"]')).toHaveAttribute('aria-pressed', 'false');
+        await expect(page.locator('#pdf-sel-bar')).toBeHidden();
+        await expect(page.locator('#pdf-ek-box-1')).toBeHidden();
+        const total = await page.locator('.pdf-page-card').count();
+        await moveToEk(page, [1, 2], 1);
+        await expect(page.locator('#pdf-ek-box-1 .pdf-page-card')).toHaveCount(2);
+        await expect(page.locator('#pdf-page-grid .pdf-page-card')).toHaveCount(total - 2);
+        await expect(page.locator('#pdf-ek-box-2')).toBeHidden();
+        await moveToEk(page, [0], 2);
+        await expect(page.locator('#pdf-ek-box-2 .pdf-page-card')).toHaveCount(1);
+        // Bölmeden ana listeye geri al
+        await page.locator('#pdf-ek-box-1 .pdf-page-card').first().locator('[data-action="sel"]').check();
+        await page.click('#pdf-to-main');
+        await expect(page.locator('#pdf-ek-box-1 .pdf-page-card')).toHaveCount(1);
+        // Geri Al son taşımayı geri getirir
+        await page.click('#pdf-undo-btn');
+        await expect(page.locator('#pdf-ek-box-1 .pdf-page-card')).toHaveCount(2);
     });
 
-    test('E2: damga yalnız seçili sayfada, sağ üstte; sayfanın geri kalanı piksel piksel aynı', async ({ page }) => {
+    test('E2: damga yalnız her bölmenin İLK sayfasında, sağ üstte; diğer her şey aynı; sıra: ana, EK-1, EK-2', async ({ page }) => {
         await openWith(page, [A]);
         const before = await analyse(page, await build(page));
-        await page.locator('.pdf-page-card').nth(1).locator('[data-action="ek1"]').click();
-        await page.locator('.pdf-page-card').nth(2).locator('[data-action="ek2"]').click();
-        const bytes = await build(page);
-        const after = await analyse(page, bytes);
+        // Ana listeden: sayfa 1,2 -> EK-1 ; sayfa 3 -> EK-2 (a.pdf 4 sayfa)
+        await moveToEk(page, [1, 2], 1);
+        await moveToEk(page, [1], 2);   // 2 taşındıktan sonra ana listede [0,3]; index 1 = orijinal sayfa 4
+        const after = await analyse(page, await build(page));
         expect(after.length).toBe(before.length);
-        for (let i = 0; i < after.length; i++) {
-            expect(after[i].outsideSum, `sayfa ${i + 1} değişmemeli`).toBe(before[i].outsideSum);
-            if (i === 1 || i === 2) expect(after[i].inside).toBeGreaterThan(before[i].inside + 40);
-            else expect(after[i].inside).toBe(before[i].inside);
-        }
+                const marked = after.map((r, i) => r.inside > 40 ? i : -1).filter((i) => i >= 0);
+        // Ana 1 sayfa, EK-1 (2 sayfa: yalnız ilki damgalı), EK-2 (1 sayfa, damgalı)
+        expect(marked).toEqual([1, 3]);
     });
 
     for (const mode of ['A4', 'Küçült']) {
-        test(`E3: döndürülmüş sayfada da görünen sağ üst köşede (${mode})`, async ({ page }) => {
+        test(`E3: döndürülmüş EK sayfasında da görünen sağ üst köşede (${mode})`, async ({ page }) => {
             await openWith(page, [A]);
             await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
-            await page.locator('.pdf-page-card').first().locator('[data-action="ek1"]').click();
+            await moveToEk(page, [0], 1);
             const bytes = await build(page, mode === 'A4' ? '#pdf-build-btn' : '#pdf-build-small-btn');
-            const [p1] = await analyse(page, bytes);
-            expect(p1.inside).toBeGreaterThan(40);
-            expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(0);
+            const rows = await analyse(page, bytes);
+            expect(rows[rows.length - 1].inside).toBeGreaterThan(40);
         });
     }
 
@@ -100,21 +110,22 @@ test.describe('EK-1 / EK-2 damgası', () => {
             await page.locator('#pdf-advanced').evaluate((el) => { el.open = true; });
             await page.locator('#pdf-opt-a4').uncheck();
             for (let i = 0; i < turns; i++) await page.locator('.pdf-page-card').first().locator('[data-action="rotate"]').click();
-            await page.locator('.pdf-page-card').first().locator('[data-action="ek2"]').click();
+            await moveToEk(page, [0], 2);
             const bytes = await build(page);
             const doc = await PDFDocument.load(bytes);
-            expect(doc.getPage(0).getRotation().angle % 360).not.toBe(0);
-            const [p1] = await analyse(page, bytes);
-            expect(p1.inside).toBeGreaterThan(40);
+            expect(doc.getPage(doc.getPageCount() - 1).getRotation().angle % 360).not.toBe(0);
+            const rows = await analyse(page, bytes);
+            expect(rows[rows.length - 1].inside).toBeGreaterThan(40);
         });
     }
 
-    test('E4: Sıfırla EK etiketlerini de kaldırır, Geri Al geri getirir', async ({ page }) => {
+    test('E4: EK bölmesi yokken çıktı eski sistemle aynı (damga yok)', async ({ page }) => {
         await openWith(page, [A]);
-        await page.locator('.pdf-page-card').first().locator('[data-action="ek1"]').click();
-        await page.click('#pdf-reset-edits-btn');
-        await expect(page.locator('.pdf-page-card').first().locator('[data-action="ek1"]')).toHaveAttribute('aria-pressed', 'false');
+        const rows = await analyse(page, await build(page));
+        const base = rows.map((r) => r.inside);
+        await moveToEk(page, [0], 1);
         await page.click('#pdf-undo-btn');
-        await expect(page.locator('.pdf-page-card').first().locator('[data-action="ek1"]')).toHaveAttribute('aria-pressed', 'true');
+        const again = (await analyse(page, await build(page))).map((r) => r.inside);
+        expect(again).toEqual(base);
     });
 });

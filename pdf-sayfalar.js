@@ -182,13 +182,26 @@ function pdfRotateAll() {
     pdfBus.emit('pages');
 }
 
-/** EK etiketi: 0 = yok, 1 = EK-1, 2 = EK-2. Aynı düğmeye tekrar basınca kalkar. */
-function pdfSetEk(uid, ek) {
-    const page = pdfState.pages.find((p) => p.uid === uid);
-    if (!page) return;
-    const next = (page.ek || 0) === ek ? 0 : ek;
-    pdfRecordUndo(next ? `EK-${next}` : 'EK kaldırıldı');
-    page.ek = next;
+/** Seçili sayfalar (tik). Undo'ya girmez; yalnızca görünümdür. */
+const pdfSelected = new Set();
+
+function pdfToggleSelect(uid) {
+    if (pdfSelected.has(uid)) pdfSelected.delete(uid); else pdfSelected.add(uid);
+    pdfBus.emit('pages');
+}
+
+function pdfClearSelection() {
+    pdfSelected.clear();
+    pdfBus.emit('pages');
+}
+
+/** Seçili sayfaları EK bölmesine (1 / 2) ya da ana listeye (0) taşır. */
+function pdfMoveSelectedToEk(ek) {
+    const chosen = pdfState.pages.filter((p) => pdfSelected.has(p.uid));
+    if (chosen.length === 0) return;
+    pdfRecordUndo(ek ? `EK-${ek}` : 'Ana listeye al');
+    for (const page of chosen) page.ek = ek;
+    pdfSelected.clear();
     pdfBus.emit('pages');
 }
 
@@ -227,9 +240,30 @@ const idle = (fn) => (window.requestIdleCallback
 
 function pdfRenderGrid() {
     const grid = document.getElementById('pdf-page-grid');
-    if (!grid) return;
+    const area = document.getElementById('pdf-page-area');
+    if (!grid || !area) return;
+    const ekGrids = {
+        1: document.getElementById('pdf-ek-grid-1'),
+        2: document.getElementById('pdf-ek-grid-2')
+    };
+    const ekBoxes = {
+        1: document.getElementById('pdf-ek-box-1'),
+        2: document.getElementById('pdf-ek-box-2')
+    };
+
+    // Silinmiş sayfaların seçimi temizlenir.
+    for (const uid of [...pdfSelected]) {
+        if (!pdfState.pages.some((p) => p.uid === uid)) pdfSelected.delete(uid);
+    }
+    const bar = document.getElementById('pdf-sel-bar');
+    if (bar) {
+        bar.hidden = pdfSelected.size === 0;
+        const count = document.getElementById('pdf-sel-count');
+        if (count) count.textContent = `${pdfSelected.size} sayfa seçili`;
+    }
 
     if (pdfState.pages.length === 0) {
+        for (const k of [1, 2]) if (ekBoxes[k]) ekBoxes[k].hidden = true;
         // Dosyalar yüklü ama tüm sayfalar silinmiş olabilir; iki durum
         // farklı mesaj ister.
         grid.innerHTML = pdfState.files.some((f) => f.doc)
@@ -244,7 +278,7 @@ function pdfRenderGrid() {
     // turda 300 <img> yeniden kurmak her tiklamada yuzlerce JPEG kodlamasi
     // demek ve arayuzu dondurur.
     const previous = new Map(
-        [...grid.querySelectorAll('.pdf-page-card')].map((el) => [Number(el.dataset.uid), el])
+        [...area.querySelectorAll('.pdf-page-card')].map((el) => [Number(el.dataset.uid), el])
     );
     // `rerender`: kartın HTML'i değişmeli (konumu, rozeti, etiketi).
     // `rethumb`: küçük resim yeniden ÜRETİLMELİ. Sıra değişikliği ikisini
@@ -259,7 +293,8 @@ function pdfRenderGrid() {
         const shownIndex = Number(el.dataset.index);
         const shownRotation = Number(el.dataset.rotation || 0);
         if (shownIndex !== index || shownRotation !== (page.rotation || 0)
-            || Number(el.dataset.ek || 0) !== (page.ek || 0)) {
+            || Number(el.dataset.ek || 0) !== (page.ek || 0)
+            || (el.dataset.sel === '1') !== pdfSelected.has(page.uid)) {
             rerender.add(page.uid);
         }
         if (shownRotation !== (page.rotation || 0)) rethumb.add(page.uid);
@@ -289,7 +324,7 @@ function pdfRenderGrid() {
                 ? '<div class="pdf-page-thumb-placeholder">Önizlenemedi</div>'
                 : '<div class="pdf-page-thumb-placeholder">Yükleniyor...</div>';
 
-        return `<div class="pdf-page-card" draggable="true" data-uid="${page.uid}" data-index="${index}" data-rotation="${page.rotation || 0}" data-ek="${page.ek || 0}">
+        return `<div class="pdf-page-card" draggable="true" data-uid="${page.uid}" data-index="${index}" data-rotation="${page.rotation || 0}" data-ek="${page.ek || 0}" data-sel="${pdfSelected.has(page.uid) ? 1 : 0}">
             <div class="pdf-page-actions">
                 <button class="pdf-page-btn" type="button" data-action="rotate" data-uid="${page.uid}"
                         title="90&deg; döndür" aria-label="Sayfayı döndür"><i class="fa-solid fa-rotate-right"></i></button>
@@ -298,17 +333,22 @@ function pdfRenderGrid() {
             </div>
             ${thumb}
             ${rotationBadge}
-            <div class="pdf-page-ek" role="group" aria-label="Ek etiketi">
-                <button class="pdf-ek-btn" type="button" data-action="ek1" data-uid="${page.uid}"
-                        aria-pressed="${page.ek === 1}">EK-1</button>
-                <button class="pdf-ek-btn" type="button" data-action="ek2" data-uid="${page.uid}"
-                        aria-pressed="${page.ek === 2}">EK-2</button>
-            </div>
+            <label class="pdf-page-sel">
+                <input type="checkbox" data-action="sel" data-uid="${page.uid}" ${pdfSelected.has(page.uid) ? 'checked' : ''}>
+                Seç
+            </label>
             <div class="pdf-page-label">Sayfa ${pageNo}/${total}<br>${pdfEscapeHtml(fileName)}</div>
         </div>`;
     });
 
-    grid.innerHTML = cards.join('');
+    const html = { 0: [], 1: [], 2: [] };
+    pdfState.pages.forEach((page, i) => html[page.ek || 0].push(cards[i]));
+    grid.innerHTML = html[0].join('');
+    for (const k of [1, 2]) {
+        if (!ekGrids[k]) continue;
+        ekGrids[k].innerHTML = html[k].join('');
+        ekBoxes[k].hidden = html[k].length === 0;
+    }
 
     // Küçük resimleri üret: ilk sayfalar hemen, kalanlar boşta.
     // thumbnailPending olan sayfalar ZATEN üretiliyor; yeniden planlanmaz.
@@ -339,7 +379,7 @@ function pdfRenderGrid() {
 }
 
 function pdfInitPageGrid() {
-    const grid = document.getElementById('pdf-page-grid');
+    const grid = document.getElementById('pdf-page-area');
     if (!grid) return;
 
     pdfBus.on('pages', pdfRenderGrid);
@@ -347,13 +387,16 @@ function pdfInitPageGrid() {
     grid.addEventListener('click', (e) => {
         const button = e.target.closest('[data-action]');
         if (!button) return;
+        if (button.dataset.action === 'sel') {
+            e.stopPropagation();
+            pdfToggleSelect(Number(button.dataset.uid));
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         const uid = Number(button.dataset.uid);
         if (button.dataset.action === 'rotate') pdfRotatePage(uid);
         if (button.dataset.action === 'delete') pdfDeletePage(uid);
-        if (button.dataset.action === 'ek1') pdfSetEk(uid, 1);
-        if (button.dataset.action === 'ek2') pdfSetEk(uid, 2);
     });
 
     let dragFrom = null;
@@ -401,6 +444,11 @@ function pdfInitPageGrid() {
     document.getElementById('pdf-rotate-all-btn')?.addEventListener('click', pdfRotateAll);
     document.getElementById('pdf-reset-edits-btn')?.addEventListener('click', pdfResetEdits);
 
+    document.getElementById('pdf-to-ek1')?.addEventListener('click', () => pdfMoveSelectedToEk(1));
+    document.getElementById('pdf-to-ek2')?.addEventListener('click', () => pdfMoveSelectedToEk(2));
+    document.getElementById('pdf-to-main')?.addEventListener('click', () => pdfMoveSelectedToEk(0));
+    document.getElementById('pdf-sel-clear')?.addEventListener('click', pdfClearSelection);
+
     pdfRenderGrid();
     pdfUpdateUndoButton();
 }
@@ -410,7 +458,8 @@ pdfInitPageGrid();
 window.pdfRotatePage = pdfRotatePage;
 window.pdfRotateAll = pdfRotateAll;
 window.pdfDeletePage = pdfDeletePage;
-window.pdfSetEk = pdfSetEk;
+window.pdfMoveSelectedToEk = pdfMoveSelectedToEk;
+window.pdfToggleSelect = pdfToggleSelect;
 window.pdfResetEdits = pdfResetEdits;
 window.pdfUndo = pdfUndo;
 window.pdfMovePage = pdfMovePage;

@@ -875,24 +875,24 @@
             text-align: center;
         }
 
-        .pdf-page-ek { display: flex; gap: 4px; }
-        .pdf-ek-btn {
-            flex: 1;
-            padding: 3px 0;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            background: var(--card);
-            color: var(--foreground);
-            font-size: 0.7rem;
-            font-weight: 700;
-            cursor: pointer;
+        .pdf-page-sel {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.75rem; cursor: pointer;
         }
-        .pdf-ek-btn:hover { background: var(--secondary); }
-        .pdf-ek-btn[aria-pressed="true"] {
-            background: var(--primary);
-            color: var(--primary-foreground);
-            border-color: var(--primary);
+        .pdf-page-card[data-sel="1"] { border-color: var(--ring); border-width: 2px; }
+        .pdf-sel-bar {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+            padding: 8px; margin-bottom: 12px;
+            border: 1px solid var(--ring); border-radius: var(--radius);
+            background: var(--secondary);
         }
+        .pdf-sel-bar[hidden], .pdf-ek-box[hidden] { display: none; }
+        .pdf-ek-box {
+            margin-top: 16px; padding: 10px;
+            border: 2px dashed var(--ring); border-radius: var(--radius);
+        }
+        .pdf-ek-head { font-weight: 700; margin-bottom: 8px; }
+        .pdf-ek-head small { font-weight: 400; color: var(--muted-foreground); }
 
         .pdf-page-label {
             font-size: 0.72rem;
@@ -1620,7 +1620,24 @@
                                 <i class="fa-solid fa-arrow-rotate-left"></i> Döndürmeleri ve Sıralamayı Sıfırla
                             </button>
                         </div>
-                        <div id="pdf-page-grid" class="pdf-page-grid"></div>
+                        <div class="pdf-sel-bar" id="pdf-sel-bar" hidden>
+                            <strong id="pdf-sel-count"></strong>
+                            <button class="btn btn-shadcn-outline" id="pdf-to-ek1" type="button">EK-1 bölmesine taşı</button>
+                            <button class="btn btn-shadcn-outline" id="pdf-to-ek2" type="button">EK-2 bölmesine taşı</button>
+                            <button class="btn btn-shadcn-outline" id="pdf-to-main" type="button">Ana listeye al</button>
+                            <button class="btn btn-shadcn-outline" id="pdf-sel-clear" type="button">Seçimi temizle</button>
+                        </div>
+                        <div id="pdf-page-area">
+                            <div id="pdf-page-grid" class="pdf-page-grid"></div>
+                            <section class="pdf-ek-box" id="pdf-ek-box-1" hidden>
+                                <div class="pdf-ek-head">EK-1 <small>&mdash; bu bölmedeki ilk sayfanın sağ üstüne "EK-1" yazılır; çıktıda ana sayfalardan sonra gelir</small></div>
+                                <div class="pdf-page-grid" id="pdf-ek-grid-1"></div>
+                            </section>
+                            <section class="pdf-ek-box" id="pdf-ek-box-2" hidden>
+                                <div class="pdf-ek-head">EK-2 <small>&mdash; bu bölmedeki ilk sayfanın sağ üstüne "EK-2" yazılır; EK-1'den sonra gelir</small></div>
+                                <div class="pdf-page-grid" id="pdf-ek-grid-2"></div>
+                            </section>
+                        </div>
                     </div>
 
                     <!-- AŞAMA 3: ÇIKTI -->

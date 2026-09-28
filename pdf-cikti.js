@@ -450,8 +450,21 @@ function pdfStampEk(doc, page, label, font) {
     page.drawText(label, { x: text.x, y: text.y, size, font, rotate: angle, color: PDFLib.rgb(0, 0, 0) });
 }
 
+/** Çıktı sırası: ana sayfalar, sonra EK-1, sonra EK-2 (grup içi sıra korunur). */
+function pdfEkOrder(pages) {
+    return [0, 1, 2].flatMap((k) => pages.filter((p) => (p.ek || 0) === k));
+}
+
+/** Her EK grubunun İLK sayfası: damga yalnız ona yazılır. */
+function pdfEkFirsts(entries) {
+    const firsts = new Map();
+    for (const e of entries) if (e.ek && !firsts.has(e.ek)) firsts.set(e.ek, e);
+    return firsts;
+}
+
 async function pdfBuildOutput() {
-    const entries = pdfState.pages;
+    const entries = pdfEkOrder(pdfState.pages);
+    const ekFirsts = pdfEkFirsts(entries);
     if (entries.length === 0) throw new Error(RESULT_TEXT.noPages);
 
     pdfSetBusy(true);
@@ -610,7 +623,7 @@ async function pdfBuildOutput() {
                 doc.addPage(copied);
             }
 
-            if (entry.ek) {
+            if (entry.ek && ekFirsts.get(entry.ek) === entry) {
                 ekFont = ekFont || await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
                 pdfStampEk(doc, doc.getPages()[doc.getPageCount() - 1], `EK-${entry.ek}`, ekFont);
             }
@@ -1827,6 +1840,7 @@ async function pdfRasterizeToOutput(entries, quality, landscape = false) {
 
     let failed = 0;
     let ekFont = null;
+    const ekFirsts = pdfEkFirsts(entries);
     const failures = [];
 
     for (const entry of entries) {
@@ -1876,7 +1890,7 @@ async function pdfRasterizeToOutput(entries, quality, landscape = false) {
                 height: h
             });
 
-            if (entry.ek) {
+            if (entry.ek && ekFirsts.get(entry.ek) === entry) {
                 ekFont = ekFont || await out.embedFont(PDFLib.StandardFonts.HelveticaBold);
                 pdfStampEk(out, target, `EK-${entry.ek}`, ekFont);
             }

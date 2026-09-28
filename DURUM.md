@@ -270,8 +270,9 @@ Ayrıca kayıp mod onayı: 5 kez "Oluştur" → tek onay → **tek** indirme.
 - Tasarım: `docs/superpowers/specs/2026-09-25-pdf-araclari-sekmesi-design.md`
 - Plan: `docs/superpowers/plans/2026-09-25-pdf-araclari-sekmesi.md`
 
-## EK-1 / EK-2 damgası
-- Her sayfa kartında "EK-1" / "EK-2" düğmesi (biri diğerini kapatır, tekrar basınca kalkar; Geri Al ve Sıfırla ile uyumlu).
-- Çıktıda seçili sayfanın GÖRÜNEN sağ üst köşesine beyaz zeminli çerçeveli kutuda damga (`pdfStampEk`, pdf-cikti.js). /Rotate 0/90/180/270, A4, A4'süz ve Küçült(raster) yollarında çalışır.
-- Damgasız sayfalara ve damga bölgesi dışına dokunulmaz (tests/ek.spec.mjs, piksel karşılaştırması).
+## EK-1 / EK-2 bölmeleri
+- Sayfa kartlarında "Seç" kutusu (tik). Seçince üstte çubuk: "EK-1 bölmesine taşı" / "EK-2 bölmesine taşı" / "Ana listeye al" / "Seçimi temizle".
+- Ana liste eskisi gibi. EK-1 ve EK-2 için kesik çizgili ayrı kutular (boşsa görünmez).
+- Çıktıda sıra: ana sayfalar, EK-1, EK-2. Damga YALNIZ her bölmenin ilk sayfasının görünen sağ üst köşesine ("EK-1"/"EK-2", `pdfStampEk`).
+- /Rotate 0/90/180/270, A4, A4'süz ve Küçült(raster) yollarında çalışır; diğer sayfalara dokunulmaz (tests/ek.spec.mjs).
 - Yapılmadı: özel etiket metni (EK-3...), sayfa numarası.

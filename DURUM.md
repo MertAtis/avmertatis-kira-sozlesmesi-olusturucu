@@ -1,8 +1,20 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 28 Eylül 2026 (JPEG küçültme — YEREL, push EDİLMEDİ)
-**Durum:** 🟢 **`npm test` 290/290 geçti.**
-**Canlı site:** `d728751` (iki düğme canlıda).
+**Son güncelleme:** 28 Eylül 2026 (fotoğraftan PDF — CANLIDA)
+**Durum:** 🟢 **`npm test` 296/296 geçti.**
+**Canlı site:** `main` (JPEG küçültme + fotoğraftan PDF canlıda).
+
+## Fotoğraf / JPG / PNG'den PDF (28 Eylül)
+
+Yükleme noktasında (`addFiles`) dosyanın gerçek türü ilk baytlardan okunur (`pdfSniffType`);
+JPG/PNG tek sayfalık PDF'e çevrilir (`pdfImageToPdf`), sonrası sıradan PDF gibi işlenir
+(küçük resim, sıralama, A4, Birleştir, Küçült). Görsel BOZULMAZ:
+- JPEG baytları olduğu gibi gömülür (`F1`: çıktıdaki JPEG kaynakla bayt bayt aynı)
+- PNG kayıpsız (Flate) gömülür (`F3`)
+- EXIF yönü piksellere dokunmadan sayfa `/Rotate`'una çevrilir (`F2`)
+- iPhone HEIC reddedilir, mesaj "Ayarlar → Kamera → Biçimler → En Uyumlu" der (`F5`)
+- Tek fotoğrafta çıktı adı `foto.jpg` → `foto.pdf`
+Testler: `tests/foto.spec.mjs` (F0–F5). Sayfa oranı fotoğrafınki; A4'e sığdır açıkken A4 olur.
 
 ## "Küçült" artık JPEG'i de küçültür (28 Eylül)
 

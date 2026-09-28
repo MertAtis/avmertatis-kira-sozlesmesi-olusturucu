@@ -677,7 +677,8 @@ function pdfSafeFileName(name) {
 /** Tek dosya indiriliyorsa adi korunur, birden fazlasi birlestirilmis ad alir. */
 function pdfDefaultOutputFileName() {
     const names = pdfState.files.filter((f) => f.doc);
-    if (names.length === 1) return pdfSafeFileName(names[0].name);
+    // Fotoğraftan gelen dosyanın adı .jpg/.png olabilir; çıktı her zaman .pdf.
+    if (names.length === 1) return pdfSafeFileName(names[0].name.replace(/\.(jpe?g|png)$/i, '.pdf'));
     return 'birlesmis-belge.pdf';
 }
 

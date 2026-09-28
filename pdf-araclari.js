@@ -134,8 +134,85 @@ const PDF_ERROR_MESSAGES = {
     totalTooLarge:
         'Yüklenen dosyaların toplamı 150 MB sınırını aşıyor. Bellek sınırı nedeniyle işlem yapılamaz.',
     memory:
-        'Tarayıcı belleği tükendi. Daha küçük dosyalarla veya daha az sayfa seçerek deneyin.'
+        'Tarayıcı belleği tükendi. Daha küçük dosyalarla veya daha az sayfa seçerek deneyin.',
+    heic:
+        'iPhone fotoğrafı (HEIC) bu tarayıcıda açılamıyor. iPhone\'da <strong>Ayarlar → Kamera → '
+        + 'Biçimler → En Uyumlu</strong> seçip fotoğrafı yeniden çekin ya da JPG olarak paylaşın.',
+    image: 'görsel okunamadı (desteklenenler: PDF, JPG, PNG).'
 };
+
+// --- Fotoğraftan PDF ----------------------------------------------------------
+
+/** Dosyanın gerçek türü (uzantıya değil, ilk baytlara bakılır). */
+function pdfSniffType(bytes) {
+    if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'pdf';
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+    const brand = String.fromCharCode(...bytes.subarray(4, 12));
+    if (/^ftyp(heic|heix|hevc|heim|heis|mif1|msf1)/.test(brand)) return 'heic';
+    return 'pdf';   // bilinmeyen: PDF olarak denenir, olmazsa "geçerli PDF değil" hatası
+}
+
+/**
+ * JPEG'in EXIF yön etiketini okur (1-8). Yoksa ya da okunamazsa 1.
+ * Telefon pikselleri sensör yönünde kaydeder, doğru yönü bu etikete yazar.
+ */
+function pdfJpegOrientation(bytes) {
+    let i = 2;
+    while (i + 4 <= bytes.length && bytes[i] === 0xff) {
+        const marker = bytes[i + 1];
+        const len = (bytes[i + 2] << 8) | bytes[i + 3];
+        if (marker === 0xda || len < 2) break;
+        if (marker === 0xe1 && String.fromCharCode(...bytes.subarray(i + 4, i + 8)) === 'Exif') {
+            const t = i + 10;                                   // TIFF başlığı
+            const le = bytes[t] === 0x49;                       // 'II' küçük uçlu
+            const u16 = (o) => (le ? bytes[o] | (bytes[o + 1] << 8) : (bytes[o] << 8) | bytes[o + 1]);
+            const u32 = (o) => (le
+                ? (bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24)) >>> 0
+                : ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0);
+            const ifd = t + u32(t + 4);
+            if (ifd + 2 > bytes.length) return 1;
+            const count = u16(ifd);
+            for (let k = 0; k < count; k++) {
+                const e = ifd + 2 + k * 12;
+                if (e + 12 > bytes.length) return 1;
+                if (u16(e) === 0x0112) {
+                    const v = u16(e + 8);
+                    return v >= 1 && v <= 8 ? v : 1;
+                }
+            }
+            return 1;
+        }
+        i += 2 + len;
+    }
+    return 1;
+}
+
+// EXIF yönü -> sayfa /Rotate (saat yönünde). Aynalı yönler (2, 4, 5, 7)
+// telefonlarda pratikte görülmez; en yakın döndürmeyle gösterilir.
+const EXIF_TO_ROTATE = { 1: 0, 2: 0, 3: 180, 4: 180, 5: 90, 6: 90, 7: 270, 8: 270 };
+
+/**
+ * Fotoğrafı tek sayfalık bir PDF'e çevirir. Görsel BOZULMAZ:
+ *  - JPEG baytları olduğu gibi gömülür (yeniden sıkıştırma YOK)
+ *  - PNG kayıpsız (Flate) gömülür
+ *  - EXIF yönü piksellere dokunmadan sayfa döndürmesine (/Rotate) çevrilir
+ * Sayfa, fotoğrafın oranındadır; uzun kenarı A4'ün uzun kenarı kadardır.
+ * "A4'e sığdır" açıkken (varsayılan) çıktıda A4'e yerleşir.
+ */
+async function pdfImageToPdf(bytes, kind) {
+    const doc = await PDFLib.PDFDocument.create();
+    const image = kind === 'jpeg' ? await doc.embedJpg(bytes) : await doc.embedPng(bytes);
+    const A4_LONG = 841.89;
+    const scale = A4_LONG / Math.max(image.width, image.height);
+    const w = image.width * scale;
+    const h = image.height * scale;
+    const page = doc.addPage([w, h]);
+    page.drawImage(image, { x: 0, y: 0, width: w, height: h });
+    const rotate = kind === 'jpeg' ? EXIF_TO_ROTATE[pdfJpegOrientation(bytes)] : 0;
+    if (rotate) page.setRotation(PDFLib.degrees(rotate));
+    return new Uint8Array(await doc.save());
+}
 
 // --- Durum ------------------------------------------------------------------
 // `const` ile tanımlanan adlar klasik script'te window'a yazılmaz (yalnızca
@@ -307,7 +384,16 @@ async function addFiles(fileList) {
             }
 
             try {
-                const buffer = new Uint8Array(await file.arrayBuffer());
+                let buffer = new Uint8Array(await file.arrayBuffer());
+                const kind = pdfSniffType(buffer);
+                if (kind === 'heic') throw new Error('HEIC');
+                if (kind === 'jpeg' || kind === 'png') {
+                    try {
+                        buffer = await pdfImageToPdf(buffer, kind);
+                    } catch (imageErr) {
+                        throw new Error('IMAGE: ' + (imageErr?.message || ''));
+                    }
+                }
                 const doc = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: false });
                 record.data = buffer;
                 const pageCount = doc.getPageCount();
@@ -334,8 +420,13 @@ async function addFiles(fileList) {
             } catch (err) {
                 // Dosya adı yazılmaz: kişisel veri (evrak/sözleşme adı)
                 // konsola sızmasın. Dosyanın KENDİSİ zaten hata satırında görünür.
-                console.error('Bir PDF yüklenemedi (' + pdfFormatBytes(record.size) + '):', err);
-                record.error = /encrypt/i.test(String(err?.message || ''))
+                console.error('Bir dosya yüklenemedi (' + pdfFormatBytes(record.size) + '):', err);
+                const msg = String(err?.message || '');
+                record.error = msg === 'HEIC'
+                    ? PDF_ERROR_MESSAGES.heic
+                    : msg.startsWith('IMAGE:')
+                    ? PDF_ERROR_MESSAGES.image
+                    : /encrypt/i.test(msg)
                     ? PDF_ERROR_MESSAGES.encrypted
                     : pdfIsMemoryError(err?.message)
                         ? PDF_ERROR_MESSAGES.memory

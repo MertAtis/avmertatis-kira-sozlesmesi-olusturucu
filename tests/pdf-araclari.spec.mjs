@@ -43,6 +43,13 @@ export async function fileListRows(page) {
     return page.locator('#pdf-file-list .pdf-file-row').allTextContents();
 }
 
+/** Her sayfa kartının döndür düğmesine bir kez basar (eski "Tümünü Döndür" yerine). */
+async function rotateAllCards(page) {
+    const buttons = page.locator('.pdf-page-card [data-action="rotate"]');
+    const n = await buttons.count();
+    for (let i = 0; i < n; i++) await buttons.nth(i).click();
+}
+
 test.describe('PDF Araçları sekmesi kabuğu', () => {
     test('T01: kütüphaneler sekme açılınca yüklenir, konsol hatası yok', async ({ page }) => {
         const errors = [];
@@ -299,7 +306,7 @@ test.describe('sayfa ızgarası ve düzenleme', () => {
         await openPdfTab(page);
         await uploadFixtures(page, ['a.pdf']);
         await expectCardCount(page, 4);
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         expect(await page.evaluate(() => window.pdfState.pages.map((p) => p.rotation))).toEqual([90, 90, 90, 90]);
     });
 
@@ -340,7 +347,7 @@ test.describe('sayfa ızgarası ve düzenleme', () => {
         await uploadFixtures(page, ['a.pdf']);
         await expectCardCount(page, 4);
         await dragCard(page, 0, 3);
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         expect(await page.evaluate(() => window.pdfState.pages[0].rotation)).toBe(90);
 
         await page.click('#pdf-reset-edits-btn');
@@ -1178,7 +1185,7 @@ test.describe('inceleme bulguları: düzeltilmiş davranışlar', () => {
 
         // Toplu döndürmede ise hepsi yeniden üretilir.
         const beforeAll = after;
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         await page.waitForTimeout(3000);
         const afterAll = await page.evaluate(() => window.__thumbRenders);
         expect(afterAll - beforeAll).toBe(60);
@@ -1221,15 +1228,15 @@ test.describe('döndürme görsel geri bildirimi ve önizleme paneli', () => {
         await uploadFixtures(page, ['a.pdf']);
         await expectCardCount(page, 4);
 
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         await expect(page.locator('.pdf-page-badge')).toHaveCount(4);
         await expect(page.locator('.pdf-page-badge').first()).toHaveText('90°');
 
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         await expect(page.locator('.pdf-page-badge').first()).toHaveText('180°');
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         await expect(page.locator('.pdf-page-badge').first()).toHaveText('270°');
-        await page.click('#pdf-rotate-all-btn');
+        await rotateAllCards(page);
         await expect(page.locator('.pdf-page-badge')).toHaveCount(0);
     });
 

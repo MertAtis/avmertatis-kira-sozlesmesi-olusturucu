@@ -175,13 +175,6 @@ function pdfRotatePage(uid) {
     pdfBus.emit('pages');
 }
 
-function pdfRotateAll() {
-    if (pdfState.pages.length === 0) return;
-    pdfRecordUndo('Tümünü döndür');
-    for (const page of pdfState.pages) page.rotation = (page.rotation + 90) % 360;
-    pdfBus.emit('pages');
-}
-
 /** Seçili sayfalar (tik). Undo'ya girmez; yalnızca görünümdür. */
 const pdfSelected = new Set();
 
@@ -460,7 +453,6 @@ function pdfInitPageGrid() {
     pdfBus.on('undo', pdfUpdateUndoButton);
 
     document.getElementById('pdf-undo-btn')?.addEventListener('click', pdfUndo);
-    document.getElementById('pdf-rotate-all-btn')?.addEventListener('click', pdfRotateAll);
     document.getElementById('pdf-reset-edits-btn')?.addEventListener('click', pdfResetEdits);
 
     document.getElementById('pdf-sel-actions')?.addEventListener('click', (e) => {
@@ -477,7 +469,6 @@ function pdfInitPageGrid() {
 pdfInitPageGrid();
 
 window.pdfRotatePage = pdfRotatePage;
-window.pdfRotateAll = pdfRotateAll;
 window.pdfDeletePage = pdfDeletePage;
 window.pdfMoveSelectedToEk = pdfMoveSelectedToEk;
 window.pdfNormalizeEk = pdfNormalizeEk;

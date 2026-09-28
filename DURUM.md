@@ -1,8 +1,15 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 28 Eylül 2026 (fotoğraftan PDF — CANLIDA)
-**Durum:** 🟢 **`npm test` 296/296 geçti.**
-**Canlı site:** `main` (JPEG küçültme + fotoğraftan PDF canlıda).
+**Son güncelleme:** 28 Eylül 2026 (sekme bölgeleri — CANLIDA)
+**Durum:** 🟢 **`npm test` 298/298 geçti.**
+**Canlı site:** `main`.
+
+## Sekme bölgeleri (28 Eylül)
+
+PDF Araçları belge oluşturucuların yanından alındı: `.tab-row` içinde iki etiketli grup —
+**Belge Oluştur** (5 sekme) solda, **Araçlar** (PDF Araçları, kesikli çerçeve) sağda; telefonda
+alt alta. Kayıp mod onay penceresi artık tüm `.tab-row`'u `inert` yapar (iki grup da kilitli, `A6`).
+Testler: `S1` (masaüstü + telefon), `T20` güncellendi.
 
 ## Fotoğraf / JPG / PNG'den PDF (28 Eylül)
 

@@ -182,6 +182,27 @@
             background: var(--secondary);
         }
 
+        /* Sekme bölgeleri: belge oluşturucular solda, araçlar ayrı bir kutuda sağda */
+        .tab-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 16px 32px;
+            margin-bottom: 24px;
+        }
+        .tab-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .tab-group-tools { margin-left: auto; }
+        .tab-group-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted-foreground, #64748b);
+            padding-left: 2px;
+        }
+        .tab-row .tab-container { margin-bottom: 0; }
+        .tab-container-tools { border-style: dashed; }
+
         /* Shadcn Segmented Control Tabs (High Contrast & Legible) */
         .tab-container {
             background: #bac5d1;
@@ -577,6 +598,13 @@
             .brand-title {
                 font-size: 1.02rem;
             }
+            .tab-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 14px;
+                margin-bottom: 16px;
+            }
+            .tab-group-tools { margin-left: 0; }
             .tab-container {
                 display: flex;
                 flex-direction: column;
@@ -1015,26 +1043,36 @@
         </div>
     </header>
 
-    <!-- TABS -->
-    <div class="tab-container no-print">
-        <button class="tab-btn active" id="tab-kira" onclick="switchTab('kira')">
-            <i class="fa-solid fa-file-contract"></i> Kira Sözleşmesi
-        </button>
-        <button class="tab-btn" id="tab-tahliye" onclick="switchTab('tahliye')">
-            <i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü
-        </button>
-        <button class="tab-btn" id="tab-anahtar" onclick="switchTab('anahtar')">
-            <i class="fa-solid fa-key"></i> Anahtar Teslim Tutanağı
-        </button>
-        <button class="tab-btn" id="tab-makbuz-avukat" onclick="switchTab('makbuz-avukat')">
-            <i class="fa-solid fa-scale-balanced"></i> Alındı Makbuzu (Avukat)
-        </button>
-        <button class="tab-btn" id="tab-makbuz-emlak" onclick="switchTab('makbuz-emlak')">
-            <i class="fa-solid fa-building-user"></i> Alındı Makbuzu (Emlakçı)
-        </button>
-        <button class="tab-btn" id="tab-pdf-araclari" onclick="switchTab('pdf-araclari')">
-            <i class="fa-solid fa-wrench"></i> PDF Araçları
-        </button>
+    <!-- SEKMELER: belge oluşturucular ve araçlar AYRI bölgelerde -->
+    <div class="tab-row no-print">
+        <div class="tab-group" id="tab-group-docs" role="group" aria-labelledby="tab-group-docs-label">
+            <div class="tab-group-label" id="tab-group-docs-label">Belge Oluştur</div>
+            <div class="tab-container no-print">
+                <button class="tab-btn active" id="tab-kira" onclick="switchTab('kira')">
+                    <i class="fa-solid fa-file-contract"></i> Kira Sözleşmesi
+                </button>
+                <button class="tab-btn" id="tab-tahliye" onclick="switchTab('tahliye')">
+                    <i class="fa-solid fa-file-signature"></i> Tahliye Taahhüdü
+                </button>
+                <button class="tab-btn" id="tab-anahtar" onclick="switchTab('anahtar')">
+                    <i class="fa-solid fa-key"></i> Anahtar Teslim Tutanağı
+                </button>
+                <button class="tab-btn" id="tab-makbuz-avukat" onclick="switchTab('makbuz-avukat')">
+                    <i class="fa-solid fa-scale-balanced"></i> Alındı Makbuzu (Avukat)
+                </button>
+                <button class="tab-btn" id="tab-makbuz-emlak" onclick="switchTab('makbuz-emlak')">
+                    <i class="fa-solid fa-building-user"></i> Alındı Makbuzu (Emlakçı)
+                </button>
+            </div>
+        </div>
+        <div class="tab-group tab-group-tools" id="tab-group-tools" role="group" aria-labelledby="tab-group-tools-label">
+            <div class="tab-group-label" id="tab-group-tools-label">Araçlar</div>
+            <div class="tab-container tab-container-tools no-print">
+                <button class="tab-btn" id="tab-pdf-araclari" onclick="switchTab('pdf-araclari')">
+                    <i class="fa-solid fa-wrench"></i> PDF Araçları
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- MAIN GRID -->

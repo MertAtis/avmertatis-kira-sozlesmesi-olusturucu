@@ -78,9 +78,32 @@ test.describe('PDF Araçları sekmesi kabuğu', () => {
             (el) => el.closest('.card-panel').className
         )).toContain('no-print');
         expect(await page.locator('#tab-pdf-araclari').evaluate(
-            (el) => el.closest('.tab-container').className
+            (el) => el.closest('.tab-row').className
         )).toContain('no-print');
     });
+
+    for (const [label, width] of [['masaüstü', 1280], ['telefon', 390]]) {
+        test(`S1 (${label}): PDF Araçları belge sekmelerinden AYRI bir bölgededir`, async ({ page }) => {
+            await page.setViewportSize({ width, height: 900 });
+            await page.goto(PAGE);
+            const docGroup = page.locator('#tab-kira').locator('xpath=ancestor::*[contains(@class,"tab-group")][1]');
+            const toolGroup = page.locator('#tab-pdf-araclari').locator('xpath=ancestor::*[contains(@class,"tab-group")][1]');
+            // Farklı gruplar; belge grubunda PDF Araçları yok.
+            expect(await docGroup.getAttribute('id')).not.toBe(await toolGroup.getAttribute('id'));
+            await expect(docGroup.locator('#tab-pdf-araclari')).toHaveCount(0);
+            await expect(docGroup.locator('.tab-btn')).toHaveCount(5);
+            // Gruplar etiketli.
+            await expect(docGroup).toContainText('Belge Oluştur');
+            await expect(toolGroup).toContainText('Araçlar');
+            // Görsel olarak ayrık: kutular arasında belirgin boşluk (yan yana
+            // ya da alt alta).
+            const a = await docGroup.boundingBox();
+            const b = await toolGroup.boundingBox();
+            const gapX = b.x - (a.x + a.width);
+            const gapY = b.y - (a.y + a.height);
+            expect(Math.max(gapX, gapY)).toBeGreaterThanOrEqual(12);
+        });
+    }
 });
 
 test.describe('dosya yükleme ve hata yönetimi', () => {
@@ -1879,6 +1902,11 @@ test.describe('denetim düzeltmeleri', () => {
         await page.locator('#pdf-opt-lossy').setChecked(true);
         await page.click('#pdf-build-btn');
         await expect(page.locator('#pdf-lossy-modal')).toBeVisible();
+
+        // Belge sekmeleri de Araçlar grubu da modal açıkken erişilemez.
+        for (const id of ['#tab-kira', '#tab-pdf-araclari']) {
+            expect(await page.locator(id).evaluate((el) => !!el.closest('[inert]'))).toBe(true);
+        }
 
         // Tab tuzağı: 6 kez Tab sonrası odak hâlâ modal içinde olmalı
         for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');

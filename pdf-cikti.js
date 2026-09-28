@@ -754,9 +754,9 @@ function pdfConfirmLossy() {
     appGrid?.querySelectorAll(':scope > *').forEach((el) => {
         if (el !== modal && !el.contains(modal)) background.push(el);
     });
-    // Sekme çubuğu `.app-grid` DIŞINDA ve `.tab-container` sınıfını taşıyor
-    // (eski seçici `.tab-bar, .tabs, nav` hiçbir şeyi bulmuyordu).
-    const tabBar = document.querySelector('.tab-container');
+    // Sekme bölgesi `.app-grid` DIŞINDA; belge ve araç grupları `.tab-row`
+    // içinde. Tek `.tab-container` seçilirse Araçlar grubu erişilebilir kalır.
+    const tabBar = document.querySelector('.tab-row');
     if (tabBar && !modal.contains(tabBar) && !tabBar.contains(modal)) background.push(tabBar);
 
     modal.hidden = false;

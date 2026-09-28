@@ -182,6 +182,16 @@ function pdfRotateAll() {
     pdfBus.emit('pages');
 }
 
+/** EK etiketi: 0 = yok, 1 = EK-1, 2 = EK-2. Aynı düğmeye tekrar basınca kalkar. */
+function pdfSetEk(uid, ek) {
+    const page = pdfState.pages.find((p) => p.uid === uid);
+    if (!page) return;
+    const next = (page.ek || 0) === ek ? 0 : ek;
+    pdfRecordUndo(next ? `EK-${next}` : 'EK kaldırıldı');
+    page.ek = next;
+    pdfBus.emit('pages');
+}
+
 function pdfDeletePage(uid) {
     const index = pdfState.pages.findIndex((p) => p.uid === uid);
     if (index === -1) return;
@@ -194,7 +204,7 @@ function pdfResetEdits() {
     if (pdfState.pages.length === 0) return;
     pdfRecordUndo('Sıfırlama');
     pdfState.pages.sort((a, b) => a.fileId - b.fileId || a.srcIndex - b.srcIndex);
-    for (const page of pdfState.pages) page.rotation = 0;
+    for (const page of pdfState.pages) { page.rotation = 0; page.ek = 0; }
     pdfBus.emit('pages');
 }
 
@@ -248,7 +258,8 @@ function pdfRenderGrid() {
         if (!el) { rerender.add(page.uid); return; }
         const shownIndex = Number(el.dataset.index);
         const shownRotation = Number(el.dataset.rotation || 0);
-        if (shownIndex !== index || shownRotation !== (page.rotation || 0)) {
+        if (shownIndex !== index || shownRotation !== (page.rotation || 0)
+            || Number(el.dataset.ek || 0) !== (page.ek || 0)) {
             rerender.add(page.uid);
         }
         if (shownRotation !== (page.rotation || 0)) rethumb.add(page.uid);
@@ -278,7 +289,7 @@ function pdfRenderGrid() {
                 ? '<div class="pdf-page-thumb-placeholder">Önizlenemedi</div>'
                 : '<div class="pdf-page-thumb-placeholder">Yükleniyor...</div>';
 
-        return `<div class="pdf-page-card" draggable="true" data-uid="${page.uid}" data-index="${index}" data-rotation="${page.rotation || 0}">
+        return `<div class="pdf-page-card" draggable="true" data-uid="${page.uid}" data-index="${index}" data-rotation="${page.rotation || 0}" data-ek="${page.ek || 0}">
             <div class="pdf-page-actions">
                 <button class="pdf-page-btn" type="button" data-action="rotate" data-uid="${page.uid}"
                         title="90&deg; döndür" aria-label="Sayfayı döndür"><i class="fa-solid fa-rotate-right"></i></button>
@@ -287,6 +298,12 @@ function pdfRenderGrid() {
             </div>
             ${thumb}
             ${rotationBadge}
+            <div class="pdf-page-ek" role="group" aria-label="Ek etiketi">
+                <button class="pdf-ek-btn" type="button" data-action="ek1" data-uid="${page.uid}"
+                        aria-pressed="${page.ek === 1}">EK-1</button>
+                <button class="pdf-ek-btn" type="button" data-action="ek2" data-uid="${page.uid}"
+                        aria-pressed="${page.ek === 2}">EK-2</button>
+            </div>
             <div class="pdf-page-label">Sayfa ${pageNo}/${total}<br>${pdfEscapeHtml(fileName)}</div>
         </div>`;
     });
@@ -335,6 +352,8 @@ function pdfInitPageGrid() {
         const uid = Number(button.dataset.uid);
         if (button.dataset.action === 'rotate') pdfRotatePage(uid);
         if (button.dataset.action === 'delete') pdfDeletePage(uid);
+        if (button.dataset.action === 'ek1') pdfSetEk(uid, 1);
+        if (button.dataset.action === 'ek2') pdfSetEk(uid, 2);
     });
 
     let dragFrom = null;
@@ -391,6 +410,7 @@ pdfInitPageGrid();
 window.pdfRotatePage = pdfRotatePage;
 window.pdfRotateAll = pdfRotateAll;
 window.pdfDeletePage = pdfDeletePage;
+window.pdfSetEk = pdfSetEk;
 window.pdfResetEdits = pdfResetEdits;
 window.pdfUndo = pdfUndo;
 window.pdfMovePage = pdfMovePage;

@@ -875,6 +875,25 @@
             text-align: center;
         }
 
+        .pdf-page-ek { display: flex; gap: 4px; }
+        .pdf-ek-btn {
+            flex: 1;
+            padding: 3px 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            color: var(--foreground);
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .pdf-ek-btn:hover { background: var(--secondary); }
+        .pdf-ek-btn[aria-pressed="true"] {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border-color: var(--primary);
+        }
+
         .pdf-page-label {
             font-size: 0.72rem;
             color: var(--muted-foreground);

@@ -422,6 +422,34 @@ function pdfEffectiveRotation(entry, file) {
  * pdfState.pages sırasına göre yeni bir belge kurar.
  * Dönüş: {bytes, originalSize, outputSize}
  */
+/**
+ * "EK-1" / "EK-2" damgası: sayfanın EKRANDA görünen sağ üst köşesine, beyaz
+ * zeminli ince çerçeveli kutu içinde yazılır. Sayfanın /Rotate değeri için
+ * yerel eksenler (u: görünür sağ, v: görünür yukarı) hesaplanır.
+ */
+function pdfStampEk(doc, page, label, font) {
+    const box = pdfVisibleBox(page);
+    const rot = (((page.getRotation().angle || 0) % 360) + 360) % 360;
+    const theta = (rot * Math.PI) / 180;
+    const u = [Math.round(Math.cos(theta)), Math.round(Math.sin(theta))];
+    const v = [-u[1], u[0]];
+    const corner = { 0: [box.right, box.top], 90: [box.left, box.top],
+        180: [box.left, box.bottom], 270: [box.right, box.bottom] }[rot] || [box.right, box.top];
+    const margin = 18, size = 14, pad = 5;
+    const textW = font.widthOfTextAtSize(label, size);
+    const W = textW + pad * 2, H = size + pad * 2;
+    const at = (a, b) => ({
+        x: corner[0] + (a - margin) * u[0] + (b - margin) * v[0],
+        y: corner[1] + (a - margin) * u[1] + (b - margin) * v[1]
+    });
+    const angle = PDFLib.degrees(rot);
+    const rect = at(-W, -H);
+    page.drawRectangle({ x: rect.x, y: rect.y, width: W, height: H, rotate: angle,
+        color: PDFLib.rgb(1, 1, 1), borderColor: PDFLib.rgb(0, 0, 0), borderWidth: 1 });
+    const text = at(-W + pad, -H + pad + size * 0.22);
+    page.drawText(label, { x: text.x, y: text.y, size, font, rotate: angle, color: PDFLib.rgb(0, 0, 0) });
+}
+
 async function pdfBuildOutput() {
     const entries = pdfState.pages;
     if (entries.length === 0) throw new Error(RESULT_TEXT.noPages);
@@ -458,6 +486,7 @@ async function pdfBuildOutput() {
 
         const doc = await PDFLib.PDFDocument.create();
         let count = 0;
+        let ekFont = null;
         // I12: kayıp mod dışı yolda da tek sayfanın hatası TÜM işi çöpe
         // atmamalı. 300 sayfalık belgede 250. sayfa okunamazsa kullanıcı
         // 10 dakikalık emeğini kaybetmemeli; sayfa atlanır ve haber verilir.
@@ -579,6 +608,11 @@ async function pdfBuildOutput() {
                 // Dönüşüm uygulanmadığında /Rotate yazılır (kaynak + kullanıcı).
                 if (rotation) copied.setRotation(PDFLib.degrees(rotation));
                 doc.addPage(copied);
+            }
+
+            if (entry.ek) {
+                ekFont = ekFont || await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+                pdfStampEk(doc, doc.getPages()[doc.getPageCount() - 1], `EK-${entry.ek}`, ekFont);
             }
 
             count++;
@@ -1792,6 +1826,7 @@ async function pdfRasterizeToOutput(entries, quality, landscape = false) {
     let done = 0;
 
     let failed = 0;
+    let ekFont = null;
     const failures = [];
 
     for (const entry of entries) {
@@ -1840,6 +1875,11 @@ async function pdfRasterizeToOutput(entries, quality, landscape = false) {
                 width: w,
                 height: h
             });
+
+            if (entry.ek) {
+                ekFont = ekFont || await out.embedFont(PDFLib.StandardFonts.HelveticaBold);
+                pdfStampEk(out, target, `EK-${entry.ek}`, ekFont);
+            }
 
             done++;
             pdfShowProgress(done, entries.length, `Sayfa ${done} / ${entries.length} görsele çevriliyor`);

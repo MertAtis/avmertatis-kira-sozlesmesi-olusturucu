@@ -269,3 +269,9 @@ Ayrıca kayıp mod onayı: 5 kez "Oluştur" → tek onay → **tek** indirme.
 - Tüm kararlar: `.superpowers/sdd/2026-09-25-pdf-araclari-sekmesi/progress.md`
 - Tasarım: `docs/superpowers/specs/2026-09-25-pdf-araclari-sekmesi-design.md`
 - Plan: `docs/superpowers/plans/2026-09-25-pdf-araclari-sekmesi.md`
+
+## EK-1 / EK-2 damgası
+- Her sayfa kartında "EK-1" / "EK-2" düğmesi (biri diğerini kapatır, tekrar basınca kalkar; Geri Al ve Sıfırla ile uyumlu).
+- Çıktıda seçili sayfanın GÖRÜNEN sağ üst köşesine beyaz zeminli çerçeveli kutuda damga (`pdfStampEk`, pdf-cikti.js). /Rotate 0/90/180/270, A4, A4'süz ve Küçült(raster) yollarında çalışır.
+- Damgasız sayfalara ve damga bölgesi dışına dokunulmaz (tests/ek.spec.mjs, piksel karşılaştırması).
+- Yapılmadı: özel etiket metni (EK-3...), sayfa numarası.

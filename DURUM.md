@@ -276,5 +276,4 @@ Ayrıca kayıp mod onayı: 5 kez "Oluştur" → tek onay → **tek** indirme.
 - Çıktıda sıra: ana sayfalar, EK-1, EK-2. Damga YALNIZ her bölmenin ilk sayfasının görünen sağ üst köşesine ("EK-1"/"EK-2", `pdfStampEk`).
 - /Rotate 0/90/180/270, A4, A4'süz ve Küçült(raster) yollarında çalışır; diğer sayfalara dokunulmaz (tests/ek.spec.mjs).
 - Sınırsız EK: seçim çubuğunda mevcut her EK için "EK-n'e ekle" + "Yeni EK-n aç" (otomatik numara). Bölme boşalınca numaralar kayar (`pdfNormalizeEk`).
-- "Dosyaları EK yap" kısayolu: ilk dosya ana belge, sonraki her dosya EK-1, EK-2...
 - Yapılmadı: özel etiket metni, sayfa numarası.

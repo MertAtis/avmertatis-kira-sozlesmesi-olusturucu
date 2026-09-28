@@ -215,21 +215,6 @@ function pdfMoveSelectedToEk(target) {
     pdfBus.emit('pages');
 }
 
-/** İlk dosya ana belge (dilekçe) kalır; sonraki her dosya sırayla EK-1, EK-2... olur. */
-function pdfFilesToEk() {
-    const order = [];
-    for (const page of pdfState.pages) if (!order.includes(page.fileId)) order.push(page.fileId);
-    if (order.length < 2) return;
-    pdfRecordUndo('Dosyaları EK yap');
-    for (const page of pdfState.pages) {
-        const i = order.indexOf(page.fileId);
-        page.ek = i === 0 ? 0 : i;
-    }
-    pdfNormalizeEk();
-    pdfSelected.clear();
-    pdfBus.emit('pages');
-}
-
 function pdfDeletePage(uid) {
     const index = pdfState.pages.findIndex((p) => p.uid === uid);
     if (index === -1) return;
@@ -482,7 +467,6 @@ function pdfInitPageGrid() {
         const b = e.target.closest('[data-ek-target]');
         if (b) pdfMoveSelectedToEk(b.dataset.ekTarget);
     });
-    document.getElementById('pdf-files-to-ek')?.addEventListener('click', pdfFilesToEk);
     document.getElementById('pdf-to-main')?.addEventListener('click', () => pdfMoveSelectedToEk(0));
     document.getElementById('pdf-sel-clear')?.addEventListener('click', pdfClearSelection);
 
@@ -496,7 +480,6 @@ window.pdfRotatePage = pdfRotatePage;
 window.pdfRotateAll = pdfRotateAll;
 window.pdfDeletePage = pdfDeletePage;
 window.pdfMoveSelectedToEk = pdfMoveSelectedToEk;
-window.pdfFilesToEk = pdfFilesToEk;
 window.pdfNormalizeEk = pdfNormalizeEk;
 window.pdfToggleSelect = pdfToggleSelect;
 window.pdfResetEdits = pdfResetEdits;

@@ -153,15 +153,4 @@ test.describe('EK-1 / EK-2 bölmeleri', () => {
         await expect(page.locator('#pdf-ek-box-1 .pdf-page-card')).toHaveCount(1);
         await expect(page.locator('#pdf-ek-box-2')).toHaveCount(0);
     });
-
-    test('E8: "Dosyaları EK yap": ilk dosya ana, sonrakiler EK-1, EK-2, EK-3 olur; tek tıkla', async ({ page }) => {
-        await openWith(page, [A, A, A, A]);   // 4 dosya x 4 sayfa
-        await page.click('#pdf-files-to-ek');
-        await expect(page.locator('#pdf-page-grid .pdf-page-card')).toHaveCount(4);
-        for (const n of [1, 2, 3]) await expect(page.locator(`#pdf-ek-box-${n} .pdf-page-card`)).toHaveCount(4);
-        const rows = await analyse(page, await build(page));
-        expect(rows.map((r, i) => (r.inside > 40 ? i : -1)).filter((i) => i >= 0)).toEqual([4, 8, 12]);
-        await page.click('#pdf-undo-btn');
-        await expect(page.locator('#pdf-page-grid .pdf-page-card')).toHaveCount(16);
-    });
 });

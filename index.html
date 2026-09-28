@@ -182,16 +182,15 @@
             background: var(--secondary);
         }
 
-        /* Sekme bölgeleri: belge oluşturucular solda, araçlar ayrı bir kutuda sağda */
+        /* Sekme bölgeleri: belge oluşturucular üstte, araçlar hemen altında ayrı bir kutuda */
         .tab-row {
             display: flex;
-            flex-wrap: wrap;
-            align-items: flex-end;
-            gap: 16px 32px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 14px;
             margin-bottom: 24px;
         }
         .tab-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-        .tab-group-tools { margin-left: auto; }
         .tab-group-label {
             font-size: 0.72rem;
             font-weight: 700;
@@ -1616,10 +1615,6 @@
                             </button>
                             <button class="btn btn-shadcn-outline" id="pdf-rotate-all-btn" type="button">
                                 <i class="fa-solid fa-rotate"></i> Tümünü Döndür
-                            </button>
-                            <button class="btn btn-shadcn-outline" id="pdf-files-to-ek" type="button"
-                                    title="İlk dosya ana belge kalır; sonraki her dosya sırayla EK-1, EK-2... olur">
-                                <i class="fa-solid fa-paperclip"></i> Dosyaları EK yap
                             </button>
                             <button class="btn btn-shadcn-outline" id="pdf-reset-edits-btn" type="button">
                                 <i class="fa-solid fa-arrow-rotate-left"></i> Döndürmeleri ve Sıralamayı Sıfırla

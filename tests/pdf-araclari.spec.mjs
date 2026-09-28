@@ -102,6 +102,9 @@ test.describe('PDF Araçları sekmesi kabuğu', () => {
             const gapX = b.x - (a.x + a.width);
             const gapY = b.y - (a.y + a.height);
             expect(Math.max(gapX, gapY)).toBeGreaterThanOrEqual(12);
+            // Araçlar, belge sekmelerinin HEMEN ALTINDA ve sola hizalı (sağa savrulmaz).
+            expect(b.y).toBeGreaterThanOrEqual(a.y + a.height);
+            expect(Math.abs(b.x - a.x)).toBeLessThan(2);
         });
     }
 });

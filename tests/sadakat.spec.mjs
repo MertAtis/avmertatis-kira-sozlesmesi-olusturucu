@@ -50,7 +50,7 @@ const FIXTURES = [
     'mixed-sizes.pdf', 'landscape-a4.pdf', 'shared-resources.pdf',
     'duplicate-images.pdf', 'same-bytes-diff-decode.pdf', 'nested-image.pdf',
     'pattern.pdf', 'pure-bw.pdf', 'pure-bw-decode.pdf', 'scanned.pdf',
-    'indexed.pdf', 'iccbased.pdf', 'smask.pdf', 'cmyk.pdf'
+    'indexed.pdf', 'iccbased.pdf', 'smask.pdf', 'cmyk.pdf', 'jpeg-only.pdf'
 ];
 
 const MODES = [

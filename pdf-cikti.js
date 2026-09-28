@@ -978,6 +978,20 @@ async function pdfOnBuildClick(kind = 'plain') {
 
 // spec §5.1 atlama kuralları. Hepsi sağlanmazsa görsel atlanır.
 const MIN_RECODE_BYTES = 20 * 1024;
+
+// Kaliteli küçültmede görselin uzun kenarı için üst sınır (piksel): A4'ün
+// uzun kenarı (11,69 inç) x hedef DPI. Telefon fotoğrafları çoğu zaman
+// 400+ DPI'dır; asıl kazanç bu çözünürlük düşürmesinden gelir.
+//   Düşük 150 DPI, Orta 200 DPI, Yüksek 300 DPI.
+const RECODE_MAX_EDGE = { 0.5: 1754, 0.7: 2339, 0.85: 3508 };
+
+// Yeniden kodlanan görsel en az bu oranda küçülmüyorsa orijinal korunur
+// (kazanç yokken kaliteyi boşuna düşürmemek için).
+const RECODE_MIN_GAIN = 0.95;
+
+function pdfRecodeMaxEdge(quality) {
+    return RECODE_MAX_EDGE[quality] || RECODE_MAX_EDGE[0.7];
+}
 // 1-bit dönüşümü için üst sınır: 40 MP üzeri görsel bellekte pahalıdır.
 const MAX_ONEBIT_PIXELS = 40 * 1000 * 1000;
 
@@ -1475,7 +1489,7 @@ async function pdfRecodeImage(xobj, quality) {
     const height = Number(dict.lookup(PDFName.of('Height')));
 
     if (bits !== 8) return 'bit derinliği desteklenmiyor';
-    if (filter && String(filter) === '/DCTDecode') return 'zaten JPEG';
+    if (filter && String(filter) === '/DCTDecode') return pdfRecodeJpeg(xobj, quality);
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
         return 'geçersiz ölçü';
     }
@@ -1503,9 +1517,11 @@ async function pdfRecodeImage(xobj, quality) {
 
         // /Decode [1 0] ters çevirme belirtir. Yeniden kodlanan görsel de aynı
         // /Decode ile yazıldığı için görünüm korunur; pikselleri ters çevirmiyoruz.
-        const jpeg = await pdfEncodeJpeg(pixels, width, height, quality);
+        const { jpeg, width: outW, height: outH } = await pdfEncodeJpeg(pixels, width, height, quality);
         xobj.contents = jpeg;
         dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+        dict.set(PDFName.of('Width'), PDFLib.PDFNumber.of(outW));
+        dict.set(PDFName.of('Height'), PDFLib.PDFNumber.of(outH));
         dict.delete(PDFName.of('DecodeParms'));
         return 'ok';
     } catch (err) {
@@ -1610,16 +1626,132 @@ async function pdfDecodePixels(xobj, bits, width, height) {
     return { pixels: rgba, channels };
 }
 
-/** RGBA pikselleri JPEG olarak kodlar. */
-async function pdfEncodeJpeg(rgba, width, height, quality) {
+/** Uzun kenarı `maxEdge`'i aşmayacak hedef ölçü (oran korunur). */
+function pdfScaledSize(width, height, maxEdge) {
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    return {
+        width: Math.max(1, Math.round(width * scale)),
+        height: Math.max(1, Math.round(height * scale))
+    };
+}
+
+/** Bir çizilebilir kaynağı (canvas / ImageBitmap) hedef ölçüde JPEG'e kodlar. */
+async function pdfDrawToJpeg(source, width, height, quality) {
     const canvas = window.OffscreenCanvas
         ? new OffscreenCanvas(width, height)
         : Object.assign(document.createElement('canvas'), { width, height });
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas bağlamı alınamadı');
-    context.putImageData(new ImageData(rgba, width, height), 0, 0);
-    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(source, 0, 0, width, height);
+    const blob = canvas.convertToBlob
+        ? await canvas.convertToBlob({ type: 'image/jpeg', quality })
+        : await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', quality));
     return new Uint8Array(await blob.arrayBuffer());
+}
+
+/**
+ * RGBA pikselleri JPEG olarak kodlar; uzun kenar kaliteye göre sınırlanır.
+ * Dönüş: {jpeg, width, height} — ölçü küçülmüş olabilir.
+ */
+async function pdfEncodeJpeg(rgba, width, height, quality) {
+    const full = window.OffscreenCanvas
+        ? new OffscreenCanvas(width, height)
+        : Object.assign(document.createElement('canvas'), { width, height });
+    const context = full.getContext('2d');
+    if (!context) throw new Error('Canvas bağlamı alınamadı');
+    context.putImageData(new ImageData(rgba, width, height), 0, 0);
+    const size = pdfScaledSize(width, height, pdfRecodeMaxEdge(quality));
+    const jpeg = await pdfDrawToJpeg(full, size.width, size.height, quality);
+    return { jpeg, ...size };
+}
+
+/**
+ * JPEG'den EXIF/APP1 bölümlerini çıkarır. PDF görüntüleyiciler JPEG içindeki
+ * EXIF yön etiketini YOK SAYAR; tarayıcı ise çözerken UYGULAR. Etiket
+ * çözmeden önce silinmezse yeniden kodlanan görsel yan döner.
+ */
+function pdfStripJpegApp1(bytes) {
+    if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return bytes;
+    const parts = [bytes.subarray(0, 2)];
+    let i = 2;
+    while (i + 4 <= bytes.length && bytes[i] === 0xff) {
+        const marker = bytes[i + 1];
+        if (marker === 0xda) break;                       // SOS: görüntü verisi başlar
+        const len = (bytes[i + 2] << 8) | bytes[i + 3];
+        if (len < 2) break;
+        if (marker !== 0xe1) parts.push(bytes.subarray(i, i + 2 + len));
+        i += 2 + len;
+    }
+    parts.push(bytes.subarray(i));
+    return pdfConcatBytes(parts);
+}
+
+/**
+ * Gömülü bir JPEG'i (DCTDecode) kaliteli küçültme için yeniden kodlar:
+ * uzun kenar kaliteye göre sınırlanır, seçilen kalitede JPEG yazılır.
+ * Yalnızca KALİTELİ KÜÇÜLTMEDE çağrılır; "Birleştir" ve kayıpsız yöntem
+ * JPEG baytlarına dokunmaz.
+ *
+ * Güvenli olmayan durumlar ATLANIR (görünüm bozulmasın):
+ *  - CMYK / 4 kanallı ICC / Separation: tarayıcı renkleri doğru çözemez
+ *  - /Decode, /DecodeParms: yeni sözlükte anlamı korunamaz
+ *  - /SMask, /Mask: ölçü değişince maske hizası bozulabilir
+ * Kazanç yoksa (RECODE_MIN_GAIN) orijinal korunur.
+ */
+async function pdfRecodeJpeg(xobj, quality) {
+    const { PDFName, PDFNumber } = PDFLib;
+    const dict = xobj.dict;
+    const raw = xobj.contents;
+    if (!raw || raw.length < MIN_RECODE_BYTES) return 'çok küçük';
+    if (dict.has(PDFName.of('Decode')) || dict.has(PDFName.of('DecodeParms'))) {
+        return 'özel kodlamalı JPEG';
+    }
+    // Şeffaflık/maske taşıyan görselde ölçü değişirse maske hizası bozulabilir.
+    if (dict.has(PDFName.of('SMask')) || dict.has(PDFName.of('Mask'))) {
+        return 'şeffaflık maskesi olan görsel';
+    }
+
+    const cs = dict.lookup(PDFName.of('ColorSpace'));
+    let supported = false;
+    if (cs && typeof cs.lookupMaybe === 'function') {
+        if (String(cs.lookup(0)) === '/ICCBased') {
+            const context = dict.context || xobj.context;
+            const profile = context ? context.lookup(cs.lookup(1)) : null;
+            const n = Number((profile?.contents ? profile.dict : profile)?.lookup?.(PDFName.of('N')));
+            supported = n === 1 || n === 3;
+        }
+    } else {
+        supported = String(cs) === '/DeviceRGB' || String(cs) === '/DeviceGray';
+    }
+    if (!supported) return 'CMYK/özel renkli JPEG';
+
+    const width = Number(dict.lookup(PDFName.of('Width')));
+    const height = Number(dict.lookup(PDFName.of('Height')));
+    let bitmap = null;
+    try {
+        bitmap = await createImageBitmap(new Blob([pdfStripJpegApp1(raw)], { type: 'image/jpeg' }));
+        // Sözlük ile JPEG başlığı uyuşmuyorsa dokunma.
+        if (bitmap.width !== width || bitmap.height !== height) return 'ölçü uyuşmuyor';
+
+        const size = pdfScaledSize(width, height, pdfRecodeMaxEdge(quality));
+        const jpeg = await pdfDrawToJpeg(bitmap, size.width, size.height, quality);
+        if (jpeg.length >= raw.length * RECODE_MIN_GAIN) return 'daha fazla küçülmüyor';
+
+        xobj.contents = jpeg;
+        dict.set(PDFName.of('Width'), PDFNumber.of(size.width));
+        dict.set(PDFName.of('Height'), PDFNumber.of(size.height));
+        // Tarayıcı JPEG'i her zaman 3 kanallı (renkli) yazar.
+        dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+        dict.set(PDFName.of('BitsPerComponent'), PDFNumber.of(8));
+        return 'ok';
+    } catch (err) {
+        console.warn('JPEG yeniden kodlanamadı, atlandı:', err);
+        return 'çözülemedi';
+    } finally {
+        bitmap?.close?.();
+    }
 }
 
 /** zlib (FlateDecode) çözer. Tarayıcıda DecompressionStream kullanılır. */

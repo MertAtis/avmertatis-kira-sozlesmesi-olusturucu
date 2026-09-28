@@ -1,8 +1,21 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 28 Eylül 2026 (iki düğme turu — YEREL, push EDİLMEDİ)
-**Durum:** 🟢 **`npm test` 282/282 geçti.**
-**Canlı site:** `be03f22` (sadakat turu + 1-bit düzeltmesi canlıda).
+**Son güncelleme:** 28 Eylül 2026 (JPEG küçültme — YEREL, push EDİLMEDİ)
+**Durum:** 🟢 **`npm test` 290/290 geçti.**
+**Canlı site:** `d728751` (iki düğme canlıda).
+
+## "Küçült" artık JPEG'i de küçültür (28 Eylül)
+
+Sorun: "Birleştir ve Küçült" JPEG görselleri "zaten JPEG" diye atlıyordu — telefon/tarayıcı
+taramalarının neredeyse hepsi JPEG olduğu için düğme bu belgelerde hiçbir şey yapmıyordu.
+
+Çözüm (`pdfRecodeJpeg`): JPEG çözülür, uzun kenar kaliteye göre sınırlanır (Düşük 150 / Orta 200 /
+Yüksek 300 DPI A4 = 1754 / 2339 / 3508 px; Flate görsellere de aynı sınır), seçilen kalitede
+yeniden yazılır. %5'ten az küçülürse orijinal korunur. EXIF (APP1) çözmeden önce silinir —
+tarayıcı yön etiketini uygular, PDF görüntüleyici uygulamaz; silinmezse görsel yan dönerdi (`K3`).
+Atlananlar: CMYK/4 kanallı ICC, /Decode, /DecodeParms, /SMask, /Mask. "Birleştir" ve kayıpsız
+yöntem JPEG baytlarına DOKUNMAZ (`K4`, sadakat testine `jpeg-only.pdf` eklendi).
+Testler: `K1`–`K4` (`tests/avukat-ux.spec.mjs`).
 
 ## İki düğme turu (28 Eylül)
 

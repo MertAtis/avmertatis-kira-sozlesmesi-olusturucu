@@ -56,7 +56,8 @@ async function analyse(page, bytes) {
 /** Ana listedeki n. kartı (0 tabanlı) seçip EK bölmesine taşır. */
 async function moveToEk(page, mainIndices, ek) {
     for (const i of mainIndices) await page.locator('#pdf-page-grid .pdf-page-card').nth(i).locator('[data-action="sel"]').check();
-    await page.click(`#pdf-to-ek${ek}`);
+    const existing = page.locator(`#pdf-sel-actions [data-ek-target="${ek}"]`);
+    await (await existing.count() ? existing : page.locator('#pdf-sel-actions [data-ek-target="new"]')).click();
 }
 
 test.describe('EK-1 / EK-2 bölmeleri', () => {
@@ -127,5 +128,40 @@ test.describe('EK-1 / EK-2 bölmeleri', () => {
         await page.click('#pdf-undo-btn');
         const again = (await analyse(page, await build(page))).map((r) => r.inside);
         expect(again).toEqual(base);
+    });
+
+    test('E6: EK-5\'e kadar: her seçim "Yeni EK aç" ile bir sonraki numarayı alır, hepsi damgalı', async ({ page }) => {
+        await openWith(page, [A, A]);   // 8 sayfa
+        for (let n = 1; n <= 5; n++) {
+            await page.locator('#pdf-page-grid .pdf-page-card').first().locator('[data-action="sel"]').check();
+            await expect(page.locator('#pdf-sel-actions [data-ek-target="new"]')).toContainText(`EK-${n}`);
+            await page.click('#pdf-sel-actions [data-ek-target="new"]');
+            await expect(page.locator(`#pdf-ek-box-${n} .pdf-page-card`)).toHaveCount(1);
+        }
+        const rows = await analyse(page, await build(page));
+        expect(rows.length).toBe(8);
+        expect(rows.map((r, i) => (r.inside > 40 ? i : -1)).filter((i) => i >= 0)).toEqual([3, 4, 5, 6, 7]);
+    });
+
+    test('E7: bölme boşalınca numaralar kayar (EK-1,EK-2 -> biri boşalırsa EK-1 kalır)', async ({ page }) => {
+        await openWith(page, [A]);
+        await moveToEk(page, [0], 1);
+        await moveToEk(page, [0], 2);
+        await expect(page.locator('#pdf-ek-box-2')).toBeVisible();
+        await page.locator('#pdf-ek-box-1 .pdf-page-card').first().locator('[data-action="sel"]').check();
+        await page.click('#pdf-to-main');
+        await expect(page.locator('#pdf-ek-box-1 .pdf-page-card')).toHaveCount(1);
+        await expect(page.locator('#pdf-ek-box-2')).toHaveCount(0);
+    });
+
+    test('E8: "Dosyaları EK yap": ilk dosya ana, sonrakiler EK-1, EK-2, EK-3 olur; tek tıkla', async ({ page }) => {
+        await openWith(page, [A, A, A, A]);   // 4 dosya x 4 sayfa
+        await page.click('#pdf-files-to-ek');
+        await expect(page.locator('#pdf-page-grid .pdf-page-card')).toHaveCount(4);
+        for (const n of [1, 2, 3]) await expect(page.locator(`#pdf-ek-box-${n} .pdf-page-card`)).toHaveCount(4);
+        const rows = await analyse(page, await build(page));
+        expect(rows.map((r, i) => (r.inside > 40 ? i : -1)).filter((i) => i >= 0)).toEqual([4, 8, 12]);
+        await page.click('#pdf-undo-btn');
+        await expect(page.locator('#pdf-page-grid .pdf-page-card')).toHaveCount(16);
     });
 });

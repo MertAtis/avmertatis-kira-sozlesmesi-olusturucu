@@ -195,12 +195,37 @@ function pdfClearSelection() {
     pdfBus.emit('pages');
 }
 
-/** Seçili sayfaları EK bölmesine (1 / 2) ya da ana listeye (0) taşır. */
-function pdfMoveSelectedToEk(ek) {
+/** EK numaralarını 1..k olarak boşluksuz sıralar (bir bölme boşalınca kalan numaralar kayar). */
+function pdfNormalizeEk() {
+    const used = [...new Set(pdfState.pages.map((p) => p.ek || 0).filter((k) => k > 0))].sort((x, y) => x - y);
+    const map = new Map(used.map((k, i) => [k, i + 1]));
+    for (const page of pdfState.pages) if (page.ek) page.ek = map.get(page.ek);
+}
+
+/** Seçili sayfaları EK bölmesine taşır: 0 = ana liste, sayı = o EK, 'new' = bir sonraki yeni EK. */
+function pdfMoveSelectedToEk(target) {
     const chosen = pdfState.pages.filter((p) => pdfSelected.has(p.uid));
     if (chosen.length === 0) return;
+    const maxEk = Math.max(0, ...pdfState.pages.map((p) => p.ek || 0));
+    const ek = target === 'new' ? maxEk + 1 : Number(target);
     pdfRecordUndo(ek ? `EK-${ek}` : 'Ana listeye al');
     for (const page of chosen) page.ek = ek;
+    pdfNormalizeEk();
+    pdfSelected.clear();
+    pdfBus.emit('pages');
+}
+
+/** İlk dosya ana belge (dilekçe) kalır; sonraki her dosya sırayla EK-1, EK-2... olur. */
+function pdfFilesToEk() {
+    const order = [];
+    for (const page of pdfState.pages) if (!order.includes(page.fileId)) order.push(page.fileId);
+    if (order.length < 2) return;
+    pdfRecordUndo('Dosyaları EK yap');
+    for (const page of pdfState.pages) {
+        const i = order.indexOf(page.fileId);
+        page.ek = i === 0 ? 0 : i;
+    }
+    pdfNormalizeEk();
     pdfSelected.clear();
     pdfBus.emit('pages');
 }
@@ -242,14 +267,8 @@ function pdfRenderGrid() {
     const grid = document.getElementById('pdf-page-grid');
     const area = document.getElementById('pdf-page-area');
     if (!grid || !area) return;
-    const ekGrids = {
-        1: document.getElementById('pdf-ek-grid-1'),
-        2: document.getElementById('pdf-ek-grid-2')
-    };
-    const ekBoxes = {
-        1: document.getElementById('pdf-ek-box-1'),
-        2: document.getElementById('pdf-ek-box-2')
-    };
+    const ekHolder = document.getElementById('pdf-ek-boxes');
+    pdfNormalizeEk();
 
     // Silinmiş sayfaların seçimi temizlenir.
     for (const uid of [...pdfSelected]) {
@@ -260,10 +279,20 @@ function pdfRenderGrid() {
         bar.hidden = pdfSelected.size === 0;
         const count = document.getElementById('pdf-sel-count');
         if (count) count.textContent = `${pdfSelected.size} sayfa seçili`;
+        const maxEk = Math.max(0, ...pdfState.pages.map((p) => p.ek || 0));
+        const actions = document.getElementById('pdf-sel-actions');
+        if (actions) {
+            let html = '';
+            for (let k = 1; k <= maxEk; k++) {
+                html += `<button class="btn btn-shadcn-outline" type="button" data-ek-target="${k}">EK-${k}'e ekle</button>`;
+            }
+            html += `<button class="btn btn-shadcn-primary" type="button" data-ek-target="new">Yeni EK-${maxEk + 1} aç</button>`;
+            actions.innerHTML = html;
+        }
     }
 
     if (pdfState.pages.length === 0) {
-        for (const k of [1, 2]) if (ekBoxes[k]) ekBoxes[k].hidden = true;
+        if (ekHolder) ekHolder.innerHTML = '';
         // Dosyalar yüklü ama tüm sayfalar silinmiş olabilir; iki durum
         // farklı mesaj ister.
         grid.innerHTML = pdfState.files.some((f) => f.doc)
@@ -341,13 +370,18 @@ function pdfRenderGrid() {
         </div>`;
     });
 
-    const html = { 0: [], 1: [], 2: [] };
-    pdfState.pages.forEach((page, i) => html[page.ek || 0].push(cards[i]));
+    const html = { 0: [] };
+    pdfState.pages.forEach((page, i) => {
+        const k = page.ek || 0;
+        (html[k] = html[k] || []).push(cards[i]);
+    });
     grid.innerHTML = html[0].join('');
-    for (const k of [1, 2]) {
-        if (!ekGrids[k]) continue;
-        ekGrids[k].innerHTML = html[k].join('');
-        ekBoxes[k].hidden = html[k].length === 0;
+    if (ekHolder) {
+        ekHolder.innerHTML = Object.keys(html).map(Number).filter((k) => k > 0).sort((x, y) => x - y)
+            .map((k) => `<section class="pdf-ek-box" id="pdf-ek-box-${k}">
+                <div class="pdf-ek-head">EK-${k} <small>&mdash; ilk sayfanın sağ üstüne "EK-${k}" yazılır</small></div>
+                <div class="pdf-page-grid" id="pdf-ek-grid-${k}">${html[k].join('')}</div>
+            </section>`).join('');
     }
 
     // Küçük resimleri üret: ilk sayfalar hemen, kalanlar boşta.
@@ -444,8 +478,11 @@ function pdfInitPageGrid() {
     document.getElementById('pdf-rotate-all-btn')?.addEventListener('click', pdfRotateAll);
     document.getElementById('pdf-reset-edits-btn')?.addEventListener('click', pdfResetEdits);
 
-    document.getElementById('pdf-to-ek1')?.addEventListener('click', () => pdfMoveSelectedToEk(1));
-    document.getElementById('pdf-to-ek2')?.addEventListener('click', () => pdfMoveSelectedToEk(2));
+    document.getElementById('pdf-sel-actions')?.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ek-target]');
+        if (b) pdfMoveSelectedToEk(b.dataset.ekTarget);
+    });
+    document.getElementById('pdf-files-to-ek')?.addEventListener('click', pdfFilesToEk);
     document.getElementById('pdf-to-main')?.addEventListener('click', () => pdfMoveSelectedToEk(0));
     document.getElementById('pdf-sel-clear')?.addEventListener('click', pdfClearSelection);
 
@@ -459,6 +496,8 @@ window.pdfRotatePage = pdfRotatePage;
 window.pdfRotateAll = pdfRotateAll;
 window.pdfDeletePage = pdfDeletePage;
 window.pdfMoveSelectedToEk = pdfMoveSelectedToEk;
+window.pdfFilesToEk = pdfFilesToEk;
+window.pdfNormalizeEk = pdfNormalizeEk;
 window.pdfToggleSelect = pdfToggleSelect;
 window.pdfResetEdits = pdfResetEdits;
 window.pdfUndo = pdfUndo;

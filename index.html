@@ -887,6 +887,7 @@
             background: var(--secondary);
         }
         .pdf-sel-bar[hidden], .pdf-ek-box[hidden] { display: none; }
+        .pdf-sel-actions { display: contents; }
         .pdf-ek-box {
             margin-top: 16px; padding: 10px;
             border: 2px dashed var(--ring); border-radius: var(--radius);
@@ -1616,27 +1617,23 @@
                             <button class="btn btn-shadcn-outline" id="pdf-rotate-all-btn" type="button">
                                 <i class="fa-solid fa-rotate"></i> Tümünü Döndür
                             </button>
+                            <button class="btn btn-shadcn-outline" id="pdf-files-to-ek" type="button"
+                                    title="İlk dosya ana belge kalır; sonraki her dosya sırayla EK-1, EK-2... olur">
+                                <i class="fa-solid fa-paperclip"></i> Dosyaları EK yap
+                            </button>
                             <button class="btn btn-shadcn-outline" id="pdf-reset-edits-btn" type="button">
                                 <i class="fa-solid fa-arrow-rotate-left"></i> Döndürmeleri ve Sıralamayı Sıfırla
                             </button>
                         </div>
                         <div class="pdf-sel-bar" id="pdf-sel-bar" hidden>
                             <strong id="pdf-sel-count"></strong>
-                            <button class="btn btn-shadcn-outline" id="pdf-to-ek1" type="button">EK-1 bölmesine taşı</button>
-                            <button class="btn btn-shadcn-outline" id="pdf-to-ek2" type="button">EK-2 bölmesine taşı</button>
+                            <span id="pdf-sel-actions" class="pdf-sel-actions"></span>
                             <button class="btn btn-shadcn-outline" id="pdf-to-main" type="button">Ana listeye al</button>
                             <button class="btn btn-shadcn-outline" id="pdf-sel-clear" type="button">Seçimi temizle</button>
                         </div>
                         <div id="pdf-page-area">
                             <div id="pdf-page-grid" class="pdf-page-grid"></div>
-                            <section class="pdf-ek-box" id="pdf-ek-box-1" hidden>
-                                <div class="pdf-ek-head">EK-1 <small>&mdash; bu bölmedeki ilk sayfanın sağ üstüne "EK-1" yazılır; çıktıda ana sayfalardan sonra gelir</small></div>
-                                <div class="pdf-page-grid" id="pdf-ek-grid-1"></div>
-                            </section>
-                            <section class="pdf-ek-box" id="pdf-ek-box-2" hidden>
-                                <div class="pdf-ek-head">EK-2 <small>&mdash; bu bölmedeki ilk sayfanın sağ üstüne "EK-2" yazılır; EK-1'den sonra gelir</small></div>
-                                <div class="pdf-page-grid" id="pdf-ek-grid-2"></div>
-                            </section>
+                            <div id="pdf-ek-boxes"></div>
                         </div>
                     </div>
 

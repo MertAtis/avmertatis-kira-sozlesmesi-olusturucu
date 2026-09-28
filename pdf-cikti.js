@@ -450,9 +450,11 @@ function pdfStampEk(doc, page, label, font) {
     page.drawText(label, { x: text.x, y: text.y, size, font, rotate: angle, color: PDFLib.rgb(0, 0, 0) });
 }
 
-/** Çıktı sırası: ana sayfalar, sonra EK-1, sonra EK-2 (grup içi sıra korunur). */
+/** Çıktı sırası: ana sayfalar, sonra EK-1, EK-2, ... EK-n (grup içi sıra korunur). */
 function pdfEkOrder(pages) {
-    return [0, 1, 2].flatMap((k) => pages.filter((p) => (p.ek || 0) === k));
+    if (window.pdfNormalizeEk) window.pdfNormalizeEk();
+    const keys = [...new Set(pages.map((p) => p.ek || 0))].sort((x, y) => x - y);
+    return keys.flatMap((k) => pages.filter((p) => (p.ek || 0) === k));
 }
 
 /** Her EK grubunun İLK sayfası: damga yalnız ona yazılır. */

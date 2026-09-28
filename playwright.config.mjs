@@ -23,6 +23,11 @@ export default defineConfig({
                     ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } }
                     : {})
             }
-        }
+        },
+        // Safari motoru: yalnızca PW_WEBKIT=1 ile (CI'da WebKit kurulu değildir).
+        ...(process.env.PW_WEBKIT ? [
+            { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+            { name: 'iphone', use: { ...devices['iPhone 14'] } }
+        ] : [])
     ]
 });

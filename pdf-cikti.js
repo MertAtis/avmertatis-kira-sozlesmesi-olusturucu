@@ -838,6 +838,12 @@ function pdfConfirmLossy() {
                 const first = cancel;
                 const last = confirmBtn;
                 if (!first || !last) return;
+                // Safari varsayılanda düğmelere Tab ile odaklanmaz; odak modal
+                // dışına (gövdeye) kaçmışsa geri al.
+                if (!modal.contains(document.activeElement)) {
+                    e.preventDefault(); last.focus();
+                    return;
+                }
                 if (e.shiftKey && document.activeElement === first) {
                     e.preventDefault(); last.focus();
                 } else if (!e.shiftKey && document.activeElement === last) {
@@ -867,8 +873,11 @@ let pdfBuildLock = false;
  * Ayar her tıklamada sayfadan YENİDEN okunur: 'small' geçersiz kılması
  * sonraki 'plain' çıktıya sızmaz.
  */
-async function pdfOnBuildClick(kind = 'plain') {
-    // Çift tıklama iki çıktı üretmesin.
+async function pdfOnBuildClick(kind = 'plain', event = null) {
+    // Çift tıklama iki çıktı üretmesin. Safari'de ikinci tıklama ilk çıktı
+    // bittikten SONRA da gelebilir; `detail` tıklama sayısıdır, 2. tıklamada
+    // 2 olur (programatik click() için 0).
+    if (event && event.detail > 1) return;
     if (pdfState.busy || pdfBuildLock) return;
     if (pdfState.pages.length === 0) {
         pdfShowResult(RESULT_TEXT.noPages, 'warning');
@@ -1991,8 +2000,8 @@ function pdfUpdateBuildButton() {
         el.addEventListener('change', pdfReadOutputState);
     });
 
-    document.getElementById('pdf-build-btn')?.addEventListener('click', () => pdfOnBuildClick('plain'));
-    document.getElementById('pdf-build-small-btn')?.addEventListener('click', () => pdfOnBuildClick('small'));
+    document.getElementById('pdf-build-btn')?.addEventListener('click', (e) => pdfOnBuildClick('plain', e));
+    document.getElementById('pdf-build-small-btn')?.addEventListener('click', (e) => pdfOnBuildClick('small', e));
     pdfBus.on('files', pdfSyncOutputNamePlaceholder);
     pdfBus.on('files', pdfUpdateBuildButton);
     pdfSyncOutputNamePlaceholder();

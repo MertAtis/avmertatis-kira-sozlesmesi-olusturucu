@@ -130,7 +130,7 @@ test.describe('EK-1 / EK-2 bölmeleri', () => {
         expect(again).toEqual(base);
     });
 
-    test('E6: EK-5\'e kadar: her seçim "Yeni EK aç" ile bir sonraki numarayı alır, hepsi damgalı', async ({ page }) => {
+    test('E6: EK-5\'e kadar: her seçim "EK-n YAP" ile bir sonraki numarayı alır, hepsi damgalı', async ({ page }) => {
         await openWith(page, [A, A]);   // 8 sayfa
         for (let n = 1; n <= 5; n++) {
             await page.locator('#pdf-page-grid .pdf-page-card').first().locator('[data-action="sel"]').check();

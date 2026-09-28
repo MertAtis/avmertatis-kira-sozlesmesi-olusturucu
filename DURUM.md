@@ -275,5 +275,12 @@ Ayrıca kayıp mod onayı: 5 kez "Oluştur" → tek onay → **tek** indirme.
 - Ana liste eskisi gibi. EK-1 ve EK-2 için kesik çizgili ayrı kutular (boşsa görünmez).
 - Çıktıda sıra: ana sayfalar, EK-1, EK-2. Damga YALNIZ her bölmenin ilk sayfasının görünen sağ üst köşesine ("EK-1"/"EK-2", `pdfStampEk`).
 - /Rotate 0/90/180/270, A4, A4'süz ve Küçült(raster) yollarında çalışır; diğer sayfalara dokunulmaz (tests/ek.spec.mjs).
-- Sınırsız EK: seçim çubuğunda mevcut her EK için "EK-n'e ekle" + "Yeni EK-n aç" (otomatik numara). Bölme boşalınca numaralar kayar (`pdfNormalizeEk`).
+- Sınırsız EK: seçim çubuğunda mevcut her EK için "EK-n'e ekle" + "EK-n YAP" (otomatik numara). Bölme boşalınca numaralar kayar (`pdfNormalizeEk`).
 - Yapılmadı: özel etiket metni, sayfa numarası.
+
+## Safari / iPhone turu
+- `PW_WEBKIT=1 npx playwright test` Safari motoru (WebKit) ve iPhone 14 ekranıyla da çalıştırır (CI'da kapalı; `npx playwright install webkit` gerekir).
+- Bulunan gerçek hatalar: (1) Safari'de çift tıklama 2 indirme üretiyordu → 2. tıklama (`event.detail > 1`) yok sayılır; (2) modal açıkken Safari'de odak modal dışına kaçabiliyordu → Tab'da odak geri alınır.
+- Safari'nin JPEG kodlayıcısı aynı kalitede daha büyük dosya üretir: T12, A3b, L7a'da oran yerine "küçüldü mü" aranır. Piksel doğruluğu testleri aynen geçer.
+- Simülatör (gerçek iOS) denenmedi: Xcode yok. Gerçek iPhone'da elle deneme kaldı.
+- Sonuç: Chromium 329/329, WebKit + iPhone tüm testler geçti (2 telefon testi bilerek atlanır: önizleme paneli dar ekranda zaten gizli).

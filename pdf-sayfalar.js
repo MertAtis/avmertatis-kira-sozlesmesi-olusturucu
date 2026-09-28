@@ -271,7 +271,7 @@ function pdfRenderGrid() {
             for (let k = 1; k <= maxEk; k++) {
                 html += `<button class="btn btn-shadcn-outline" type="button" data-ek-target="${k}">EK-${k}'e ekle</button>`;
             }
-            html += `<button class="btn btn-shadcn-primary" type="button" data-ek-target="new">Yeni EK-${maxEk + 1} aç</button>`;
+            html += `<button class="btn btn-shadcn-primary" type="button" data-ek-target="new">EK-${maxEk + 1} YAP</button>`;
             actions.innerHTML = html;
         }
     }

@@ -221,7 +221,7 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
-        .tab-btn {
+        .tab-btn, .veraset-btn {
             padding: 8px 18px;
             border-radius: calc(var(--radius) - 2px);
             font-weight: 600;
@@ -236,16 +236,16 @@
             gap: 8px;
         }
 
-        [data-theme="dark"] .tab-btn {
+        [data-theme="dark"] .tab-btn, [data-theme="dark"] .veraset-btn {
             color: #cbd5e1;
         }
 
-        .tab-btn:hover {
+        .tab-btn:hover, .veraset-btn:hover {
             color: #000000;
             background: rgba(255, 255, 255, 0.4);
         }
 
-        [data-theme="dark"] .tab-btn:hover {
+        [data-theme="dark"] .tab-btn:hover, [data-theme="dark"] .veraset-btn:hover {
             color: #ffffff;
             background: rgba(255, 255, 255, 0.08);
         }
@@ -1097,11 +1097,11 @@
             <div class="tab-group" id="tab-group-veraset" role="group" aria-labelledby="tab-group-veraset-label">
                 <div class="tab-group-label" id="tab-group-veraset-label">Veraset İntikal Beyanname</div>
                 <div class="tab-container tab-container-tools no-print">
-                    <a class="tab-btn" id="btn-veraset-indir" href="belgeler/veraset-intikal-beyannamesi-bos.pdf" download="VERASET VE İNTİKAL BEYANNAMESİ - BOŞ.pdf" style="text-decoration: none;" title="Orijinal PDF'i kayıpsız indirir">
+                    <a class="veraset-btn" id="btn-veraset-indir" href="belgeler/veraset-intikal-beyannamesi-bos.pdf" download="VERASET VE İNTİKAL BEYANNAMESİ - BOŞ.pdf" style="text-decoration: none;" title="Orijinal PDF'i kayıpsız indirir">
                         <i class="fa-solid fa-download"></i> İndir
                     </a>
-                    <button class="tab-btn" id="btn-veraset-yazdir" type="button" onclick="verasetBeyannameYazdir()" title="A4 olarak yazdırır (yazıcı penceresinde Ölçek: %100 / Gerçek boyut seçin)">
-                        <i class="fa-solid fa-print"></i> Yazdır (A4)
+                    <button class="veraset-btn" id="btn-veraset-yazdir" type="button" onclick="verasetBeyannameYazdir()" title="A4 olarak yazdırır (yazıcı penceresinde Ölçek: %100 / Gerçek boyut seçin)">
+                        <i class="fa-solid fa-print"></i> Çıktı Al (A4)
                     </button>
                 </div>
             </div>

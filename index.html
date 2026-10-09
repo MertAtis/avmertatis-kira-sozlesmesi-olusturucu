@@ -201,6 +201,7 @@
         }
         .tab-row .tab-container { margin-bottom: 0; }
         .tab-container-tools { border-style: dashed; }
+        .tab-row-tools { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
 
         /* Shadcn Segmented Control Tabs (High Contrast & Legible) */
         .tab-container {
@@ -1084,12 +1085,25 @@
                 </button>
             </div>
         </div>
-        <div class="tab-group tab-group-tools" id="tab-group-tools" role="group" aria-labelledby="tab-group-tools-label">
-            <div class="tab-group-label" id="tab-group-tools-label">Araçlar</div>
-            <div class="tab-container tab-container-tools no-print">
-                <button class="tab-btn" id="tab-pdf-araclari" onclick="switchTab('pdf-araclari')">
-                    <i class="fa-solid fa-wrench"></i> PDF Araçları
-                </button>
+        <div class="tab-row-tools">
+            <div class="tab-group tab-group-tools" id="tab-group-tools" role="group" aria-labelledby="tab-group-tools-label">
+                <div class="tab-group-label" id="tab-group-tools-label">Araçlar</div>
+                <div class="tab-container tab-container-tools no-print">
+                    <button class="tab-btn" id="tab-pdf-araclari" onclick="switchTab('pdf-araclari')">
+                        <i class="fa-solid fa-wrench"></i> PDF Araçları
+                    </button>
+                </div>
+            </div>
+            <div class="tab-group" id="tab-group-veraset" role="group" aria-labelledby="tab-group-veraset-label">
+                <div class="tab-group-label" id="tab-group-veraset-label">Veraset İntikal Beyanname</div>
+                <div class="tab-container tab-container-tools no-print">
+                    <a class="tab-btn" id="btn-veraset-indir" href="belgeler/veraset-intikal-beyannamesi-bos.pdf" download="VERASET VE İNTİKAL BEYANNAMESİ - BOŞ.pdf" style="text-decoration: none;" title="Orijinal PDF'i kayıpsız indirir">
+                        <i class="fa-solid fa-download"></i> İndir
+                    </a>
+                    <button class="tab-btn" id="btn-veraset-yazdir" type="button" onclick="verasetBeyannameYazdir()" title="A4 olarak yazdırır (yazıcı penceresinde Ölçek: %100 / Gerçek boyut seçin)">
+                        <i class="fa-solid fa-print"></i> Yazdır (A4)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1764,6 +1778,24 @@
 
     document.addEventListener('input', renderPreview);
     document.addEventListener('change', renderPreview);
+
+    // Boş Veraset İntikal Beyannamesi: orijinal A4 PDF, yeniden işlenmeden yazdırılır
+    function verasetBeyannameYazdir() {
+        const url = 'belgeler/veraset-intikal-beyannamesi-bos.pdf';
+        const fallback = () => window.open(url, '_blank', 'noopener');
+        try {
+            const fr = document.createElement('iframe');
+            fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+            fr.onload = () => {
+                try { fr.contentWindow.focus(); fr.contentWindow.print(); }
+                catch (e) { fallback(); }
+                setTimeout(() => fr.remove(), 60000);
+            };
+            fr.onerror = fallback;
+            fr.src = url;
+            document.body.appendChild(fr);
+        } catch (e) { fallback(); }
+    }
 
     function switchTab(tab) {
         if (tab === 'makbuz') tab = 'makbuz-avukat';

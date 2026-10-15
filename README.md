@@ -27,6 +27,10 @@ hiçbir sunucuya gönderilmez.
 | **A4'e sığdırma** | Her sayfayı **kırpmadan** ölçekleyip A4'e ortalar. A5/A6 belgeler baskıda okunur hale gelir |
 | **Boyut küçültme (metin korunur)** | Gömülü görseller JPEG olarak yeniden kodlanır. **Metin seçilebilir ve aranabilir kalır** |
 | **Boyut küçültme (görsele çevirme)** | Sayfaları 150 DPI görsele çevirir. En büyük küçülme, ancak **metin seçilemez** — uygulama işlem başlamadan önce onayınızı ister |
+| **TIFF → PDF** | CCITT G3/G4, JPEG, LZW, Deflate, PackBits ve sıkıştırmasız TIFF'leri dış kütüphane olmadan PDF'e çevirir; görünüm libtiff ile birebir |
+| **Fotoğraf (JPG/PNG) → PDF** | JPEG baytları olduğu gibi, PNG kayıpsız gömülür; EXIF yönü piksellere dokunmadan sayfaya uygulanır |
+| **EK-1 / EK-2 bölmeleri** | Seçili sayfaları ayrı bölmelere taşır; çıktıda her bölmenin ilk sayfasına "EK-n" damgası vurulur |
+| **Veraset İntikal Beyanname** | Boş beyanname formunu orijinal haliyle **kayıpsız indirir** ve A4 olarak yazdırır |
 | **Geri Al** | Sayfa silme, sıralama ve döndürme adımları geri alınabilir (20 adım) |
 
 **Ölçülen küçülme** (9,8 MB'lık 5 sayfalık taranmış bir belge üzerinde):
@@ -76,11 +80,22 @@ Uygulamanın çalışma zamanı bağımlılığı yoktur. Aşağıdakiler yalnı
 **testler** içindir ve dağıtıma dahil edilmez:
 
 ```bash
-npm install                      # geliştirme bağımlılıkları
-npx playwright install chromium  # test tarayıcısı
+npm install                      # geliştirme bağımlılıkları (yalnız test)
+npx playwright install chromium  # varsayılan test tarayıcısı
 npm run fixtures                 # test verilerini üret (tests/fixtures/*.pdf)
-npm test                         # 73 test
+npm test                         # tüm test paketi (Chromium)
 ```
+
+Ek tarayıcı motorları (isteğe bağlı) — varsayılan Chromium'dur:
+
+```bash
+npx playwright install firefox webkit
+PW_FIREFOX=1 npx playwright test --project=firefox
+PW_WEBKIT=1  npx playwright test    # WebKit + iPhone 14
+```
+
+Testler gerçek `file://` protokolünü kullanır; yani README'de anlatılan
+"`index.html`'e çift tıklayarak aç" yolu her koşuda doğrulanır.
 
 Kütüphane dosyalarını `node_modules`'ten depoya yeniden kopyalamak için:
 
@@ -92,6 +107,14 @@ npm run sync-libs
 > Bu, UMD derlemesi yayınlayan son sürümdür. Daha yeni sürümler yalnızca ESM
 > modülü sunar ve `file://` üzerinden açıldığında tarayıcı tarafından engellenir;
 > yukarıdaki "çift tıklayarak açın" kullanımı bozulur.
+
+> **Bağımlılık güvenliği:** Geliştirme bağımlılıkları yalnız test ortamındadır
+> ve dağıtılan dosyalara girmez. `package.json` içindeki `overrides`, geçişli
+> `tar` sürümünü yamalı bir sürüme sabitler. `pdfjs-dist 3.11.174` bilinçli
+> olarak sabittir (yukarıdaki UMD kısıtı); bu sürüme ait `npm audit` uyarısı
+> tarayıcıda CSP (`script-src 'self'`, `'unsafe-eval'` yok) ile etkisizdir ve
+> dağıtımı etkilemez. Depo ayrıca kök kütüphane ve `vendor/` dosyalarını
+> SHA-256 ile sabitler (`tests/dependencies.spec.mjs`).
 
 ---
 

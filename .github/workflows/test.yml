@@ -7,7 +7,20 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: chromium
+            install: chromium
+            env: ""
+            args: ""
+          - name: webkit
+            install: webkit
+            env: "PW_WEBKIT=1"
+            args: "--project=webkit --project=iphone"
+    name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,8 +28,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps ${{ matrix.install }}
       # Test PDF'leri depoda tutulmaz; her koşuda yeniden üretilir.
       - run: npm run fixtures
       # Canlı site testi yayından SONRA ayrıca çalıştırılır (bkz. DURUM.md).
-      - run: npx playwright test --grep-invert "canlı sitede"
+      - run: ${{ matrix.env }} npx playwright test ${{ matrix.args }} --grep-invert "canlı sitede"

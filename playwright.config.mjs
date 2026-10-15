@@ -24,6 +24,10 @@ export default defineConfig({
                     : {})
             }
         },
+        // Firefox motoru: yalnızca PW_FIREFOX=1 ile (CI'da ayrı iş).
+        ...(process.env.PW_FIREFOX ? [
+            { name: 'firefox', use: { ...devices['Desktop Firefox'] } }
+        ] : []),
         // Safari motoru: yalnızca PW_WEBKIT=1 ile (CI'da WebKit kurulu değildir).
         ...(process.env.PW_WEBKIT ? [
             { name: 'webkit', use: { ...devices['Desktop Safari'] } },

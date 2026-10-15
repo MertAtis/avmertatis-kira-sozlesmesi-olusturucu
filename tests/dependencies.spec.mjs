@@ -132,6 +132,22 @@ test.describe('dış bağımlılık yasağı', () => {
         expect(imgSrc.trim().split(/\s+/).sort()).toEqual(["'self'", 'blob:', 'data:']);
     });
 
+    test('U5b: script/style kaynakları sabit — eval yasak, dış kaynak yok', () => {
+        // `'unsafe-inline'` BİLİNÇLİDİR: index.html satır-içi `<script>`,
+        // onclick/onchange öznitelikleri ve `style="..."` öznitelikleri içerir;
+        // bunlar dışsallaştırılmadan kaldırılamaz. Asıl güvenlik sınırı
+        // `connect-src 'none'` ve `'unsafe-eval'`in YOKLUĞUDUR. Bu test, bir
+        // CDN veya `unsafe-eval` eklenirse kırmızıya döner.
+        const html = readFileSync(join(REPO, 'index.html'), 'utf8');
+        const csp = html.match(/content="([^"]*default-src[^"]*)"/)?.[1] || '';
+        const scriptSrc = csp.match(/script-src([^;]*)/)?.[1] || '';
+        const styleSrc = csp.match(/style-src([^;]*)/)?.[1] || '';
+        expect(scriptSrc.trim().split(/\s+/).sort()).toEqual(["'self'", "'unsafe-inline'"]);
+        expect(styleSrc.trim().split(/\s+/).sort()).toEqual(["'self'", "'unsafe-inline'"]);
+        expect(csp).not.toContain('unsafe-eval');
+        expect(csp).not.toMatch(/https?:/);
+    });
+
     test('U6: depodaki kütüphane ve vendor dosyaları değiştirilmemiş (SHA-256)', () => {
         // Bir kütüphane dosyası sessizce değişirse (elle düzenleme, bozuk
         // kopya, tedarik zinciri) test kırmızıya döner. Bilinçli güncellemede

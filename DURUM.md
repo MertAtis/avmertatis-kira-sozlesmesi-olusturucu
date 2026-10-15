@@ -1,8 +1,19 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 28 Eylül 2026 (TIFF → PDF — CANLIDA)
+**Son güncelleme:** 9 Ekim 2026 (Veraset İntikal Beyannamesi — CANLIDA)
 **Durum:** 🟢 **`npm test` 319/319 geçti.**
 **Canlı site:** `main`.
+
+## Veraset İntikal Beyannamesi (9 Ekim 2026) — CANLIDA
+
+Sekme satırına "Veraset İntikal Beyanname" adlı üçüncü bir araç grubu eklendi (`#tab-group-veraset`, `index.html`).
+
+- **Dosya:** `belgeler/veraset-intikal-beyannamesi-bos.pdf` (boş form, orijinal A4 PDF; yeniden işlenmez).
+- **İndir** (`#btn-veraset-indir`): `<a download>` ile orijinal PDF'i kayıpsız indirir.
+- **Yazdır** (`#btn-veraset-yazdir`): `verasetBeyannameYazdir()` PDF'i A4 olarak yazdırır (yazıcıda Ölçek %100 / Gerçek boyut).
+- **Dikkat:** Butonlar `.veraset-btn` sınıfını kullanır, `.tab-btn` değil; etiket "Yazdır" değil. Mevcut testler `.tab-btn` ve "Yazdır" etiketini seçtiği için bu CI'ı bozmuştu (commit `d86f818` düzeltti). Yeni buton eklerken aynı çakışmaya dikkat et.
+- **Test:** `tests/veraset.spec.mjs` (V1–V5): kayıpsız indirme (bayt bayt), iframe ile A4 yazdırma, `.veraset-btn`/`.tab-btn` ayrımı ve yazdırmada gizlenme. (`file://` altında Chromium `download` özniteliğini yok sayar; ad yerine bayt eşitliği doğrulanır, istenen ad DOM'da sabitlenir.)
+- `VERASET VE İNTİKAL BEYANNAMESİ - BOŞ .pdf` kök dizindeki kopya `.gitignore`'dadır (`/VERASET*.pdf`); asıl dosya `belgeler/` altında.
 
 ## TIFF → PDF (28 Eylül) — `pdf-tiff.js`
 
@@ -105,8 +116,14 @@ Bilinen ve bilinçli: A4 modunda form alanları düzleşir (etkileşim gider), b
 
 ## Açık kalan noktalar
 
-- Yalnızca Chromium'da test edildi (Safari/Firefox denenmedi).
+- CI: Chromium ve WebKit/iPhone matrisi (`.github/workflows/test.yml`). Firefox desteği kodda var (`PW_FIREFOX=1`) ama CI'da yok.
 - Testler üretilmiş örnek PDF'lerle; gerçek UYAP çıktıları / taranmış evrakla denenmedi.
+
+## Altyapı sertleştirmesi (bu tur)
+
+- `npm audit`: geçişli `tar` (canvas → node-pre-gyp zinciri, dev + optional, kurulu değil) `package.json` `overrides` ile yamalı sürüme sabitlendi. Kalan tek uyarı `pdfjs-dist 3.11.174` — bilinçli UMD sabitlemesi; tarayıcıda `'unsafe-eval'`siz CSP ile etkisiz.
+- CSP, `dependencies.spec.mjs` U5/U5b ile saklanıyor: `connect-src 'none'`, `'unsafe-eval'` yok, script/style kaynakları `'self'` + `'unsafe-inline'` (satır-içi kod nedeniyle bilinçli).
+- `.gitignore`: `.DS_Store` ve kökteki `/VERASET*.pdf` kopyası eklendi.
 
 ## Sonraki tur için önerilen sıra
 

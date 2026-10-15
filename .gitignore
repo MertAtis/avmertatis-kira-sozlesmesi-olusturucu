@@ -6,3 +6,9 @@ playwright-report/
 # Test verileri `npm run fixtures` ile yeniden üretilir; depoya girmez.
 tests/fixtures/*.pdf
 tests/.tmp-verify/
+
+# macOS
+.DS_Store
+
+# Kök dizindeki geçici PDF kopyaları; asıl belgeler belgeler/ altındadır.
+/VERASET*.pdf

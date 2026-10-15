@@ -13,5 +13,8 @@
     "@playwright/test": "1.63.0",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "3.11.174"
+  },
+  "overrides": {
+    "tar": "^7.5.22"
   }
 }

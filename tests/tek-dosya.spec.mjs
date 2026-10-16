@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import { tekDosyaHtml } from '../scripts/tek-dosya-olustur.mjs';
+import { onErrorList } from './helpers/console-noise.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const COMPILED = join(REPO, 'tek-dosya.html');
@@ -45,7 +46,7 @@ test.describe('tek-dosya (Bilgisayara İndir)', () => {
     test('T1: file:// açılır; 6 sekme; gömülü kütüphanelerle PDF araçları hazır; sıfır ağ, sıfır hata', async ({ page }) => {
         const consoleErrors = [];
         const requests = [];
-        page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+        onErrorList(page, consoleErrors);
         page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
         page.on('request', (r) => {
             if (!r.url().startsWith('file://') && !r.url().startsWith('data:')
@@ -115,7 +116,7 @@ test.describe('tek-dosya (Bilgisayara İndir)', () => {
 
     test('T4: Veraset Yazdır — iframe blob url yükler, konsol hatası yok', async ({ page }) => {
         const errors = [];
-        page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+        onErrorList(page, errors);
         page.on('pageerror', (e) => errors.push(String(e)));
         await page.goto('file://' + COMPILED);
         await page.click('#btn-veraset-yazdir');

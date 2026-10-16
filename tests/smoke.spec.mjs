@@ -1,6 +1,7 @@
 // Canlıya çıkmadan önce uçtan uca duman testi: 6 sekme, sıfır ağ isteği,
 // sıfır konsol hatası, gerçek indirme zinciri.
 import { test, expect } from '@playwright/test';
+import { onErrorList } from './helpers/console-noise.mjs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -14,7 +15,7 @@ test.describe('duman testi (canlı öncesi)', () => {
     test('6 sekme, PDF araçları uçtan uca, sıfır ağ isteği ve konsol hatası', async ({ page, context }) => {
         const consoleErrors = [];
         const requests = [];
-        page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+        onErrorList(page, consoleErrors);
         page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
         page.on('request', (r) => {
             if (!r.url().startsWith('file://') && !r.url().startsWith('data:')

@@ -6,6 +6,7 @@
 // "Yazdır" etiketini seçtiği için yanlış sınıf/etiket CI'ı kırmıştı
 // (bkz. commit d86f818). Aşağıdaki testler bunu sabitler.
 import { test, expect } from '@playwright/test';
+import { onErrorList } from './helpers/console-noise.mjs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -77,7 +78,7 @@ test.describe('Veraset İntikal Beyanname aracı', () => {
 
     test('V4: Çıktı Al (A4) PDF’i iframe ile yükler ve konsol hatası üretmez', async ({ page }) => {
         const errors = [];
-        page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+        onErrorList(page, errors);
         page.on('pageerror', (e) => errors.push(String(e)));
 
         await page.goto(PAGE);

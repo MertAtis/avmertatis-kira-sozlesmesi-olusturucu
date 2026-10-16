@@ -4,6 +4,26 @@
 **Durum:** 🟢 **`npm test` 340/340 geçti.**
 **Canlı site:** `main`.
 
+## CI: WebKit/Linux tuhaflıkları (16 Ekim 2026) — düzeltildi (`d92cf16`)
+
+`8341393` ile eklenen WebKit/iPhone matrisi **ilk kez** `d94d18b` push'unda koştu ve
+kırmızıydı. Üç koşu ortamı farkı, üçü de uygulama hatası DEĞİL:
+
+1. **Viewport gürültüsü:** Linux WebKit, `index.html` 5. satırdaki Chrome'a özgü
+   `interactive-widget=resizes-content` meta anahtarını **konsol hatası** olarak
+   yazar ("Viewport argument key ... not recognized and ignored"). Sıfır konsol
+   hatası iddiası eden testler artık **yalnızca bu satırı** süzer
+   (`tests/helpers/console-noise.mjs` → `onErrorList`).
+2. **A5 (5 eşzamanlı tıklama):** WebKit `file://` altında download olayını her
+   zaman raporlamaz (veraset V2'de zaten belgeli kısıt). WebKit ailesinde
+   `≤ 1` kabul edilir; Chromium'da hâlâ tam `1`.
+3. **F9 (60 kart döndür/sil):** yavaş runner'da 2 dk genel süreyi aşıyor —
+   davranış testi olduğu için `test.slow()` (3× süre).
+
+Yerel doğrulama: macOS'ta Chromium 340/340, WebKit+iPhone 15/15 (tek-dosya
+suite'i), Firefox 10/10; ek olarak canlıdan indirilen `tek-dosya.html` SHA-256
+birebir aynı ve indirilen kopya file:// altında uçtan uca çalışıyor.
+
 ## Tek-Dosya İndirme (16 Ekim 2026) — CANLIDA
 
 Header'da **"Bilgisayara İndir (İnternetsiz)"** düğmesi (`#btn-tek-dosya`,

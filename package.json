@@ -7,6 +7,7 @@
   "scripts": {
     "sync-libs": "node tests/sync-libs.mjs",
     "fixtures": "node tests/fixtures/build-fixtures.mjs",
+    "tek-dosya": "node scripts/tek-dosya-olustur.mjs",
     "test": "playwright test"
   },
   "devDependencies": {

@@ -68,6 +68,24 @@ yazılım (Node.js vb.) gerekmez**:
 4. PDF düzenlemek / birleştirmek / küçültmek için **PDF Araçları** sekmesini
    kullanın.
 
+### 💾 Tek dosya olarak indir (internetsiz kullanım)
+
+Sitede (veya klasörde) üstte **"Bilgisayara İndir (İnternetsiz)"**
+düğmesine tıklayın: sitenin tamamını içeren **tek bir `tek-dosya.html`** dosyası
+(~6,4 MB) iner. Bu dosyaya çift tıklayarak her aracı — PDF oluşturup
+düzenlemekten veraset beyannamesi indirmeye — **internetsiz** çalıştırabilirsiniz.
+Dosya kendi kendine yeterlidir: hiçbir kütüphane, yazı tipü veya belge dışarıdan
+yüklenmez; gizlilik davranışı (veri gönderilmemesi, CSP) aynıdır.
+
+Ayrıca geliştiriciler dosyayı kendileri üretebilir:
+
+```bash
+npm run tek-dosya    # tek-dosya.html yeniden üret (scripts/tek-dosya-olustur.mjs)
+```
+
+`tests/tek-dosya.spec.mjs`, üretilmiş dosyanın güncel üretimle AYNI olduğunu
+(kayma yasak) ve file:// altında uçtan uca çalıştığını her koşuda doğrular.
+
 Kütüphaneler (`pdf-lib.min.js`, `pdf.min.js`, `pdf.worker.min.js`) depoda
 bulunur ve ilk kullanımda tarayıcıya indirilir. İnternet bağlantısı olmadan da
 her şey çalışır.

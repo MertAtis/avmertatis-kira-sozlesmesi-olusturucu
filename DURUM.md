@@ -1,8 +1,37 @@
 # Durum — PDF Araçları (denetim + bağımsız inceleme)
 
-**Son güncelleme:** 9 Ekim 2026 (Veraset İntikal Beyannamesi — CANLIDA)
-**Durum:** 🟢 **`npm test` 319/319 geçti.**
+**Son güncelleme:** 16 Ekim 2026 (Tek-Dosya İndirme — CANLIDA)
+**Durum:** 🟢 **`npm test` 340/340 geçti.**
 **Canlı site:** `main`.
+
+## Tek-Dosya İndirme (16 Ekim 2026) — CANLIDA
+
+Header'da **"Bilgisayara İndir (İnternetsiz)"** düğmesi (`#btn-tek-dosya`,
+`index.html`): tıklayınca `tek-dosya.html` iner — sitenin tamamını içeren TEK
+dosya; internetsiz, çift tıklayarak (file://) açılır, tüm araçlar çalışır.
+
+- **Üretim:** `npm run tek-dosya` → `scripts/tek-dosya-olustur.mjs` (~6,4 MB).
+  index.html kopyasına uygulanır: CSS+fontlar data URI, 4 uygulama
+  betiği + pdf-lib + pdf.min.js + pdf.worker.min.js satır içi, worker `workerSrc`
+  → gömülü blob URL, veraset PDF base64 gömük (indir `<a>` + yazdır iframe'i
+  tıkınca blob üretir). CSP'ye yalnızca `frame-src 'self' blob:` eklenir
+  (yazdırma iframe'i için); `connect-src 'none'` KORUNUR.
+- **Kritik bulgu:** file:// altında Chrome blob worker kuramaz → pdf.js fake
+  worker'a düşer. Fake worker, `loadScript('pdf.worker.min.js')`'in açtığı
+  klasik script globalini (`window['pdfjs-dist/build/pdf.worker']`) zaten
+  kullanır; bu yüzden worker hem base64 (blob için) hem klasik script (fake
+  worker globali için) gömülür. İkisi de yoksa küçük resimler boş kalır.
+- **Canlı site etkisi:** index.html + kütüphaneler hiç değiştirilmeden; yalnızca
+  header'a `<a id="btn-tek-dosya">` eklendi. Düğme üretilen dosyanın İÇİNDE
+  anlamsız olduğundan build çıktısından şeritlenir.
+- **Testler:** `tests/tek-dosya.spec.mjs` (T0–T4): tazelik (birebir aynı üretim;
+  dış kaynak yasağı), file:// smoke (6 sekme, sıfır ağ/hata), uçtan uca PDF
+  araçları çıktısı, veraset kayıpsız indirme (blob→bayt eşitliği, download
+  olayı üzerinden), veraset iframe blob yüklemesi.
+- **Flaky dersi:** build ~20 ms'de bitiyor; indirme dinleyicisi tıklamadan ÖNCE
+  takılmalı (smoke.spec.mjs düzeni), tıklamadan sonra takılırsa olay kaçar ve
+  test takılır.
+
 
 ## Veraset İntikal Beyannamesi (9 Ekim 2026) — CANLIDA
 
